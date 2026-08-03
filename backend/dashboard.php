@@ -39,7 +39,7 @@ require_once __DIR__ . '/config/auth_guard.php';
 
             <?php if ($_SESSION['role'] === 'admin'): ?>
             <div class="nav-section-label">Admin</div>
-            <a href="/backend/user-management.php" class="nav-link-custom">User Management</a>
+            <a href="../backend/user-management.php" class="nav-link-custom">User Management</a>
             <?php endif; ?>
 
             <div class="nav-section-label">Settings</div>

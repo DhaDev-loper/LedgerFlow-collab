@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Management Test</title>
+</head>
+<body>
+
+    <h2>Create User</h2>
+    <form id="createForm">
+        <label>Full Name: <input type="text" name="full_name" value="Test Staff"></label><br><br>
+        <label>Email: <input type="email" name="email" value="teststaff@gmail.com"></label><br><br>
+        <label>Password: <input type="text" name="password" value="staff123"></label><br><br>
+        <label>Role:
+            <select name="role">
+                <option value="staff">Staff</option>
+                <option value="accountant">Accountant</option>
+                <option value="admin">Admin</option>
+            </select>
+        </label><br><br>
+        <button type="submit">Create User</button>
+    </form>
+     
+    <hr>
+
+        <h2>Toggle Status</h2>
+        <form id="toggleForm">
+            <label>User ID: <input type="number" name="user_id" id="toggleUserId" value="4"></label>
+            <button type="submit">Toggle Active/Inactive</button>
+        </form>
+
+        <hr>
+
+        <h2>Edit User</h2>
+        <form id="editForm">
+            <label>User ID: <input type="number" name="user_id" value="4"></label><br><br>
+            <label>Full Name: <input type="text" name="full_name" value="Test Staff Updated"></label><br><br>
+            <label>Email: <input type="email" name="email" value="teststaff@wrs.test"></label><br><br>
+            <label>Role:
+                <select name="role">
+                    <option value="staff">Staff</option>
+                    <option value="accountant">Accountant</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </label><br><br>
+            <button type="submit">Update User</button>
+        </form>
+
+    <hr>
+     
+    <h2>List Users</h2>
+    <button id="listBtn">Refresh List</button>
+
+    <hr>
+
+        <hr>
+
+        <h2>Delete User</h2>
+        <form id="deleteForm">
+            <label>User ID: <input type="number" name="user_id" value="4"></label>
+            <button type="submit">Delete User</button>
+        </form>
+
+    <h3>Result:</h3>
+    <pre id="result"></pre>
+
+    <script>
+        const resultBox = document.getElementById('result');
+
+        function showResult(data) {
+            resultBox.textContent = JSON.stringify(data, null, 2);
+        }
+
+        document.getElementById('createForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('action', 'create');
+
+            const response = await fetch('routes/user-management.php', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await response.json();
+            showResult(data);
+        });
+
+        document.getElementById('listBtn').addEventListener('click', async () => {
+            const response = await fetch('routes/user-management.php?action=list');
+            const data = await response.json();
+            showResult(data);
+        });
+
+                document.getElementById('toggleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('action', 'toggle-status');
+
+            const response = await fetch('routes/user-management.php', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await response.json();
+            showResult(data);
+        });
+
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('action', 'edit');
+
+            const response = await fetch('routes/user-management.php', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await response.json();
+            showResult(data);
+        });
+
+            document.getElementById('deleteForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        formData.append('action', 'delete');
+
+        const response = await fetch('routes/user-management.php', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await response.json();
+        showResult(data);
+    });
+    </script>
+</body>
+</html>

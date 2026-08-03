@@ -7,6 +7,7 @@ CREATE TABLE users (
     role            ENUM('admin','accountant','staff') NOT NULL DEFAULT 'staff',
     is_active       TINYINT(1)          NOT NULL DEFAULT 1,
     failed_attempts TINYINT UNSIGNED    NOT NULL DEFAULT 0,
+    deleted_at      DATETIME            NULL,
     locked_until    DATETIME            NULL,
     created_at      TIMESTAMP           NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_users_email (email)
