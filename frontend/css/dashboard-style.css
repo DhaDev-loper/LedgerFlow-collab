@@ -1,0 +1,347 @@
+/* =====================================================================
+   WRS Accounting — Design System
+   Layered on top of Bootstrap 5. Bootstrap handles grid/utilities;
+   this file defines our actual visual identity (tokens + components).
+   ===================================================================== */
+
+:root {
+    --ink-navy: #0B2545;
+    --marine-blue: #1B6CA8;
+    --aqua-teal: #2EC4B6;
+    --canvas: #F7F9FB;
+    --slate: #64748B;
+    --flow-green: #16A34A;
+    --coral-alert: #E5533D;
+    --white: #FFFFFF;
+    --border-soft: #E7EBF0;
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+
+    --shadow-card: 0 2px 8px rgba(11, 37, 69, 0.06);
+    --shadow-card-lg: 0 8px 32px rgba(11, 37, 69, 0.10);
+    --radius: 14px;
+
+    /* ---------- Dark dashboard theme ---------- */
+    --dark-bg: #0A1428;
+    --dark-surface: #101E38;
+    --dark-surface-2: #14243F;
+    --dark-border: rgba(255, 255, 255, 0.07);
+    --dark-text: #F1F5F9;
+    --dark-text-muted: rgba(241, 245, 249, 0.55);
+    --accent-blue: #2E90FA;
+    --accent-blue-soft: rgba(46, 144, 250, 0.15);
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--canvas);
+    color: var(--ink-navy);
+}
+
+h1, h2, h3, h4, .brand-font {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.money, .table td.money, .kpi-value {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Droplet logo mark ---------- */
+.droplet-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50% 50% 50% 4px;
+    background: linear-gradient(135deg, var(--aqua-teal), var(--marine-blue));
+    transform: rotate(45deg);
+    flex-shrink: 0;
+}
+.droplet-mark::after {
+    content: "";
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.85);
+}
+
+/* ---------- Auth / Login page ---------- */
+.auth-shell {
+    min-height: 100vh;
+    display: flex;
+}
+.auth-visual {
+    background: linear-gradient(160deg, var(--ink-navy) 0%, #123a63 55%, var(--marine-blue) 100%);
+    color: var(--white);
+    position: relative;
+    overflow: hidden;
+}
+.auth-visual::before {
+    content: "";
+    position: absolute;
+    width: 480px;
+    height: 480px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(46,196,182,0.25), transparent 70%);
+    top: -120px;
+    right: -140px;
+}
+.auth-visual .visual-content {
+    position: relative;
+    z-index: 1;
+}
+.auth-form-side {
+    background: var(--canvas);
+}
+.auth-card {
+    width: 100%;
+    max-width: 380px;
+}
+.form-control:focus {
+    border-color: var(--marine-blue);
+    box-shadow: 0 0 0 0.2rem rgba(27, 108, 168, 0.15);
+}
+.btn-brand {
+    background: var(--marine-blue);
+    border-color: var(--marine-blue);
+    color: var(--white);
+    font-weight: 600;
+}
+.btn-brand:hover {
+    background: #16537f;
+    border-color: #16537f;
+    color: var(--white);
+}
+
+/* ---------- App shell (dashboard — dark theme) ---------- */
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+    background: var(--dark-bg);
+    color: var(--dark-text);
+}
+.sidebar {
+    width: 240px;
+    flex-shrink: 0;
+    background: var(--dark-bg);
+    border-right: 1px solid var(--dark-border);
+    color: var(--dark-text-muted);
+    display: flex;
+    flex-direction: column;
+    padding: 1.5rem 1rem;
+}
+.sidebar .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--dark-text);
+    margin-bottom: 1.75rem;
+    padding: 0 0.5rem;
+}
+.sidebar .brand .droplet-mark { width: 28px; height: 28px; }
+.sidebar .brand .droplet-mark::after { width: 9px; height: 9px; }
+
+.nav-link-custom {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.9rem;
+    border-radius: 8px;
+    color: var(--dark-text-muted);
+    text-decoration: none;
+    font-size: 0.9rem;
+    margin-bottom: 0.1rem;
+    transition: background 0.15s ease;
+}
+.nav-link-custom:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--dark-text);
+}
+.nav-link-custom.active {
+    background: var(--accent-blue-soft);
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+.nav-section-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: rgba(241, 245, 249, 0.3);
+    margin: 1.1rem 0.9rem 0.35rem;
+}
+
+.main-content {
+    flex: 1;
+    min-width: 0;
+}
+.content-area {
+    padding: 1.75rem 2rem;
+}
+
+/* ---------- Greeting banner ---------- */
+.greeting-banner {
+    background: linear-gradient(120deg, var(--dark-surface) 0%, #16294A 100%);
+    border: 1px solid var(--dark-border);
+    border-radius: var(--radius);
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.5rem;
+}
+.greeting-banner h1 {
+    font-size: 1.4rem;
+    margin-bottom: 0.2rem;
+}
+.quick-action-btn {
+    background: var(--dark-surface-2);
+    border: 1px solid var(--dark-border);
+    color: var(--dark-text);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+.quick-action-btn:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--dark-text);
+}
+.quick-action-btn.primary {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: var(--white);
+}
+.quick-action-btn.primary:hover {
+    background: #1c7de0;
+}
+
+/* ---------- KPI cards ---------- */
+.kpi-card {
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: var(--radius);
+    padding: 1.15rem 1.3rem;
+    height: 100%;
+}
+.kpi-label {
+    font-size: 0.78rem;
+    color: var(--dark-text-muted);
+    margin-bottom: 0.4rem;
+}
+.kpi-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--dark-text);
+}
+.kpi-value.positive { color: #4ADE80; }
+.kpi-value.negative { color: #F87171; }
+
+.badge-in {
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ADE80;
+    font-weight: 600;
+    padding: 0.3em 0.65em;
+    border-radius: 6px;
+    font-size: 0.78rem;
+}
+.badge-out {
+    background: rgba(248, 113, 113, 0.15);
+    color: #F87171;
+    font-weight: 600;
+    padding: 0.3em 0.65em;
+    border-radius: 6px;
+    font-size: 0.78rem;
+}
+
+/* ---------- Panels ---------- */
+.panel {
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: var(--radius);
+}
+.panel-header {
+    padding: 1.1rem 1.4rem;
+    border-bottom: 1px solid var(--dark-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.panel-header h2 { color: var(--dark-text); }
+.panel-body {
+    padding: 1.1rem 1.4rem;
+}
+.panel-body.compact { padding: 0.9rem 1.1rem; }
+
+.stat-mini {
+    background: var(--dark-surface-2);
+    border: 1px solid var(--dark-border);
+    border-radius: 10px;
+    padding: 0.75rem 0.9rem;
+    flex: 1;
+}
+.stat-mini-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: var(--accent-blue-soft);
+    color: var(--accent-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+}
+.stat-mini-label {
+    font-size: 0.72rem;
+    color: var(--dark-text-muted);
+}
+.stat-mini-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--dark-text);
+}
+
+.table-transactions {
+    color: var(--dark-text);
+}
+.table-transactions td, .table-transactions th {
+    vertical-align: middle;
+    border-color: var(--dark-border);
+}
+.table-transactions thead th {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--dark-text-muted);
+    border-bottom-width: 1px;
+}
+.table-transactions .text-secondary { color: var(--dark-text-muted) !important; }
+
+.tx-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+}
+.tx-icon.in { background: rgba(74, 222, 128, 0.12); color: #4ADE80; }
+.tx-icon.out { background: rgba(248, 113, 113, 0.12); color: #F87171; }
+
+.date-pill {
+    background: var(--dark-surface-2);
+    border: 1px solid var(--dark-border);
+    color: var(--dark-text-muted);
+    font-size: 0.8rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+    .sidebar { display: none; }
+}

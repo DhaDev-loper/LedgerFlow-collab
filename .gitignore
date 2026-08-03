@@ -1,0 +1,16 @@
+# Environment & secrets
+.env
+
+# Composer
+/vendor/
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log

@@ -1,0 +1,135 @@
+/* ---------- Auth / Login page ---------- */
+
+:root {
+    --canvas: #0f3459;
+    --white: #ffffff;
+    --border-soft: #dee2e6;
+    --marine-blue: #1b6ca8;
+    --radius: 0.5rem;
+    --shadow-card-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+}
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--canvas);    
+    padding: 1.5rem;
+    
+
+}
+.login-card {
+    background: var(--white);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card-lg);
+    padding: 2.25rem;
+    width: 100%;
+    max-width: 400px;
+}
+
+/* ---------- Glass login theme ---------- */
+.login-page-glass {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, #6EE7E0 0%, #1E88C7 50%, #0B3C74 100%);
+    padding: 1.5rem;
+}
+
+.wave-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+}
+
+.droplet-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #2EC4B6, #1B6CA8);
+    position: relative;
+}
+.droplet-icon::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    border-radius: 50% 50% 50% 4px;
+    background: #ffffff;
+    transform: translate(-50%, -60%) rotate(45deg);
+}
+
+.d-inline-flex {
+    display: inline-flex!important
+}
+
+
+.login-card-glass {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 400px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 24px;
+    padding: 2.5rem;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.form-control-glass {
+    background: rgba(11, 60, 116, 0.45);
+    border: 1px solid rgba(46, 196, 182, 0.5);
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 0.65rem 0.9rem;
+}
+.form-control-glass::placeholder {
+    color: rgba(255, 255, 255, 0.55);
+}
+.form-control-glass:focus {
+    background: rgba(11, 60, 116, 0.6);
+    border-color: #2EC4B6;
+    box-shadow: 0 0 0 0.2rem rgba(46, 196, 182, 0.25);
+    color: #ffffff;
+}
+
+.btn-glass {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+    font-weight: 600;
+    border-radius: 10px;
+    padding: 0.65rem;
+}
+.btn-glass:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+.form-control:focus {
+    border-color: var(--marine-blue);
+    box-shadow: 0 0 0 0.2rem rgba(27, 108, 168, 0.15);
+}
+.btn-brand {
+    background: var(--marine-blue);
+    border-color: var(--marine-blue);
+    color: var(--white);
+    font-weight: 600;
+}
+.btn-brand:hover {
+    background: #16537f;
+    border-color: #16537f;
+    color: var(--white);
+}
