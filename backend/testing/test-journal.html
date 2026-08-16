@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Journal Entry Test</title>
+</head>
+<body>
+
+    <h2>Create Journal Entry</h2>
+    <form id="journalForm">
+        <label>Transaction Type:
+            <select name="transaction_type_id" id="typeSelect"></select>
+        </label><br><br>
+
+        <label>Description: <input type="text" name="description" value="Test walk-in sale"></label><br><br>
+        <label>Date: <input type="date" name="transaction_date" id="dateInput"></label><br><br>
+        <label>Reference No: <input type="text" name="reference_no" value=""></label><br><br>
+        <label>Category:
+            <select name="category_id" id="categorySelect">
+                <option value="">-- None --</option>
+            </select>
+        </label><br><br>
+
+        <h3>Split Lines</h3>
+        <div id="linesContainer"></div>
+        <button type="button" id="addLineBtn">+ Add Line</button>
+
+        <br><br>
+        <button type="submit">Save Journal Entry</button>
+    </form>
+
+    <hr>
+    <h3>Result:</h3>
+    <pre id="result"></pre>
+
+    <script>
+        let accounts = [];
+        const linesContainer = document.getElementById('linesContainer');
+
+        function addLine(accountId = '', entryType = 'debit', amount = '') {
+            const div = document.createElement('div');
+            div.className = 'line-row';
+            div.innerHTML = `
+                <select class="line-account">
+                    ${accounts.map(a => `<option value="${a.id}" ${a.id == accountId ? 'selected' : ''}>${a.name} (${a.type_name})</option>`).join('')}
+                </select>
+                <select class="line-type">
+                    <option value="debit" ${entryType === 'debit' ? 'selected' : ''}>Debit</option>
+                    <option value="credit" ${entryType === 'credit' ? 'selected' : ''}>Credit</option>
+                </select>
+                <input type="number" step="0.01" class="line-amount" value="${amount}" placeholder="Amount">
+                <button type="button" class="removeLineBtn">Remove</button>
+            `;
+            div.querySelector('.removeLineBtn').addEventListener('click', () => div.remove());
+            linesContainer.appendChild(div);
+        }
+
+        document.getElementById('addLineBtn').addEventListener('click', () => addLine());
+
+        // Load reference data first
+        fetch('../routes/journal.php?action=reference-data')
+            .then(r => r.json())
+            .then(data => {
+                accounts = data.accounts;
+
+                const typeSelect = document.getElementById('typeSelect');
+                typeSelect.innerHTML = data.types.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+                const categorySelect = document.getElementById('categorySelect');
+                categorySelect.innerHTML += data.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+                document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+
+                // Start with 2 example lines pre-filled
+                addLine(accounts[0]?.id, 'debit', '150.00');
+                addLine(accounts[3]?.id, 'credit', '150.00');
+            });
+
+        document.getElementById('journalForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const lines = Array.from(document.querySelectorAll('.line-row')).map(row => ({
+                account_id: row.querySelector('.line-account').value,
+                entry_type: row.querySelector('.line-type').value,
+                amount: row.querySelector('.line-amount').value,
+            }));
+
+            const formData = new FormData(e.target);
+            formData.append('action', 'create');
+            formData.append('lines', JSON.stringify(lines));
+
+            const response = await fetch('../routes/journal.php', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await response.json();
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        });
+    </script>
+</body>
+</html>

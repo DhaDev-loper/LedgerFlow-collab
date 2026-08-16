@@ -6,6 +6,31 @@ require_once __DIR__ . '/../config/database.php';
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
+// Sir Christian noticed that admin can edit other admin so we add this:
+function canManageTarget(array $currentUser, array $targetUser): bool
+{
+    // Nobody can be forced to act on the Owner account through these
+    // management actions — Owner is untouchable by design.
+    if ($targetUser['role'] === 'owner') {
+        return false;
+    }
+
+    // Owner can manage everyone else (Admin, Accountant, Staff)
+    if ($currentUser['role'] === 'owner') {
+        return true;
+    }
+
+    // Regular Admins can manage Accountant/Staff, but NOT other Admins
+    if ($currentUser['role'] === 'admin' && $targetUser['role'] !== 'admin') {
+        return true;
+    }
+
+    return false;
+}
+
+
+
+
 switch ($action) {
 
    case 'list':
@@ -71,7 +96,7 @@ switch ($action) {
     echo json_encode(['success' => true, 'message' => 'User created successfully.']);
     break;
    
-    case 'toggle-status':
+   case 'toggle-status':
     $userId = (int) ($_POST['user_id'] ?? 0);
 
     if ($userId === 0) {
@@ -80,8 +105,6 @@ switch ($action) {
         break;
     }
 
-    // Prevent an admin from accidentally deactivating their own account
-    // while logged in — that would lock them out with no way back in.
     if ($userId === (int) $_SESSION['user_id']) {
         http_response_code(400);
         echo json_encode(['error' => 'You cannot deactivate your own account.']);
@@ -90,17 +113,23 @@ switch ($action) {
 
     $pdo = getDbConnection();
 
-    $stmt = $pdo->prepare("SELECT is_active FROM users WHERE id = :id AND deleted_at IS NULL");
+    $stmt = $pdo->prepare("SELECT id, role, is_active FROM users WHERE id = :id");
     $stmt->execute([':id' => $userId]);
-    $user = $stmt->fetch();
+    $targetUser = $stmt->fetch();
 
-    if (!$user) {
+    if (!$targetUser) {
         http_response_code(404);
         echo json_encode(['error' => 'User not found.']);
         break;
     }
 
-    $newStatus = $user['is_active'] ? 0 : 1;
+    if (!canManageTarget(['role' => $_SESSION['role']], $targetUser)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'You do not have permission to manage this account.']);
+        break;
+    }
+
+    $newStatus = $targetUser['is_active'] ? 0 : 1;
 
     $updateStmt = $pdo->prepare("UPDATE users SET is_active = :status WHERE id = :id");
     $updateStmt->execute([':status' => $newStatus, ':id' => $userId]);
@@ -112,7 +141,7 @@ switch ($action) {
     ]);
     break;
 
-case 'edit':
+    case 'edit':
     $userId = (int) ($_POST['user_id'] ?? 0);
     $fullName = trim($_POST['full_name'] ?? '');
     $email = trim($_POST['email'] ?? '');
@@ -133,8 +162,23 @@ case 'edit':
 
     $pdo = getDbConnection();
 
-    // Check the new email isn't already used by a DIFFERENT user
-   $checkStmt = $pdo->prepare("SELECT id FROM users WHERE email = :email AND id != :id AND deleted_at IS NULL");
+    $targetStmt = $pdo->prepare("SELECT id, role FROM users WHERE id = :id AND deleted_at IS NULL");
+    $targetStmt->execute([':id' => $userId]);
+    $targetUser = $targetStmt->fetch();
+
+    if (!$targetUser) {
+        http_response_code(404);
+        echo json_encode(['error' => 'User not found.']);
+        break;
+    }
+
+    if (!canManageTarget(['role' => $_SESSION['role']], $targetUser)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'You do not have permission to manage this account.']);
+        break;
+    }
+
+    $checkStmt = $pdo->prepare("SELECT id FROM users WHERE email = :email AND id != :id AND deleted_at IS NULL");
     $checkStmt->execute([':email' => $email, ':id' => $userId]);
     if ($checkStmt->fetch()) {
         http_response_code(409);
@@ -155,8 +199,7 @@ case 'edit':
     echo json_encode(['success' => true, 'message' => 'User updated successfully.']);
     break;
 
-
-  case 'delete':
+   case 'delete':
     $userId = (int) ($_POST['user_id'] ?? 0);
 
     if ($userId === 0) {
@@ -173,11 +216,19 @@ case 'edit':
 
     $pdo = getDbConnection();
 
-    $stmt = $pdo->prepare("SELECT id FROM users WHERE id = :id AND deleted_at IS NULL");
-    $stmt->execute([':id' => $userId]);
-    if (!$stmt->fetch()) {
+    $targetStmt = $pdo->prepare("SELECT id, role FROM users WHERE id = :id AND deleted_at IS NULL");
+    $targetStmt->execute([':id' => $userId]);
+    $targetUser = $targetStmt->fetch();
+
+    if (!$targetUser) {
         http_response_code(404);
         echo json_encode(['error' => 'User not found.']);
+        break;
+    }
+
+    if (!canManageTarget(['role' => $_SESSION['role']], $targetUser)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'You do not have permission to manage this account.']);
         break;
     }
 

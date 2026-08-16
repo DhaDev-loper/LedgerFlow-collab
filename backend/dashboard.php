@@ -18,26 +18,25 @@ require_once __DIR__ . '/config/auth_guard.php';
 
 <div class="app-shell">
 
-    <!-- Sidebar -->
+    <!-- NAVIGATION SIDE BAR -->
     <aside class="sidebar">
         <div class="brand">
             <span class="droplet-mark"></span>
             <span class="fs-6">LedgerFlow</span>
         </div>
-
+     
         <nav>
             <div class="nav-section-label">Overview</div>
             <a href="dashboard.php" class="nav-link-custom active">Dashboard</a>
 
             <div class="nav-section-label">Management</div>
+            <a href="transaction.php" class="nav-link-custom">Transactions</a>
             <a href="accounts.php" class="nav-link-custom">Accounts</a>
             <a href="journal-entries.php" class="nav-link-custom">Journal Entries</a>
-            <a href="inventory.php" class="nav-link-custom">Inventory</a>
-            <a href="#" class="nav-link-custom">Customers</a>
-            <a href="#" class="nav-link-custom">Dispenser Rentals</a>
+
             <a href="reports.php" class="nav-link-custom">Reports</a>
 
-            <?php if ($_SESSION['role'] === 'admin'): ?>
+            <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
             <div class="nav-section-label">Admin</div>
             <a href="../backend/user-management.php" class="nav-link-custom">User Management</a>
             <?php endif; ?>
@@ -55,14 +54,13 @@ require_once __DIR__ . '/config/auth_guard.php';
             <!-- Greeting banner -->
             <div class="greeting-banner d-flex flex-wrap justify-content-between align-items-center gap-3">
                 <div>
-                    <h1 class="mb-0">Good evening, <span style="color: var(--accent-blue);">Admin</span> 👋</h1>
+                    <h1 class="mb-0">Good day, <span style="color: var(--accent-blue);">Admin</span> 👋</h1>
                     <p class="text-secondary small mb-0" style="color: var(--dark-text-muted) !important;">Here's a quick look at your system management today.</p>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <button class="quick-action-btn primary">+ New Transaction</button>
-                    <button class="quick-action-btn">Customer</button>
-                    <button class="quick-action-btn">Inventory</button>
-                    <button class="quick-action-btn">Expense</button>
+                    <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#quickSaleModal">+ New Transaction</button>
+                    <button class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#quickExpenseModal">Expense</button>
+                  
                 </div>
             </div>
 
@@ -70,26 +68,26 @@ require_once __DIR__ . '/config/auth_guard.php';
             <div class="row g-3 mb-4">
                 <div class="col-6 col-lg-3">
                     <div class="kpi-card">
-                        <div class="kpi-label">Net Worth</div>
-                        <div class="kpi-value money">₱128,450.00</div>
+                        <div class="kpi-label">Total Assets</div>
+                        <div class="kpi-value money" id="kpiTotalAssets">₱0.00</div>
                     </div>
                 </div>
                 <div class="col-6 col-lg-3">
                     <div class="kpi-card">
-                        <div class="kpi-label">Cash In (this month)</div>
-                        <div class="kpi-value money positive">+₱42,300.00</div>
+                        <div class="kpi-label">Cash Inflow (this month)</div>
+                        <div class="kpi-value money positive" id="kpiCashInflow">₱0.00</div>
                     </div>
                 </div>
                 <div class="col-6 col-lg-3">
                     <div class="kpi-card">
-                        <div class="kpi-label">Cash Out (this month)</div>
-                        <div class="kpi-value money negative">-₱18,720.00</div>
+                        <div class="kpi-label">Cash Outflow (this month)</div>
+                        <div class="kpi-value money negative" id="kpiCashOutflow">₱0.00</div>
                     </div>
                 </div>
                 <div class="col-6 col-lg-3">
                     <div class="kpi-card">
                         <div class="kpi-label">Net Cash Flow</div>
-                        <div class="kpi-value money positive">+₱23,580.00</div>
+                        <div class="kpi-value money" id="kpiNetCashFlow">₱0.00</div>
                     </div>
                 </div>
             </div>
@@ -103,7 +101,7 @@ require_once __DIR__ . '/config/auth_guard.php';
                     <div class="panel">
                         <div class="panel-header">
                             <h2 class="h6 mb-0">Cash Flow</h2>
-                            <span class="date-pill">Jul 1 – Jul 29, 2026</span>
+                            
                         </div>
                         <div class="panel-body">
                             <canvas id="cashflowChart" height="90"></canvas>
@@ -113,7 +111,7 @@ require_once __DIR__ . '/config/auth_guard.php';
                     <div class="panel">
                         <div class="panel-header">
                             <h2 class="h6 mb-0">Recent Transactions</h2>
-                            <a href="journal-entries.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
+                            <a href="backend/journal-entries.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
                         </div>
                         <div class="table-responsive">
                             <table class="table table-transactions mb-0">
@@ -136,64 +134,24 @@ require_once __DIR__ . '/config/auth_guard.php';
                 </div>
 
                 <!-- Right: stacked stat widgets -->
-                <div class="col-lg-4 d-flex flex-column gap-4">
-
-                    <div class="panel">
-                        <div class="panel-header">
-                            <h2 class="h6 mb-0">Today's Sales</h2>
+                <div class=" panel col-lg-4 d-flex flex-column gap-4">
+                    <div class="panel-header d-flex justify-content-between align-items-center">
+                         <h2 class="h6 mb-0">Accounts</h2>
+                  <a href="../backend/accounts.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
+                     </div>
+                  <div class="panel-body compact">
+                        
+                        <div id="dashboardAccountsList">
+                            <p class="text-center py-3" style="color: var(--dark-text-muted);">Loading...</p>
                         </div>
-                        <div class="panel-body compact">
-                            <div class="d-flex gap-2 mb-3">
-                                <div class="stat-mini">
-                                    <div class="stat-mini-icon">₱</div>
-                                    <div class="stat-mini-label">Walk-in Sales</div>
-                                    <div class="stat-mini-value">₱1,240.00</div>
-                                </div>
-                                <div class="stat-mini">
-                                    <div class="stat-mini-icon">↑</div>
-                                    <div class="stat-mini-label">Growth vs Yesterday</div>
-                                    <div class="stat-mini-value" style="color:#4ADE80;">+12%</div>
-                                </div>
-                            </div>
-                            <canvas id="miniSalesChart" height="110"></canvas>
+                        <hr style="border-color: var(--dark-border);">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="fw-semibold small">Total Assets</div>
+                            <div class="money fw-semibold" id="dashboardTotalAssets">₱0.00</div>
                         </div>
                     </div>
 
-                    <div class="panel">
-                        <div class="panel-header">
-                            <h2 class="h6 mb-0">Accounts</h2>
-                            <a href="accounts.php" class="small text-decoration-none" style="color: var(--accent-blue);">Manage</a>
-                        </div>
-                        <div class="panel-body compact">
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div>
-                                    <div class="fw-semibold small">Cash Drawer</div>
-                                    <div class="small" style="color: var(--dark-text-muted);">Asset</div>
-                                </div>
-                                <div class="money fw-semibold">₱8,240.00</div>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div>
-                                    <div class="fw-semibold small">BDO Business Checking</div>
-                                    <div class="small" style="color: var(--dark-text-muted);">Asset</div>
-                                </div>
-                                <div class="money fw-semibold">₱96,110.00</div>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div>
-                                    <div class="fw-semibold small">GCash Business</div>
-                                    <div class="small" style="color: var(--dark-text-muted);">Asset</div>
-                                </div>
-                                <div class="money fw-semibold">₱24,100.00</div>
-                            </div>
-                            <hr style="border-color: var(--dark-border);">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div class="fw-semibold small">Total Assets</div>
-                                <div class="money fw-semibold">₱128,450.00</div>
-                            </div>
-                        </div>
-                    </div>
-
+                  
                 </div>
             </div>
 
@@ -201,6 +159,92 @@ require_once __DIR__ . '/config/auth_guard.php';
     </div>
 </div>
 
+<!-- Quick Sale Modal -->
+<div class="modal fade" id="quickSaleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content modal-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Record a Sale</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="quickSaleForm">
+                <div class="modal-body">
+
+                    <div class="mb-3">
+                        <label class="form-label small">Amount</label>
+                        <input type="number" step="0.01" min="0.01" class="form-control form-control-dark" id="saleAmount" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">Received Into</label>
+                        <select class="form-select form-control-dark" id="saleReceivedInto" required></select>
+                        <div class="form-text" style="color: var(--dark-text-muted);">Which account the money landed in (e.g. Cash Drawer)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">Revenue Type</label>
+                        <select class="form-select form-control-dark" id="saleRevenueAccount" required></select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">Description (optional)</label>
+                        <input type="text" class="form-control form-control-dark" id="saleDescription" placeholder="e.g. Walk-in sale">
+                    </div>
+
+                    <div id="quickSaleError" class="alert alert-danger py-2 px-3 small d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn quick-action-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn quick-action-btn primary" id="saveQuickSaleBtn">Record Sale</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Expense Modal -->
+<div class="modal fade" id="quickExpenseModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content modal-dark">
+            <div class="modal-header">
+                <h5 class="modal-title">Record an Expense</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="quickExpenseForm">
+                <div class="modal-body">
+
+                    <div class="mb-3">
+                        <label class="form-label small">Amount</label>
+                        <input type="number" step="0.01" min="0.01" class="form-control form-control-dark" id="expenseAmount" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">Paid From</label>
+                        <select class="form-select form-control-dark" id="expensePaidFrom" required></select>
+                        <div class="form-text" style="color: var(--dark-text-muted);">Which account the money came out of</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">Expense Type</label>
+                        <select class="form-select form-control-dark" id="expenseAccount" required></select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small">Description (optional)</label>
+                        <input type="text" class="form-control form-control-dark" id="expenseDescription" placeholder="e.g. Electricity bill">
+                    </div>
+
+                    <div id="quickExpenseError" class="alert alert-danger py-2 px-3 small d-none"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn quick-action-btn" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn quick-action-btn primary" id="saveQuickExpenseBtn">Record Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="../frontend/js/dashboard.js"></script>
 </body>

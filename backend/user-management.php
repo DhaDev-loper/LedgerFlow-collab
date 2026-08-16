@@ -29,11 +29,9 @@ $fullName = $_SESSION['full_name'];
             <a href="dashboard.php" class="nav-link-custom">Dashboard</a>
 
             <div class="nav-section-label">Management</div>
+             <a href="transaction.php" class="nav-link-custom">Transactions</a>
             <a href="accounts.php" class="nav-link-custom">Accounts</a>
             <a href="journal-entries.php" class="nav-link-custom">Journal Entries</a>
-            <a href="inventory.php" class="nav-link-custom">Inventory</a>
-            <a href="#" class="nav-link-custom">Customers</a>
-            <a href="#" class="nav-link-custom">Dispenser Rentals</a>
             <a href="reports.php" class="nav-link-custom">Reports</a>
 
             <div class="nav-section-label">Admin</div>
