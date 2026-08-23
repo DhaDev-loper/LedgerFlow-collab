@@ -3,6 +3,14 @@ declare(strict_types=1);
 
 session_start();
 
+// Prevent the browser from caching this page at all. Without this,
+// pressing the Back button after logout can show a stale cached
+// snapshot of this page instead of actually re-requesting it from
+// the server — which would bypass the login check entirely.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
 
