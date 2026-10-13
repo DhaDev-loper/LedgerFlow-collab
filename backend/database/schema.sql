@@ -1,4 +1,4 @@
-CREATE DATABASE IF NOT EXISTS wrs_accounting CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+`login-system`CREATE DATABASE IF NOT EXISTS wrs_accounting CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE wrs_accounting;
 
 CREATE TABLE users (
@@ -150,3 +150,15 @@ CREATE TABLE journal_category (
     CONSTRAINT fk_jc_category
         FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
+
+CREATE TABLE business_settings (
+    id              TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+    business_name   VARCHAR(150)    NOT NULL DEFAULT 'My Business',
+    address         VARCHAR(255)    NULL,
+    contact_number  VARCHAR(30)     NULL,
+    logo_path       VARCHAR(255)    NULL,
+    updated_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_single_row CHECK (id = 1)
+) ENGINE=InnoDB;
+
+INSERT INTO business_settings (id, business_name) VALUES (1, 'My Business');

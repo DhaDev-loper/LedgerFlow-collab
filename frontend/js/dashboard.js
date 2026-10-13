@@ -5,12 +5,20 @@
 const gridColor = 'rgba(255, 255, 255, 0.06)';
 const tickColor = 'rgba(241, 245, 249, 0.55)';
 
+
 async function loadCashflowChart() {
     const ctx = document.getElementById('cashflowChart');
     if (!ctx) return;
 
+    // Destroy any existing chart on this canvas before creating a new one,
+    // otherwise switching periods repeatedly stacks multiple charts on top
+    // of each other.
+    const existingChart = Chart.getChart(ctx);
+    if (existingChart) existingChart.destroy();
+
     try {
-        const response = await fetch('routes/journal.php?action=cashflow-chart&days=14');
+        const days = document.getElementById('periodFilter')?.value || 14;
+        const response = await fetch(`routes/journal.php?action=cashflow-chart&days=${days}`);
         const data = await response.json();
 
         if (!data.success) return;
@@ -266,9 +274,8 @@ document.getElementById('quickSaleForm')?.addEventListener('submit', async (e) =
                 transaction_type_id: window.CASH_INFLOW_TYPE_ID,
                 description: description,
                 transaction_date: new Date().toISOString().split('T')[0],
-                from_account_id: fromAccount,
-                to_account_id: toAccount,
-                amount: amount,
+                debit_lines: JSON.stringify([{ account_id: toAccount, amount: amount }]),
+                credit_lines: JSON.stringify([{ account_id: fromAccount, amount: amount }]),
             }),
         });
         const data = await response.json();
@@ -310,9 +317,8 @@ document.getElementById('quickExpenseForm')?.addEventListener('submit', async (e
                 transaction_type_id: window.CASH_OUTFLOW_TYPE_ID,
                 description: description,
                 transaction_date: new Date().toISOString().split('T')[0],
-                from_account_id: fromAccount,
-                to_account_id: toAccount,
-                amount: amount,
+                debit_lines: JSON.stringify([{ account_id: toAccount, amount: amount }]),
+                credit_lines: JSON.stringify([{ account_id: fromAccount, amount: amount }]),
             }),
         });
         const data = await response.json();
@@ -335,6 +341,365 @@ document.getElementById('quickExpenseForm')?.addEventListener('submit', async (e
     }
 });
 
+//------ A/R A/P for dashboard and journal entry page
+async function loadReceivablesPayables() {
+    try {
+        const response = await fetch('routes/journal.php?action=receivables-payables');
+        const data = await response.json();
+
+        if (!data.success) return;
+
+        fillAgingCard('ar', data.receivables);
+        fillAgingCard('ap', data.payables);
+
+    } catch (err) {
+        console.error('Failed to load receivables/payables:', err);
+    }
+}
+
+function fillAgingCard(prefix, info) {
+    document.getElementById(`${prefix}Total`).textContent = formatMoney(info.total);
+    document.getElementById(`${prefix}CurrentAmount`).textContent = formatMoney(info.current);
+    document.getElementById(`${prefix}OverdueAmount`).textContent = formatMoney(info.overdue);
+
+    const sum = info.current + info.overdue;
+    const currentPercent = sum > 0 ? (info.current / sum) * 100 : 100;
+    const overduePercent = sum > 0 ? (info.overdue / sum) * 100 : 0;
+
+    document.getElementById(`${prefix}CurrentBar`).style.width = currentPercent + '%';
+    document.getElementById(`${prefix}OverdueBar`).style.width = overduePercent + '%';
+}
+
+
+//-- journal entries navigation expandble
+document.addEventListener('DOMContentLoaded', () => {
+    const journalExpandable = document.getElementById('journalExpandable');
+    const journalTrigger = document.getElementById('journalTrigger');
+
+    journalTrigger.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Toggle active state to trigger expand animation
+        journalExpandable.classList.toggle('active');
+    });
+
+    // Optional: Close expansion when clicking outside the nav
+    document.addEventListener('click', (e) => {
+        if (!journalExpandable.contains(e.target)) {
+            journalExpandable.classList.remove('active');
+        }
+    });
+});
+
+
+
+
+document.getElementById('periodFilter')?.addEventListener('change', () => {
+    loadCashflowChart();
+});
+
+
+//--login responsive ui
+
+// Smooth Login Transition Handler
+document.addEventListener('DOMContentLoaded', () => {
+    const overlay = document.getElementById('loginTransitionOverlay');
+    if (!overlay) return;
+
+    const loaderStep = document.getElementById('transitionStepLoader');
+    const welcomeStep = document.getElementById('transitionStepWelcome');
+
+    // 1. Show spinner for 700ms
+    setTimeout(() => {
+        if (loaderStep && welcomeStep) {
+            loaderStep.classList.add('d-none');
+            welcomeStep.classList.remove('d-none');
+        }
+
+        // 2. Display "Logged in as" message for 1.3 seconds, then fade out
+        setTimeout(() => {
+            overlay.style.opacity = '0';
+            overlay.style.visibility = 'hidden';
+
+            // Remove from DOM after fade animation completes
+            setTimeout(() => overlay.remove(), 500);
+        }, 1300);
+
+    }, 700);
+});
+
+// ==========================================
+// RECEIPT SCANNER & QR POLLING CONTROLLER
+// ==========================================
+
+let scanPollInterval = null;
+let currentScanToken = null;
+let currentReceiptImagePath = '';
+
+// Handle Modal Show -> Generate Token & Start Polling
+document.getElementById('receiptScannerModal')?.addEventListener('show.bs.modal', async () => {
+    resetScannerModalState();
+    triggerCleanupRoutine();
+    await initScanSession();
+    await ensureAccountsLoadedForScan();
+});
+
+// Handle Modal Hide -> Stop Polling
+document.getElementById('receiptScannerModal')?.addEventListener('hide.bs.modal', () => {
+    stopScanPolling();
+});
+
+function resetScannerModalState() {
+    stopScanPolling();
+    currentScanToken = null;
+    currentReceiptImagePath = '';
+
+    document.getElementById('scanStepSelection')?.classList.remove('d-none');
+    document.getElementById('scanStepVerification')?.classList.add('d-none');
+    document.getElementById('saveScannedEntryBtn')?.classList.add('d-none');
+
+    const qrContainer = document.getElementById('qrCodeContainer');
+    if (qrContainer) qrContainer.innerHTML = '';
+}
+
+// 1. Initialize Scan Session & Render QR Code
+async function initScanSession() {
+    const qrContainer = document.getElementById('qrCodeContainer');
+    if (qrContainer) qrContainer.innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"></div> Loading QR...';
+
+    try {
+        const response = await fetch(`${API_URL}?action=init-scan-session`);
+        const data = await response.json();
+
+        if (data.success && data.mobile_url) {
+            currentScanToken = data.token;
+
+            if (qrContainer) {
+                qrContainer.innerHTML = ''; // Clear loading spinner
+                
+                // Check if QRCode library is loaded
+                if (typeof QRCode !== 'undefined') {
+                    new QRCode(qrContainer, {
+                        text: data.mobile_url,
+                        width: 160,
+                        height: 160,
+                        colorDark: '#0f172a',
+                        colorLight: '#ffffff',
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                } else {
+                    qrContainer.innerHTML = `<span class="text-danger small">QR library missing. <a href="${data.mobile_url}" target="_blank">Open Link</a></span>`;
+                }
+            }
+
+            startScanPolling();
+        } else {
+            if (qrContainer) qrContainer.innerHTML = '<span class="text-danger small">Failed to create scan session.</span>';
+            console.error('Scan init error:', data);
+        }
+    } catch (err) {
+        if (qrContainer) qrContainer.innerHTML = '<span class="text-danger small">Server connection error.</span>';
+        console.error('Failed to initialize scan session:', err);
+    }
+
+    
+}
+
+
+// 2. Poll Backend Every 2 Seconds
+function startScanPolling() {
+    stopScanPolling(); // Clear any existing interval
+    scanPollInterval = setInterval(async () => {
+        if (!currentScanToken) return;
+
+        try {
+            const response = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const data = await response.json();
+
+            if (data.success && data.status === 'completed') {
+                stopScanPolling();
+                openVerificationForm(data.image_path, data.extracted);
+            }
+        } catch (err) {
+            console.error('Polling error:', err);
+        }
+    }, 2000);
+}
+
+function stopScanPolling() {
+    if (scanPollInterval) {
+        clearInterval(scanPollInterval);
+        scanPollInterval = null;
+    }
+}
+
+// 3. Fallback: Local File Drop / Selector
+const uploadZone = document.getElementById('receiptUploadZone');
+const fileInput = document.getElementById('receiptFileInput');
+
+uploadZone?.addEventListener('click', () => fileInput?.click());
+
+fileInput?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('action', 'push-mobile-receipt');
+    formData.append('token', currentScanToken);
+    formData.append('receipt_image', file);
+
+    try {
+        const response = await fetch(API_URL, { method: 'POST', body: formData });
+        const data = await response.json();
+
+        if (data.success) {
+            // Re-check session immediately
+            const checkRes = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const checkData = await checkRes.json();
+            if (checkData.success && checkData.status === 'completed') {
+                stopScanPolling();
+                openVerificationForm(checkData.image_path, checkData.extracted);
+            }
+        } else {
+            showToast(data.error || 'Failed to process receipt file.', 'danger');
+        }
+    } catch (err) {
+        showToast('Server error during local file processing.', 'danger');
+    }
+});
+
+// 4. Populate Form and Switch to Step 2 Verification Panel
+function openVerificationForm(imagePath, extracted) {
+    currentReceiptImagePath = imagePath;
+
+    document.getElementById('scannedImagePreview').src = '/wrs-accounting-collab/' + imagePath;
+    document.getElementById('scannedVendor').value = extracted.vendor || '';
+    document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
+    document.getElementById('scannedRef').value = extracted.reference_no || '';
+    document.getElementById('scannedAmount').value = extracted.amount || '0.00';
+
+    populateScanAccounts();
+
+    document.getElementById('scanStepSelection')?.classList.add('d-none');
+    document.getElementById('scanStepVerification')?.classList.remove('d-none');
+    document.getElementById('saveScannedEntryBtn')?.classList.remove('d-none');
+}
+
+// Ensure account reference list is ready for Debit/Credit dropdowns
+async function ensureAccountsLoadedForScan() {
+    if (!window.allAccountsForLines || window.allAccountsForLines.length === 0) {
+        try {
+            const res = await fetch(`${API_URL}?action=reference-data`);
+            const data = await res.json();
+            if (data.success) window.allAccountsForLines = data.accounts || [];
+        } catch (e) {
+            console.error('Failed to load accounts:', e);
+        }
+    }
+}
+
+function populateScanAccounts() {
+    const debitSelect = document.getElementById('scannedDebitAccount');
+    const creditSelect = document.getElementById('scannedCreditAccount');
+
+    if (window.allAccountsForLines && window.allAccountsForLines.length > 0) {
+        const optionsHtml = window.allAccountsForLines.map(a =>
+            `<option value="${a.id}">${a.name} (${a.type_name})</option>`
+        ).join('');
+
+        if (debitSelect) debitSelect.innerHTML = optionsHtml;
+        if (creditSelect) creditSelect.innerHTML = optionsHtml;
+    }
+}
+
+// 5. Save Final Verified Transaction as Journal Entry
+document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async () => {
+    const vendor = document.getElementById('scannedVendor').value.trim();
+    const date = document.getElementById('scannedDate').value;
+    const ref = document.getElementById('scannedRef').value.trim();
+    const amount = parseFloat(document.getElementById('scannedAmount').value);
+    const debitAcc = document.getElementById('scannedDebitAccount').value;
+    const creditAcc = document.getElementById('scannedCreditAccount').value;
+
+    if (!vendor || !date || isNaN(amount) || amount <= 0) {
+        showToast('Please complete all required fields.', 'danger');
+        return;
+    }
+
+    const debitLines = [{ account_id: debitAcc, amount: amount }];
+    const creditLines = [{ account_id: creditAcc, amount: amount }];
+
+    const formData = new FormData();
+    formData.append('action', 'create');
+    formData.append('transaction_type_id', 1); // Default to Expense / Outflow
+    formData.append('description', vendor);
+    formData.append('transaction_date', date);
+    formData.append('reference_no', ref);
+    formData.append('debit_lines', JSON.stringify(debitLines));
+    formData.append('credit_lines', JSON.stringify(creditLines));
+
+    try {
+        const response = await fetch(API_URL, { method: 'POST', body: formData });
+        const data = await response.json();
+
+        if (data.success) {
+            const modalEl = document.getElementById('receiptScannerModal');
+            bootstrap.Modal.getInstance(modalEl)?.hide();
+
+            showToast('Receipt transaction saved successfully!', 'success');
+            // Trigger whatever table reload function your app uses
+            if (typeof loadJournalEntries === 'function') {
+                loadJournalEntries();
+            } else if (typeof fetchEntries === 'function') {
+                fetchEntries();
+            } else if (typeof renderJournalTable === 'function') {
+                renderJournalTable();
+            } else {
+                // Fallback: reload the page smoothly if no function matches
+                location.reload();
+            }
+        } else {
+            showToast(data.error || 'Failed to save transaction.', 'danger');
+        }
+    } catch (err) {
+        showToast('Server error while saving transaction.', 'danger');
+    }
+});
+
+async function triggerCleanupRoutine() {
+    try {
+        await fetch('backend/routes/cleanup-scans.php?ajax=1');
+    } catch (err) {
+        // Fail silently so it never interrupts the user experience
+        console.debug('Background cleanup check completed.');
+    }
+}
+
+function loadClientDropdown() {
+    fetch('routes/journal.php?action=get_clients')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const clientSelect = document.getElementById('clientIdSelect');
+                if (!clientSelect) return;
+                clientSelect.innerHTML = '<option value="">-- Optional: Select Client --</option>';
+                
+                data.clients.forEach(client => {
+                    const label = client.company_name 
+                        ? `${client.name} (${client.company_name})` 
+                        : client.name;
+                    
+                    const option = document.createElement('option');
+                    option.value = client.id;
+                    option.textContent = label;
+                    clientSelect.appendChild(option);
+                });
+            }
+        })
+        .catch(err => console.error('Error loading clients:', err));
+}
+
 // ---------- Logout ----------
 document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -351,3 +716,4 @@ loadRecentTransactions();
 loadDashboardSummary();
 loadCashflowChart();
 loadDashboardAccounts();
+loadReceivablesPayables() // for A/R and A/P in the dashboard and journal entry page

@@ -1,147 +1,153 @@
-/* ---------- Auth / Login page ---------- */
+/* ---------- Auth / Login Page (Split Neon Layout) ---------- */
 
 :root {
-    --canvas: #0f3459;
+    --canvas: #060913;
     --white: #ffffff;
-    --border-soft: #dee2e6;
-    --marine-blue: #1b6ca8;
-    --radius: 0.5rem;
-    --shadow-card-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --border-soft: rgba(255, 255, 255, 0.12);
+    --marine-blue: #ff0066;
+    --radius: 1rem;
+    --shadow-card-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
     --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-
-}
-.login-page {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--canvas);    
-    padding: 1.5rem;
-    
-
-}
-.login-card {
-    background: var(--white);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-card-lg);
-    padding: 2.25rem;
-    width: 100%;
-    max-width: 400px;
 }
 
-/* ---------- Glass login theme ---------- */
+/* Hide legacy wave SVG background */
+.wave-bg,
+svg.wave-bg {
+    display: none !important;
+}
+
+/* Page Wrapper with Dual Neon Radial Glows */
+.login-page,
 .login-page-glass {
     min-height: 100vh;
+    width: 100%;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     position: relative;
     overflow: hidden;
-    background: linear-gradient(135deg, #6EE7E0 0%, #1E88C7 50%, #0B3C74 100%);
-    padding: 1.5rem;
+    background-color: #060913;
+    background-image: 
+        radial-gradient(ellipse 650px 500px at 0% 20%, rgba(255, 0, 102, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 750px 600px at 100% 30%, rgba(56, 30, 114, 0.5) 0%, transparent 75%);
+    background-attachment: fixed;
+    padding: 3rem 6% 3rem 8%;
+    box-sizing: border-box;
 }
 
-.wave-bg {
-    position: absolute;
-    inset: 0;
+/* Disable pure-CSS pseudo-element fallback in favor of real image/logo */
+.login-page::after,
+.login-page-glass::after {
+    display: none !important;
+}
+
+/* Right-Side KoboSocial Logo Element */
+.kobo-logo-side {
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    transform: none !important;
+    max-width: 380px;
+    height: auto;
+    filter: drop-shadow(0 0 35px rgba(255, 0, 102, 0.45));
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Login Form Card on the Left */
+.login-page,
+.login-page-glass {
+    min-height: 100vh;
     width: 100%;
-    height: 100%;
-    z-index: 0;
-}
-
-.droplet-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 20px;
-    background: linear-gradient(135deg, #2EC4B6, #1B6CA8);
+    display: flex;
+    align-items: center;
+    justify-content: center; /* Center both items together */
+    gap: 8rem; /* Adjust this distance to bring them closer or farther */
     position: relative;
-}
-.droplet-icon::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 22px;
-    height: 22px;
-    border-radius: 50% 50% 50% 4px;
-    background: #ffffff;
-    transform: translate(-50%, -60%) rotate(45deg);
+    overflow: hidden;
+    background-color: #060913;
+    background-image: 
+        radial-gradient(ellipse 650px 500px at 0% 20%, rgba(255, 0, 102, 0.22) 0%, transparent 70%),
+        radial-gradient(ellipse 750px 600px at 100% 30%, rgba(56, 30, 114, 0.5) 0%, transparent 75%);
+    background-attachment: fixed;
+    padding: 2rem;
+    box-sizing: border-box;
 }
 
-.d-inline-flex {
-    display: inline-flex!important
-}
-
-
+.login-card,
 .login-card-glass {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     width: 100%;
-    max-width: 400px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 24px;
-    padding: 2.5rem;
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    max-width: 420px;
+    margin: 0;
+    background: rgba(13, 19, 38, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 2.75rem 2.25rem;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.45);
+    color: #ffffff;
 }
 
+/* Form Controls with Neon Focus States */
+.form-control,
 .form-control-glass {
-    background: rgba(11, 60, 116, 0.45);
-    border: 1px solid rgba(46, 196, 182, 0.5);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     color: #ffffff;
     border-radius: 10px;
-    padding: 0.65rem 0.9rem;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
 }
+
+.form-control::placeholder,
 .form-control-glass::placeholder {
-    color: rgba(255, 255, 255, 0.55);
-}
-.form-control-glass:focus {
-    background: rgba(11, 60, 116, 0.6);
-    border-color: #2EC4B6;
-    box-shadow: 0 0 0 0.2rem rgba(46, 196, 182, 0.25);
-    color: #ffffff;
+    color: rgba(255, 255, 255, 0.45);
 }
 
+.form-control:focus,
+.form-control-glass:focus {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: #ff0066;
+    box-shadow: 0 0 12px rgba(255, 0, 102, 0.35);
+    color: #ffffff;
+    outline: none;
+}
+
+/* Glass Action Button */
+.btn-brand,
 .btn-glass {
-    background: rgba(255, 255, 255, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: linear-gradient(135deg, #ff0066 0%, #d946ef 100%);
+    border: none;
     color: #ffffff;
     font-weight: 600;
     border-radius: 10px;
-    padding: 0.65rem;
+    padding: 0.75rem;
+    width: 100%;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 15px rgba(255, 0, 102, 0.35);
 }
+
+.btn-brand:hover,
 .btn-glass:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: linear-gradient(135deg, #ff1a75 0%, #e055f2 100%);
     color: #ffffff;
-}
-.form-control:focus {
-    border-color: var(--marine-blue);
-    box-shadow: 0 0 0 0.2rem rgba(27, 108, 168, 0.15);
-}
-.btn-brand {
-    background: var(--marine-blue);
-    border-color: var(--marine-blue);
-    color: var(--white);
-    font-weight: 600;
-}
-.btn-brand:hover {
-    background: #16537f;
-    border-color: #16537f;
-    color: var(--white);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 0, 102, 0.5);
 }
 
-/* ---------- Password Toggle ---------- */
-
+/* Password Toggle */
 .password-field-wrapper {
     position: relative;
 }
+
 .password-field-wrapper .form-control {
     padding-right: 2.75rem;
 }
+
 .password-toggle-btn {
     position: absolute;
     right: 0.75rem;
@@ -150,11 +156,27 @@
     background: none;
     border: none;
     font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.15s ease;
+    transition: color 0.15s ease;
     line-height: 1;
 }
+
 .password-toggle-btn:hover {
-    opacity: 1;
+    color: #ffffff;
+}
+
+
+
+/* Responsive collapse for small screens */
+@media (max-width: 991px) {
+    .login-page,
+    .login-page-glass {
+        justify-content: center;
+        padding: 2rem 1.5rem;
+    }
+    
+    .kobo-logo-side {
+        display: none !important;
+    }
 }

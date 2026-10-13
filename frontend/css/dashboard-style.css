@@ -1,43 +1,62 @@
 /* =====================================================================
    WRS Accounting — Design System
-   Layered on top of Bootstrap 5. Bootstrap handles grid/utilities;
-   this file defines our actual visual identity (tokens + components).
+   Layered on top of Bootstrap 5.
    ===================================================================== */
 
 :root {
-    --ink-navy: #0B2545;
-    --marine-blue: #1B6CA8;
-    --aqua-teal: #2EC4B6;
-    --canvas: #F7F9FB;
-    --slate: #64748B;
-    --flow-green: #16A34A;
-    --coral-alert: #E5533D;
-    --white: #FFFFFF;
-    --border-soft: #E7EBF0;
+    /* Palette — KoboSocial Colors */
+    --ink-navy: #080d1e;
+    --marine-blue: #0096c7;
+    --aqua-teal: #00d2ff;
+    --canvas: #f3f4f7;
+    --slate: #8c909e;
+    --flow-green: #00d2ff;
+    --coral-alert: #ff0066;
+    --white: #ffffff;
+    --border-soft: rgba(0, 0, 0, 0.08);
 
     --font-display: 'Space Grotesk', sans-serif;
     --font-body: 'Inter', sans-serif;
     --font-mono: 'IBM Plex Mono', monospace;
 
-    --shadow-card: 0 2px 8px rgba(11, 37, 69, 0.06);
-    --shadow-card-lg: 0 8px 32px rgba(11, 37, 69, 0.10);
     --radius: 14px;
 
-    /* ---------- Dark dashboard theme ---------- */
-    --dark-bg: #0A1428;
-    --dark-surface: #101E38;
-    --dark-surface-2: #14243F;
-    --dark-border: rgba(255, 255, 255, 0.07);
-    --dark-text: #F1F5F9;
-    --dark-text-muted: rgba(241, 245, 249, 0.55);
-    --accent-blue: #2E90FA;
-    --accent-blue-soft: rgba(46, 144, 250, 0.15);
+    /* ---------- Dark dashboard theme (Kobo Dark Mode) ---------- */
+    --dark-bg: #080d1e;                             /* Kobo Deep Navy */
+    --dark-surface: #0d1326;                        /* Kobo Dark Card Blue */
+    --dark-surface-2: #141c33;                      /* Lighter surface tone */
+    --dark-border: rgba(255, 255, 255, 0.08);       /* Muted light border line */
+    --dark-text: #ffffff;                           /* Pure White Text */
+    --dark-text-muted: #8c909e;                     /* Kobo Muted Slate Text */
+    --accent-blue: #9a8ce2;                         /* Primary Accent -> Hot Pink */
+    --accent-blue-soft: rgba(255, 0, 102, 0.15);    /* Soft Pink Glow */
 }
 
+/* ---------- Light dashboard theme (Kobo Light Mode) ---------- */
+:root[data-theme="light"] {
+    --dark-bg: #F4F6F9;
+    --dark-surface: #FFFFFF;
+    --dark-surface-2: #EEF1F5;
+    --dark-border: rgba(8, 13, 30, 0.10);
+    --dark-text: #16233A;
+    --dark-text-muted: rgba(22, 35, 58, 0.6);
+}
+
+:root[data-theme="light"] .app-shell {
+    background-color: #F4F6F9;
+    background-image: none;
+}
+
+:root[data-theme="light"] .kpi-value.positive { color: #16A34A; }
+:root[data-theme="light"] .kpi-value.negative { color: #DC2626; }
+:root[data-theme="light"] .badge-in { background: rgba(22, 163, 74, 0.12); color: #16A34A; }
+:root[data-theme="light"] .badge-out { background: rgba(220, 38, 38, 0.12); color: #DC2626; }
+
+/* ---------- Typography & Base Styles ---------- */
 body {
     font-family: var(--font-body);
-    background-color: var(--canvas);
-    color: var(--ink-navy);
+    background-color: var(--dark-bg);
+    color: var(--dark-text);
 }
 
 h1, h2, h3, h4, .brand-font {
@@ -51,81 +70,76 @@ h1, h2, h3, h4, .brand-font {
     font-variant-numeric: tabular-nums;
 }
 
-/* ---------- Droplet logo mark ---------- */
-.droplet-mark {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50% 50% 50% 4px;
-    background: linear-gradient(135deg, var(--aqua-teal), var(--marine-blue));
-    transform: rotate(45deg);
-    flex-shrink: 0;
-}
-.droplet-mark::after {
-    content: "";
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.85);
-}
-
 /* ---------- Auth / Login page ---------- */
 .auth-shell {
     min-height: 100vh;
     display: flex;
 }
+
 .auth-visual {
-    background: linear-gradient(160deg, var(--ink-navy) 0%, #123a63 55%, var(--marine-blue) 100%);
+    background: linear-gradient(160deg, #080d1e 0%, #0d1326 55%, #0096c7 100%);
     color: var(--white);
     position: relative;
     overflow: hidden;
 }
+
 .auth-visual::before {
     content: "";
     position: absolute;
     width: 480px;
     height: 480px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(46,196,182,0.25), transparent 70%);
+    background: radial-gradient(circle, rgba(0,210,255,0.25), transparent 70%);
     top: -120px;
     right: -140px;
 }
+
 .auth-visual .visual-content {
     position: relative;
     z-index: 1;
 }
+
 .auth-form-side {
     background: var(--canvas);
 }
+
 .auth-card {
     width: 100%;
     max-width: 380px;
 }
+
 .form-control:focus {
     border-color: var(--marine-blue);
     box-shadow: 0 0 0 0.2rem rgba(27, 108, 168, 0.15);
 }
+
 .btn-brand {
-    background: var(--marine-blue);
-    border-color: var(--marine-blue);
+    background: #ff0066;
+    border-color: #ff0066;
     color: var(--white);
     font-weight: 600;
-}
-.btn-brand:hover {
-    background: #16537f;
-    border-color: #16537f;
-    color: var(--white);
+    transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
-/* ---------- App shell (dashboard — dark theme) ---------- */
+.btn-brand:hover {
+    background: #e6005c;
+    border-color: #e6005c;
+    color: var(--white);
+    transform: translateY(-2px);
+}
+
+/* ---------- App Shell ---------- */
 .app-shell {
-    display: flex;
+    display: block;
     min-height: 100vh;
-    background: var(--dark-bg);
+    background-color: var(--dark-bg);
+    background-image: 
+        radial-gradient(ellipse 650px 500px at 0% 15%, rgba(255, 0, 102, 0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 700px 600px at 100% 20%, rgba(56, 30, 114, 0.45) 0%, transparent 75%);
+    background-attachment: fixed;
     color: var(--dark-text);
 }
+
 .sidebar {
     width: 240px;
     flex-shrink: 0;
@@ -135,7 +149,10 @@ h1, h2, h3, h4, .brand-font {
     display: flex;
     flex-direction: column;
     padding: 1.5rem 1rem;
+    position: relative;
+    z-index: 10;
 }
+
 .sidebar .brand {
     display: flex;
     align-items: center;
@@ -144,6 +161,7 @@ h1, h2, h3, h4, .brand-font {
     margin-bottom: 1.75rem;
     padding: 0 0.5rem;
 }
+
 .sidebar .brand .droplet-mark { width: 28px; height: 28px; }
 .sidebar .brand .droplet-mark::after { width: 9px; height: 9px; }
 
@@ -157,17 +175,21 @@ h1, h2, h3, h4, .brand-font {
     text-decoration: none;
     font-size: 0.9rem;
     margin-bottom: 0.1rem;
-    transition: background 0.15s ease;
+    transition: transform 0.15s ease, background 0.15s ease;
 }
+
 .nav-link-custom:hover {
     background: rgba(255,255,255,0.05);
     color: var(--dark-text);
+    transform: translateY(-1px);
 }
+
 .nav-link-custom.active {
     background: var(--accent-blue-soft);
     color: var(--accent-blue);
     font-weight: 600;
 }
+
 .nav-section-label {
     font-size: 0.68rem;
     text-transform: uppercase;
@@ -177,25 +199,29 @@ h1, h2, h3, h4, .brand-font {
 }
 
 .main-content {
-    flex: 1;
-    min-width: 0;
-}
-.content-area {
-    padding: 1.75rem 2rem;
+    width: 100%;
 }
 
-/* ---------- Greeting banner ---------- */
+.content-area {
+    padding: 1.75rem 2rem 6rem;
+}
+
+/* ---------- Greeting Banner ---------- */
 .greeting-banner {
-    background: linear-gradient(120deg, var(--dark-surface) 0%, #16294A 100%);
-    border: 1px solid var(--dark-border);
+    background: rgba(13, 19, 38, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius);
     padding: 1.5rem 1.75rem;
     margin-bottom: 1.5rem;
 }
+
 .greeting-banner h1 {
     font-size: 1.4rem;
     margin-bottom: 0.2rem;
 }
+
 .quick-action-btn {
     background: var(--dark-surface-2);
     border: 1px solid var(--dark-border);
@@ -204,39 +230,59 @@ h1, h2, h3, h4, .brand-font {
     font-weight: 500;
     padding: 0.5rem 0.9rem;
     border-radius: 8px;
-    transition: background 0.15s ease;
+    transition: transform 0.15s ease, background 0.15s ease;
 }
+
 .quick-action-btn:hover {
     background: rgba(255,255,255,0.08);
     color: var(--dark-text);
+    transform: translateY(-2px);
 }
+
 .quick-action-btn.primary {
     background: var(--accent-blue);
     border-color: var(--accent-blue);
     color: var(--white);
 }
+
 .quick-action-btn.primary:hover {
-    background: #1c7de0;
+    background: #e6005c;
+    border-color: #e6005c;
+    transform: translateY(-2px);
 }
 
-/* ---------- KPI cards ---------- */
+/* ---------- KPI Cards ---------- */
 .kpi-card {
+    position: relative;
     background: var(--dark-surface);
     border: 1px solid var(--dark-border);
+    border-top: 3px solid var(--accent-blue);
     border-radius: var(--radius);
-    padding: 1.15rem 1.3rem;
+    padding: 1.5rem 1.3rem 1.15rem 1.3rem;
     height: 100%;
+    overflow: visible;
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+.kpi-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 0, 102, 0.4);
+}
+
 .kpi-label {
     font-size: 0.78rem;
     color: var(--dark-text-muted);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
 }
+
 .kpi-value {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--dark-text);
 }
+
 .kpi-value.positive { color: #4ADE80; }
 .kpi-value.negative { color: #F87171; }
 
@@ -248,6 +294,7 @@ h1, h2, h3, h4, .brand-font {
     border-radius: 6px;
     font-size: 0.78rem;
 }
+
 .badge-out {
     background: rgba(248, 113, 113, 0.15);
     color: #F87171;
@@ -257,12 +304,70 @@ h1, h2, h3, h4, .brand-font {
     font-size: 0.78rem;
 }
 
+/* Custom dark class for search, date inputs, and dropdowns */
+.filter-input {
+  background-color: #0d1117;       /* Dark background matching your panels */
+  color: #ffffff;                  /* White text */
+  border: 1px solid #1e293b;       /* Dark border */
+  border-radius: 5px;              /* Smooth rounded corners */
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.filter-input-search{
+    background-color: #0d1117;       /* Dark background matching your panels */
+  color: #ffffff;                  /* White text */
+  border: 1px solid #1e293b;       /* Dark border */
+  border-radius: 5px;              /* Smooth rounded corners */
+  padding: 8px 30px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Hover and focus states */
+.filter-input:focus {
+  border-color: #e60067;           /* Pink accent matching your UI buttons */
+  box-shadow: 0 0 0 2px rgba(230, 0, 103, 0.2);
+}
+
+/* Placeholder text color */
+.filter-input::placeholder {
+  color: #64748b;
+}
+
+/* Calendar icon inside date inputs for dark mode */
+.filter-input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(0.8);
+  cursor: pointer;
+}
+
 /* ---------- Panels ---------- */
+/* Style selects placed inside a .panel container */
+.panel select {
+  background-color: #0f172a; /* Match your panel dark background color */
+  color: #ffffff;             /* Text color */
+  border: 1px solid #1e293b;  /* Subtle dark border */
+  border-radius: 8px;
+  padding: 6px 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Ensure the dropdown menu items match when opened */
+.panel select option {
+  background-color: #0f172a;
+  color: #ffffff;
+}
+
 .panel {
     background: var(--dark-surface);
     border: 1px solid var(--dark-border);
     border-radius: var(--radius);
 }
+
 .panel-header {
     padding: 1.1rem 1.4rem;
     border-bottom: 1px solid var(--dark-border);
@@ -270,11 +375,59 @@ h1, h2, h3, h4, .brand-font {
     align-items: center;
     justify-content: space-between;
 }
+
 .panel-header h2 { color: var(--dark-text); }
-.panel-body {
-    padding: 1.1rem 1.4rem;
-}
+.panel-body { padding: 1.1rem 1.4rem; }
 .panel-body.compact { padding: 0.9rem 1.1rem; }
+
+/* ---------- Receipt / Paper Slip Style Summary Side Panel ---------- */
+.receipt-card {
+    position: relative;
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: 4px 0 0 0;
+    padding: 1.5rem 1.25rem 2rem 1.25rem !important;
+    overflow: hidden;
+
+    /* Serrated Zigzag Edge at Bottom */
+    --zigzag-size: 8px;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--zigzag-size)), transparent calc(100% - var(--zigzag-size))),
+                conic-gradient(from -45deg at bottom, #000 90deg, transparent 0);
+    mask-size: 100% 100%, calc(var(--zigzag-size) * 2) calc(var(--zigzag-size) * 2);
+    mask-position: 0 0, 0 100%;
+    mask-repeat: no-repeat, repeat-x;
+
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--zigzag-size)), transparent calc(100% - var(--zigzag-size))),
+                        conic-gradient(from -45deg at bottom, #000 90deg, transparent 0);
+    -webkit-mask-size: 100% 100%, calc(var(--zigzag-size) * 2) calc(var(--zigzag-size) * 2);
+    -webkit-mask-position: 0 0, 0 100%;
+    -webkit-mask-repeat: no-repeat, repeat-x;
+}
+
+.receipt-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 22px 0 0 22px;
+    border-color: transparent transparent var(--dark-surface-2) transparent;
+    z-index: 3;
+}
+
+.receipt-card .summary-item,
+.receipt-card .d-flex {
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+    padding-bottom: 0.6rem;
+    margin-bottom: 0.6rem;
+}
+
+.receipt-card .summary-item:last-child,
+.receipt-card .d-flex:last-child {
+    border-bottom: 3px solid var(--accent-blue);
+}
 
 .stat-mini {
     background: var(--dark-surface-2);
@@ -283,6 +436,7 @@ h1, h2, h3, h4, .brand-font {
     padding: 0.75rem 0.9rem;
     flex: 1;
 }
+
 .stat-mini-icon {
     width: 28px;
     height: 28px;
@@ -295,38 +449,86 @@ h1, h2, h3, h4, .brand-font {
     font-size: 0.8rem;
     margin-bottom: 0.4rem;
 }
+
 .stat-mini-label {
     font-size: 0.72rem;
     color: var(--dark-text-muted);
 }
+
 .stat-mini-value {
     font-size: 1rem;
     font-weight: 600;
     color: var(--dark-text);
 }
 
+/* ---------- Notebook Ledger Table Container ---------- */
+.table-responsive,
+.panel-body:has(.table) {
+    position: relative;
+    border-radius: var(--radius);
+    padding-left: 36px;
+    border-left: 2px solid rgba(255, 0, 102, 0.3);
+    background: var(--dark-surface);
+    box-shadow: none;
+    overflow: hidden;
+}
+
+.table-responsive::before,
+.panel-body:has(.table)::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 12px;
+    width: 12px;
+    background-image: radial-gradient(circle, #060913 5px, transparent 6px);
+    background-size: 12px 32px;
+    background-repeat: repeat-y;
+    background-position: center 8px;
+    z-index: 5;
+}
+
+/* ---------- Bookkeeping Ledger Table Styling ---------- */
 .table-transactions {
     --bs-table-bg: transparent;
     --bs-table-color: var(--dark-text);
     color: var(--dark-text);
-     
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
 }
-.table-transactions td, .table-transactions th {
+
+.table-transactions td, 
+.table-transactions th {
     vertical-align: middle;
-    border-color: var(--dark-border);
-    font-size: 1rem;
+    padding: 0.75rem 0.9rem;
+    font-size: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.table-transactions thead th {
+    font-family: var(--font-display);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: var(--dark-surface-2);
+    border-top: 1px solid var(--dark-border);
     
 }
 
-
-.table-transactions thead th {
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--dark-text-muted);
-    border-bottom-width: 1px;
-}
 .table-transactions .text-secondary { color: var(--dark-text-muted) !important; }
+
+.table-transactions tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.table-transactions tbody tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.015);
+}
+
+.table-transactions tbody tr:hover {
+    background-color: rgba(255, 0, 102, 0.05);
+}
 
 .tx-icon {
     width: 32px;
@@ -337,6 +539,7 @@ h1, h2, h3, h4, .brand-font {
     justify-content: center;
     font-size: 0.85rem;
 }
+
 .tx-icon.in { background: rgba(74, 222, 128, 0.12); color: #4ADE80; }
 .tx-icon.out { background: rgba(248, 113, 113, 0.12); color: #F87171; }
 
@@ -349,49 +552,131 @@ h1, h2, h3, h4, .brand-font {
     border-radius: 8px;
 }
 
-@media (max-width: 900px) {
-    .sidebar { display: none; }
-}
-
-:root {
-    --ink-navy: #0B2545;
-    --marine-blue: #1B6CA8;
-    --aqua-teal: #2EC4B6;
-    --canvas: #F7F9FB;
-    --slate: #64748B;
-    --flow-green: #16A34A;
-    --coral-alert: #E5533D;
-    --white: #FFFFFF;
-    --border-soft: #E7EBF0;
-
-    --font-display: 'Space Grotesk', sans-serif;
-    --font-body: 'Inter', sans-serif;
-    --font-mono: 'IBM Plex Mono', monospace;
-
-    --shadow-card: 0 2px 8px rgba(11, 37, 69, 0.06);
-    --shadow-card-lg: 0 8px 32px rgba(11, 37, 69, 0.10);
-    --radius: 14px;
-
-    /* ---------- Dark dashboard theme ---------- */
-    --dark-bg: #0A1428;
-    --dark-surface: #101E38;
-    --dark-surface-2: #14243F;
-    --dark-border: rgba(255, 255, 255, 0.07);
-    --dark-text: #F1F5F9;
-    --dark-text-muted: rgba(241, 245, 249, 0.55);
-    --accent-blue: #2E90FA;
-    --accent-blue-soft: rgba(46, 144, 250, 0.15);
-}
+/* ---------- Modal System ---------- */
+.modal,
 .modal-dark {
-    background: var(--dark-surface);
+    --bs-modal-bg: var(--dark-surface);
+    --bs-modal-color: var(--dark-text);
+    --bs-modal-border-color: var(--dark-border);
+    --bs-modal-header-border-color: var(--dark-border);
+    --bs-modal-footer-border-color: var(--dark-border);
+}
+
+.modal-content,
+.modal-dark .modal-content {
+    background-color: var(--dark-surface) !important;
     border: 1px solid var(--dark-border);
+    border-radius: var(--radius);
+    color: var(--dark-text) !important;
+    position: relative;
+    overflow: hidden;
+    padding-left: 32px;
+   
+}
+
+.modal-content::before,
+.modal-dark .modal-content::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 10px;
+    width: 12px;
+    background-image: radial-gradient(circle, #060913 5px, transparent 6px);
+    background-size: 12px 32px;
+    background-repeat: repeat-y;
+    background-position: center 8px;
+    z-index: 10;
+}
+
+.modal-header,
+.modal-dark .modal-header {
+    
+    padding: 1.25rem 1.5rem 1.25rem 0.5rem;
+    background: transparent !important;
+}
+
+.modal-title,
+.modal-dark .modal-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--dark-text) !important;
+}
+
+.modal-header .btn-close,
+.modal-dark .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.modal-body,
+.modal-dark .modal-body {
+    padding: 1.5rem 1.5rem 1.5rem 0.5rem;
+    background-color: transparent !important;
+    color: var(--dark-text) !important;
+    
+    background-size: 100% 32px;
+}
+
+.modal-footer,
+.modal-dark .modal-footer {
+    border-top: 1px solid var(--dark-border);
+    padding: 1rem 1.5rem 1rem 0.5rem;
+    background-color: transparent !important;
+}
+
+.modal label,
+.modal p,
+.modal span,
+.modal .form-label,
+.modal-dark label,
+.modal-dark p,
+.modal-dark span,
+.modal-dark .form-label {
+    color: var(--dark-text-muted) !important;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+}
+
+.modal .form-control,
+.modal .form-select,
+.modal-dark .form-control,
+.modal-dark .form-select,
+.modal-dark .form-control-dark,
+.modal-dark .form-select-dark {
+    background-color: rgba(72, 10, 100, 0.02) !important;
+    border: none !important;
+    border-bottom: 2px dashed rgba(255, 255, 255, 0.2) !important;
+    border-radius: 0 !important;
+    color: var(--dark-text) !important;
+    padding: 0.5rem 0.3rem;
+    font-family: var(--font-mono);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.modal .form-control:focus,
+.modal .form-select:focus,
+.modal-dark .form-control:focus,
+.modal-dark .form-select:focus,
+.modal-dark .form-control-dark:focus,
+.modal-dark .form-select-dark:focus {
+    background-color: rgba(255, 0, 102, 0.05) !important;
+    border-bottom: 2px solid var(--accent-blue) !important;
+    box-shadow: none !important;
+    outline: none;
+    color: var(--dark-text) !important;
+}
+
+.modal .form-select option,
+.modal-dark .form-select option {
+    background-color: var(--dark-surface-2);
     color: var(--dark-text);
 }
 
-.form-control-dark {
-    background: var(--dark-surface-2);
-    border: 1px solid var(--dark-border);
-    color: var(--dark-text);
+.is-locked {
+    pointer-events: none !important;
+    opacity: 0.65 !important;
+    background-color: rgba(255, 255, 255, 0.01) !important;
 }
 
 .table-action-btn {
@@ -402,8 +687,462 @@ h1, h2, h3, h4, .brand-font {
     padding: 0.3rem 0.65rem;
     border-radius: 6px;
     margin-left: 0.3rem;
+    transition: background 0.15s ease, color 0.15s ease;
 }
+
 .table-action-btn:hover {
     background: rgba(255,255,255,0.06);
     color: var(--dark-text);
+}
+
+.btn-group {
+    border-radius: 12px;
+    font-size: 0.78rem;
+    padding: 0.5rem 0.8rem;
+}
+
+/* ---------- Floating Bottom Navigation ---------- */
+.bottom-nav {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1030;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: 999px;
+    padding: 0.5rem 0.75rem;
+    max-width: 95vw;
+    overflow-x: auto;
+}
+
+.nav-group-left,
+.nav-group-right {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    color: var(--dark-text-muted);
+    text-decoration: none;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    transition: transform 0.15s ease, background 0.15s ease;
+    flex-shrink: 0;
+}
+
+.bottom-nav-item i {
+    font-size: 1.15rem;
+}
+
+.bottom-nav-item:hover {
+    background: rgba(255,255,255,0.06);
+    color: var(--dark-text);
+    transform: translateY(-2px);
+}
+
+.bottom-nav-item.active {
+    background: var(--accent-blue);
+    color: var(--white);
+}
+
+.bottom-nav-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--dark-border);
+    flex-shrink: 0;
+}
+
+
+
+/* Container for the inline expandable item */
+.bottom-nav-expandable {
+    display: flex;
+    align-items: center;
+    border-radius: 50px;
+    transition: background 0.3s ease, padding 0.3s ease;
+}
+
+/* Base button trigger styling matching your icons */
+.bottom-nav-expandable .nav-trigger {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    outline: none;
+}
+
+/* Sub-items hidden container */
+.expandable-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: max-width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                opacity 0.25s ease, 
+                padding 0.3s ease;
+}
+
+/* Styling for the expanded sub-links */
+.sub-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-decoration: none;
+    color: var(--dark-text, #fff);
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 8px;
+    transition: color 0.2s ease, background 0.2s ease;
+}
+
+.sub-nav-item:hover {
+    color: var(--accent-blue, #3b82f6);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Active Expanded State */
+.bottom-nav-expandable.active {
+    background: rgba(255, 255, 255, 0.06); /* Soft highlight around expanded section */
+    padding-right: 0.75rem;
+}
+
+.bottom-nav-expandable.active .expandable-content {
+    max-width: 300px; /* Expands to reveal sub-items inline */
+    opacity: 1;
+    padding-left: 0.5rem;
+}
+
+/* Center Floating Scanner Button */
+/* Push everything after the Accounts tab (or right before Scan) */
+.bottom-nav-scan-btn {
+    background: none;
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-top: -16px; 
+    position: relative;
+    z-index: 10;
+    padding: 0 12px;
+    flex-shrink: 0;
+    /* If you want it pushed away from left items */
+    margin-left: auto; 
+    margin-right: auto;
+}
+
+.bottom-nav-scan-btn .scan-btn-icon {
+    width: 46px;
+    height: 46px;
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    border: 3px solid var(--dark-bg, #0f172a);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.bottom-nav-scan-btn:hover .scan-btn-icon {
+    transform: scale(1.08);
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.6);
+}
+
+.bottom-nav-scan-btn span {
+    font-size: 0.7rem;
+    margin-top: 3px;
+    font-weight: 600;
+    color: #60a5fa;
+}
+
+
+/* ---------- Pagination ---------- */
+.table-footer {
+    padding: 1rem;
+    border-top: 1px solid var(--dark-border);
+    background: var(--dark-surface);
+}
+
+.table-footer .pagination {
+    margin-bottom: 0;
+}
+
+.table-footer .page-link {
+    background: var(--dark-surface);
+    border-color: var(--dark-border);
+    color: var(--dark-text);
+}
+
+.table-footer .page-item.active .page-link {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #fff;
+}
+
+.table-footer .page-item.disabled .page-link {
+    opacity: 0.5;
+}
+
+/* ---------- A/P AND A/R ---------- */
+.aging-progress {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--dark-surface-2);
+    overflow: hidden;
+    display: flex;
+    margin: 1rem 0;
+}
+.aging-progress-current {
+    background: var(--accent-blue);
+    height: 100%;
+}
+.aging-progress-overdue {
+    background: #F87171;
+    height: 100%;
+}
+.aging-legend-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.4rem;
+}
+
+/* ---------- PDF Modal Viewer ---------- */
+.pdf-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(10, 15, 29, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.pdf-modal-container {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 950px;
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.pdf-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: #1e293b;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pdf-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.pdf-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-modal-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #2563eb;
+    color: #ffffff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.2s ease;
+}
+
+.btn-modal-download:hover {
+    background: #1d4ed8;
+}
+
+.btn-modal-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 24px;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s ease;
+}
+
+.btn-modal-close:hover {
+    color: #f8fafc;
+}
+
+.pdf-modal-body {
+    position: relative;
+    flex: 1;
+    background: #334155;
+}
+
+.pdf-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #cbd5e1;
+    font-size: 13px;
+}
+
+#pdfPreviewFrame {
+    width: 100%;
+    height: 100%;
+    border: none;
+    position: relative;
+    z-index: 2;
+}
+
+/* -- receipt side by side with the view entry */
+/* Position the View Entry modal on the left half */
+#viewEntryModal.side-by-side .modal-dialog {
+    margin-left: 5% !important;
+    margin-right: auto !important;
+    max-width: 42% !important;
+    transition: all 0.3s ease;
+}
+
+/* Position the Preview modal on the right half */
+#receiptPreviewModal.side-by-side .modal-dialog {
+    margin-left: auto !important;
+    margin-right: 5% !important;
+    max-width: 45% !important;
+    transition: all 0.3s ease;
+}
+
+/* ---------- enrty saved notification ---------- */
+/* Floating Toast Container */
+#toastContainer {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+/* Glassmorphism Toast Card */
+.toast-glass {
+    pointer-events: auto;
+    min-width: 280px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.1));
+    color: #fff;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast-glass.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-glass.toast-success i { color: #34D399; }
+.toast-glass.toast-danger i { color: #F87171; }
+.toast-glass.toast-info i { color: #60A5FA; }
+
+/* Table Container */
+.wrs-table-container {
+    width: 100%;
+    overflow-x: auto;
+    background: #12121c; /* Matches the dark background surface */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* Base Table */
+.wrs-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+    font-family: inherit;
+    color: #e2e8f0;
+}
+
+/* Table Header */
+.wrs-table th {
+    background-color: #1a1a2e;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Table Body Cells */
+.wrs-table td {
+    padding: 14px 16px;
+    font-size: 0.875rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    color: #cbd5e1;
+}
+
+/* Row Hover Effect */
+.wrs-table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Remove bottom border on the last row */
+.wrs-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+@media (max-width: 900px) {
+    .sidebar { display: none; }
 }

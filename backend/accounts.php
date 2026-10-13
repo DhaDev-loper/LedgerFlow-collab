@@ -2,9 +2,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/auth_guard.php';
-
+$userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 $userRole = $_SESSION['role'];
-$canManage = in_array($userRole, ['admin', 'accountant'], true);
+$canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -14,42 +14,27 @@ $canManage = in_array($userRole, ['admin', 'accountant'], true);
 <title>Chart of Accounts — WRS Accounting</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
 
 <div class="app-shell">
 
-    <aside class="sidebar">
-        <div class="brand">
-            <span class="droplet-mark"></span>
-            <span class="fs-6">LedgerFlow</span>
-        </div>
-
-        <nav>
-            <div class="nav-section-label">Overview</div>
-            <a href="dashboard.php" class="nav-link-custom">Dashboard</a>
-
-            <div class="nav-section-label">Management</div>
-            <a href="transaction.php" class="nav-link-custom">Transactions</a>
-            <a href="accounts.php" class="nav-link-custom active">Accounts</a>
-            <a href="journal-entries.php" class="nav-link-custom">Journal Entries</a>
-    
-            <a href="reports.php" class="nav-link-custom">Reports</a>
-
-            <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <div class="nav-section-label">Admin</div>
-            <a href="user-management.php" class="nav-link-custom">User Management</a>
-            <?php endif; ?>
-
-            <div class="nav-section-label">Settings</div>
-            <a href="#" class="nav-link-custom">Settings</a>
-            <a href="#" class="nav-link-custom" id="logoutBtn">Logout</a>
-        </nav>
-    </aside>
-
     <div class="main-content">
         <div class="content-area">
+             <!-- Global Top Navigation Bar -->
+            <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
+                <!-- Top-Left: Logo -->
+                <div class="d-flex align-items-center">
+                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
+                </div>
 
+                <!-- Top-Right: User Profile -->
+                <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
+                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
+                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+            </div>
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                 <div>
                     <h1 class="h4 mb-1">Chart of Accounts</h1>
@@ -59,6 +44,7 @@ $canManage = in_array($userRole, ['admin', 'accountant'], true);
                 <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#accountModal" id="addAccountBtn">
                     + Add Account
                 </button>
+
                 <?php endif; ?>
             </div>
 
@@ -89,6 +75,78 @@ $canManage = in_array($userRole, ['admin', 'accountant'], true);
         </div>
     </div>
 </div>
+
+<nav class="bottom-nav">
+    <!-- LEFT SIDE (4 items) -->
+    <a href="dashboard.php" class="bottom-nav-item">
+        <i class="bi bi-speedometer2"></i>
+        <span>Dashboard</span>
+    </a>
+    <a href="transaction.php" class="bottom-nav-item">
+        <i class="bi bi-arrow-left-right"></i>
+        <span>Transact</span>
+    </a>
+    <a href="accounts.php" class="bottom-nav-item active">
+        <i class="bi bi-wallet2"></i>
+        <span>Accounts</span>
+    </a>
+    <a href="clients.php" class="bottom-nav-item">
+        <i class="bi bi-people-fill"></i>
+        <span>Clients</span>
+    </a>
+
+    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
+    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
+        <div class="scan-btn-icon">
+            <i class="bi bi-qr-code-scan"></i>
+        </div>
+        <span>Scan</span>
+    </button>
+    
+    <!-- RIGHT SIDE (4 items balanced) -->
+    <div class="bottom-nav-expandable " id="journalExpandable">
+        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
+            <i class="bi bi-journal-text"></i>
+            <span>Journal</span>
+        </button>
+         
+        <div class="expandable-content active">
+            <a href="journal-entries.php" class="sub-nav-item">
+                <i class="bi bi-journal-check"></i>
+                <span>Entries</span>
+            </a>
+            <a href="general-ledger.php" class="sub-nav-item">
+                <i class="bi bi-book"></i>
+                <span>Ledger</span>
+            </a>
+            <a href="cashflow.php" class="sub-nav-item">
+                <i class="bi bi-cash-stack"></i>
+                <span>Cash Flow</span>
+            </a>
+        </div>
+    </div>
+     <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
+            <a href="user-management.php" class="bottom-nav-item ">
+                <i class="bi bi-people"></i>
+                <span>Users</span>
+            </a>
+     <?php endif; ?>
+    <a href="reports.php" class="bottom-nav-item">
+        <i class="bi bi-bar-chart"></i>
+        <span>Reports</span>
+    </a>
+
+    <a href="settings.php" class="bottom-nav-item">
+        <i class="bi bi-gear"></i>
+        <span>Settings</span>
+    </a>
+
+    <div class="bottom-nav-divider"></div>
+    <a href="#" class="bottom-nav-item" id="logoutBtn">
+        <i class="bi bi-box-arrow-right"></i>
+        <span>Logout</span>
+    </a>
+</nav>
 
 <?php if ($canManage): ?>
 <!-- Add / Edit Account Modal -->
@@ -136,15 +194,162 @@ $canManage = in_array($userRole, ['admin', 'accountant'], true);
         </div>
     </div>
 </div>
+
+<!-- RECEIPT SCANNER & EDIT MODAL -->
+<div class="modal fade" id="receiptScannerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content modal-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-receipt me-2 text-primary"></i>Scan & Verify Receipt</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+
+                <!-- STEP 1: CAPTURE / UPLOAD SELECTION PANEL -->
+                <div id="scanStepSelection" class="row g-4 align-items-center">
+                    
+                    <!-- LEFT: QR HANDSHAKE FOR PHONE CAMERA -->
+                    <div class="col-md-6 border-end border-secondary pe-md-4">
+                        <div class="text-center p-3">
+                            <h6 class="fw-bold mb-2 text-light"><i class="bi bi-qr-code-scan me-2 text-primary"></i>Option 1: Scan with Phone Camera</h6>
+                            <p class="small text-secondary mb-3">Point your phone's native camera app at this QR code to capture a physical receipt on your desk.</p>
+                            
+                            <div class="d-flex justify-content-center my-3">
+                                <div id="qrCodeContainer" class="bg-white p-3 rounded shadow-sm"></div>
+                            </div>
+                            
+                            <div class="d-flex align-items-center justify-content-center text-primary small">
+                                <div class="spinner-grow spinner-grow-sm me-2" role="status"></div>
+                                <span>Waiting for phone camera upload...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RIGHT: DIRECT LOCAL FILE DROPZONE -->
+                    <div class="col-md-6 ps-md-4">
+                        <div class="text-center p-3">
+                            <h6 class="fw-bold mb-2 text-light"><i class="bi bi-pc-display me-2 text-primary"></i>Option 2: Direct File Upload</h6>
+                            <p class="small text-secondary mb-3">Upload a saved receipt photo or PDF directly from your computer or flash drive.</p>
+                            
+                            <div id="receiptUploadZone" class="border border-dashed border-secondary rounded p-4 text-center style-dropzone mt-3" style="cursor: pointer; background: rgba(255,255,255,0.02);">
+                                <i class="bi bi-cloud-arrow-up display-5 text-primary mb-2 d-block"></i>
+                                <span class="fw-semibold small d-block">Click or drag receipt photo here</span>
+                                <small class="text-secondary">JPG, PNG, WEBP</small>
+                                <input type="file" id="receiptFileInput" accept="image/*" class="d-none">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- STEP 2: EDITABLE VERIFICATION FORM (HIDDEN UNTIL SCAN RECEIVED) -->
+                <div id="scanStepVerification" class="d-none">
+                    <div class="row g-4">
+                        
+                        <!-- LEFT PANEL: ZOOMABLE RECEIPT PREVIEW -->
+                        <div class="col-md-5 border-end border-secondary pe-md-3">
+                            <label class="form-label small fw-semibold text-light mb-2">Scanned Receipt Image</label>
+                            <div class="bg-black rounded border border-secondary p-2 text-center overflow-auto" style="max-height: 400px;">
+                                <img id="scannedImagePreview" src="" alt="Scanned Receipt" class="img-fluid rounded" style="object-fit: contain;">
+                            </div>
+                        </div>
+
+                        <!-- RIGHT PANEL: EDITABLE DATA FORM -->
+                        <div class="col-md-7 ps-md-3">
+                            <form id="scannedReceiptForm">
+                                <div class="mb-3">
+                                    <label class="form-label">Client / Customer (Optional)</label>
+                                    <select id="scannedClient" class="form-select">
+                                        <option value="">-- Select Client --</option>
+                                    </select>
+                                </div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-8">
+                                        <label class="form-label small mb-1">Vendor / Description <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-dark" id="scannedVendor" required>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-1">Date <span class="text-danger">*</span></label>
+                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required>
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label small mb-1">Reference / Invoice #</label>
+                                        <input type="text" class="form-control form-control-dark" id="scannedRef">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small mb-1">Total Amount (₱) <span class="text-danger">*</span></label>
+                                        <input type="number" step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
+                                    </div>
+                                </div>
+
+                                <hr class="border-secondary my-3">
+
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label small mb-1">Debit Account (Expense / Asset) <span class="text-danger">*</span></label>
+                                        <select class="form-select form-control-dark" id="scannedDebitAccount" required></select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small mb-1">Credit Account (Payment Source) <span class="text-danger">*</span></label>
+                                        <select class="form-select form-control-dark" id="scannedCreditAccount" required></select>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn quick-action-btn" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary d-none" id="saveScannedEntryBtn">
+                    <i class="bi bi-check-lg me-1"></i> Save As Journal Entry
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
 <?php endif; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
-    // Let the frontend know whether this user can manage accounts,
-    // without duplicating the role-check logic in JavaScript.
-    const CAN_MANAGE = <?= $canManage ? 'true' : 'false' ?>;
+    // Define global configuration BEFORE loading journal-entries.js
+    window.API_URL    = '../backend/routes/journal.php';
+    window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
+    window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
+    const CAN_MANAGE  = <?= $canManage ? 'true' : 'false' ?>;
 </script>
+
 <script src="../frontend/js/accounts.js"></script>
+<script src="../frontend/js/journal-entries.js"></script>
+
+<script>
+    // Trigger QR session generation when the scanner modal opens
+    document.addEventListener('DOMContentLoaded', () => {
+        const scannerModal = document.getElementById('receiptScannerModal');
+        if (scannerModal) {
+            scannerModal.addEventListener('show.bs.modal', () => {
+                if (typeof initScanSession === 'function') {
+                    initScanSession();
+                }
+            });
+            scannerModal.addEventListener('hidden.bs.modal', () => {
+                if (typeof stopScanPolling === 'function') {
+                    stopScanPolling();
+                }
+            });
+        }
+    });
+</script>
+
 </body>
 </html>

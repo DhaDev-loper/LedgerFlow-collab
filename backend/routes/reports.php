@@ -138,6 +138,59 @@ switch ($action) {
         ]);
         break;
 
+            case 'trial-balance':
+        $asOf = $_GET['as_of'] ?? date('Y-m-d');
+
+        $pdo = getDbConnection();
+
+        $stmt = $pdo->prepare(
+            "SELECT a.id, a.name, at.name AS type_name,
+                    COALESCE(SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE 0 END), 0) AS total_debit,
+                    COALESCE(SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE 0 END), 0) AS total_credit
+             FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             LEFT JOIN transactions t ON t.account_id = a.id
+             LEFT JOIN transaction_journals tj ON tj.id = t.transaction_journal_id AND tj.transaction_date <= :as_of
+             WHERE a.is_active = 1
+             GROUP BY a.id, a.name, at.name
+             HAVING (total_debit - total_credit) != 0
+             ORDER BY at.id, a.name"
+        );
+        $stmt->execute([':as_of' => $asOf]);
+        $rows = $stmt->fetchAll();
+
+        $lines = [];
+        $totalDebitColumn = 0;
+        $totalCreditColumn = 0;
+
+        foreach ($rows as $row) {
+            $net = (float) $row['total_debit'] - (float) $row['total_credit'];
+
+            $debitBalance = $net > 0 ? $net : 0;
+            $creditBalance = $net < 0 ? abs($net) : 0;
+
+            $lines[] = [
+                'account_id' => $row['id'],
+                'name' => $row['name'],
+                'type_name' => $row['type_name'],
+                'debit_balance' => $debitBalance,
+                'credit_balance' => $creditBalance,
+            ];
+
+            $totalDebitColumn += $debitBalance;
+            $totalCreditColumn += $creditBalance;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'as_of' => $asOf,
+            'lines' => $lines,
+            'total_debit' => $totalDebitColumn,
+            'total_credit' => $totalCreditColumn,
+            'is_balanced' => round($totalDebitColumn, 2) === round($totalCreditColumn, 2),
+        ]);
+        break;
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid action']);

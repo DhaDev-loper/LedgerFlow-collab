@@ -10,11 +10,12 @@ require_once __DIR__ . '/../config/database.php';
 // this is for security to prevent other roles from performing actions they shouldn't be able to do.
 function requireFinanceRole(): void
 {
-    if (!in_array($_SESSION['role'], ['admin', 'accountant'], true)) {
+    if (!in_array($_SESSION['role'], ['admin', 'accountant', 'owner'], true)) {
         http_response_code(403);
         echo json_encode(['error' => 'You do not have permission to perform this action.']);
         exit;
     }
+
 }
 
       $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -147,8 +148,11 @@ switch ($action) {
         ]);
         break;
 
+
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid action']);
         break;
+
+
 }

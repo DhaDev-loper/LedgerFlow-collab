@@ -22,16 +22,17 @@ $action = $_POST['action'] ?? $_GET['action'] ?? ''; // the double ? if the valu
 //LOGIN SYSTEM
 switch ($action) {
     // this will validate the email and password from the loginForm  
-   case 'login':
+    // LOGIN SYSTEM
+    case 'login':
             $email = trim($_POST['email'] ?? '');
             $password = $_POST['password'] ?? '';
-            // if the textboxes are empty it will return an error message
+
             if ($email === '' || $password === '') {
                 http_response_code(422);
                 echo json_encode(['error' => 'Email and password are required.']);
                 break;
             }
-             // PDO is a PHP extension that provides a consistent interface for accessing databases. It allows you to connect to a database, execute queries, and fetch results in a secure and efficient manner.
+
             $pdo = getDbConnection();
 
             $stmt = $pdo->prepare(
@@ -41,9 +42,6 @@ switch ($action) {
             $stmt->execute([':email' => $email]);
             $user = $stmt->fetch();
 
-            // Check lockout BEFORE checking the password — no point verifying
-            // a password on an account that's currently locked out anyway.
-            // owener does not have a lockout system so we check if the user is owner or not
             if ($user && $user['role'] !== 'owner' && $user['locked_until'] !== null && strtotime($user['locked_until']) > time()) {
                 $minutesLeft = (int) ceil((strtotime($user['locked_until']) - time()) / 60);
                 http_response_code(429);
@@ -52,10 +50,6 @@ switch ($action) {
             }
 
             if (!$user || !password_verify($password, $user['password_hash'])) {
-
-                // Only increment the counter if the account actually exists —
-                // no point tracking attempts against emails that aren't registered.
-               // we add also owner doenst have a lockout system
                 if ($user && $user['role'] !== 'owner') {
                     $newAttempts = $user['failed_attempts'] + 1;
                     $maxAttempts = 5;
@@ -92,28 +86,73 @@ switch ($action) {
                 break;
             }
 
-            // Successful login — reset the failed attempt counter and any lock.
+            // Successful login — reset failed attempt counter and lock
             $resetStmt = $pdo->prepare(
                 "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id"
             );
             $resetStmt->execute([':id' => $user['id']]);
 
-              //OWNER PIN VERIFICATION
-             if ($user['role'] === 'owner') {
-                // Don't create the real session yet — store a temporary
-                // "pending owner verification" marker instead, and ask for the PIN.
+            // OWNER PIN VERIFICATION
+            if ($user['role'] === 'owner') {
                 session_regenerate_id(true);
                 $_SESSION['pending_owner_id'] = $user['id'];
 
                 echo json_encode(['success' => true, 'pin_required' => true]);
                 break;
-                }
+            }
 
+            // Standard User Login (Admin / Accountant)
             session_regenerate_id(true);
 
-            $_SESSION['user_id']   = $user['id'];
-            $_SESSION['full_name'] = $user['full_name'];
-            $_SESSION['role']      = $user['role'];
+            $_SESSION['user_id']        = $user['id'];
+            $_SESSION['full_name']      = $user['full_name'];
+            $_SESSION['role']           = $user['role'];
+            $_SESSION['just_logged_in'] = true; // <-- SET FOR STANDARD USERS
+
+            echo json_encode([
+                'success' => true,
+                'user' => [
+                    'full_name' => $user['full_name'],
+                    'role'      => $user['role'],
+                ],
+            ]);
+            break;
+
+    // OWNER PIN VERIFICATION
+    case 'verify-pin':
+            if (!isset($_SESSION['pending_owner_id'])) {
+                http_response_code(403);
+                echo json_encode(['error' => 'No pending verification. Please log in again.']);
+                break;
+            }
+
+            $pin = $_POST['pin'] ?? '';
+
+            if ($pin === '' || strlen($pin) !== 4) {
+                http_response_code(422);
+                echo json_encode(['error' => 'Please enter your 4-digit PIN.']);
+                break;
+            }
+
+            $pdo = getDbConnection();
+            $stmt = $pdo->prepare("SELECT id, full_name, role, pin_hash FROM users WHERE id = :id");
+            $stmt->execute([':id' => $_SESSION['pending_owner_id']]);
+            $user = $stmt->fetch();
+
+            if (!$user || !password_verify($pin, $user['pin_hash'])) {
+                http_response_code(401);
+                echo json_encode(['error' => 'Incorrect PIN.']);
+                break;
+            }
+
+            // Clear pending state and create session
+            unset($_SESSION['pending_owner_id']);
+            session_regenerate_id(true);
+
+            $_SESSION['user_id']        = $user['id'];
+            $_SESSION['full_name']      = $user['full_name'];
+            $_SESSION['role']           = $user['role'];
+            $_SESSION['just_logged_in'] = true; // <-- ADDED FOR OWNER PIN SUCCESS
 
             echo json_encode([
                 'success' => true,

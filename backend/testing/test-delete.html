@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Journal Entry Test</title>
+</head>
+<body>
+
+    <h2>Delete Journal Entry</h2>
+    <form id="deleteForm">
+        <label>Journal ID: <input type="number" name="journal_id" required></label>
+        <button type="submit">Delete Entry</button>
+    </form>
+
+    <h3>Result:</h3>
+    <pre id="result"></pre>
+
+    <script>
+        document.getElementById('deleteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('action', 'delete');
+
+            const response = await fetch('../routes/journal.php', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await response.json();
+            document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+        });
+    </script>
+</body>
+</html>
