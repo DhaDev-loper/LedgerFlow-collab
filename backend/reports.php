@@ -11,6 +11,7 @@ $userRole = $_SESSION['role'];
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reports — WRS Accounting</title>
+<script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -37,7 +38,7 @@ $userRole = $_SESSION['role'];
             </div>
            <div class="mb-4">
              <h1 class="h4 mb-1">Reports</h1>
-             <p class="small mb-0" style="color: var(--dark-text-muted);">Income Statement and Balance Sheet, generated from your journal entries.</p>
+             <p class="small mb-0" style="color: var(--dark-text-muted);">Financial reports from journal activity, including cash inflows and outflows.</p>
             </div>
 
           <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -45,25 +46,40 @@ $userRole = $_SESSION['role'];
                     <button type="button" class="quick-action-btn primary" id="tabIncomeStatement">Income Statement</button>
                     <button type="button" class="quick-action-btn" id="tabBalanceSheet">Balance Sheet</button>
                     <button type="button" class="quick-action-btn" id="tabTrialBalance">Trial Balance</button>
+                    <button type="button" class="quick-action-btn" id="tabCashFlowStatement">Cash Flow Statement</button>
                 </div>
 
                 
 
-            <div class="d-flex align-items-end gap-2">
-                   <div id="dateRangeControls" class="d-flex gap-2 align-items-end">
+            <div class="d-flex flex-wrap align-items-end gap-2">
+                   <div id="incomeStatementDateControls" class="d-flex gap-2 align-items-end">
                          <div>
-                               <label class="form-label small mb-1">From</label>
+                               <label for="dateFrom" class="form-label small mb-1">From</label>
                                <input type="date" class="filter-input" id="dateFrom">
                            </div>
                           <div>
-                                <label class="form-label small mb-1">To</label>
+                                <label for="dateTo" class="form-label small mb-1">To</label>
                                <input type="date" class="filter-input" id="dateTo">
                           </div>
                     </div>
-                    <div id="asOfControl" class="d-none">
-                            <label class="form-label small mb-1">As of</label>
-                           <input type="date" class="form-control form-control-dark" id="asOfDate">
-                     </div>
+                    <div id="balanceSheetDateControl" class="d-none">
+                        <label for="balanceSheetAsOfDate" class="form-label small mb-1">Balance Sheet as of</label>
+                        <input type="date" class="filter-input" id="balanceSheetAsOfDate">
+                    </div>
+                    <div id="trialBalanceDateControl" class="d-none">
+                        <label for="trialBalanceAsOfDate" class="form-label small mb-1">Trial Balance as of</label>
+                        <input type="date" class="filter-input" id="trialBalanceAsOfDate">
+                    </div>
+                    <div id="cashFlowStatementDateControls" class="d-none d-flex gap-2 align-items-end">
+                        <div>
+                            <label for="cashFlowDateFrom" class="form-label small mb-1">From</label>
+                            <input type="date" class="filter-input" id="cashFlowDateFrom">
+                        </div>
+                        <div>
+                            <label for="cashFlowDateTo" class="form-label small mb-1">To</label>
+                            <input type="date" class="filter-input" id="cashFlowDateTo">
+                        </div>
+                    </div>
              <button class="quick-action-btn" id="generateReportBtn">Generate</button>
              <button type="button" id="exportBtn" class="quick-action-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -71,13 +87,13 @@ $userRole = $_SESSION['role'];
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                     </svg>
-                    Export
+                    <span id="exportButtonLabel">Export</span>
                 </button>
             </div>
       </div>
 
 <div id="reportContent">
-    <p class="text-center py-5" style="color: var(--dark-text-muted);">Select a report and click Generate.</p>
+    <p class="text-center py-5" style="color: var(--dark-text-muted);">Reports load automatically when selected.</p>
 </div>
 
         </div>
@@ -191,5 +207,6 @@ $userRole = $_SESSION['role'];
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="../frontend/js/reports.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

@@ -65,8 +65,11 @@ async function loadCashflowReport() {
         const existingChart = Chart.getChart(ctx);
         if (existingChart) existingChart.destroy();
 
-        const gridColor = 'rgba(255, 255, 255, 0.06)';
-        const tickColor = 'rgba(241, 245, 249, 0.55)';
+        const themeStyles = getComputedStyle(document.documentElement);
+        const gridColor = themeStyles.getPropertyValue('--dark-border').trim();
+        const tickColor = themeStyles.getPropertyValue('--dark-text-muted').trim();
+        const chartSurface = themeStyles.getPropertyValue('--dark-surface').trim();
+        const chartText = themeStyles.getPropertyValue('--dark-text').trim();
 
         const gradientIn = ctx.getContext('2d').createLinearGradient(0, 0, 0, 260);
         gradientIn.addColorStop(0, 'rgba(46, 144, 250, 0.35)');
@@ -109,8 +112,8 @@ async function loadCashflowReport() {
                         labels: { boxWidth: 12, usePointStyle: true, color: tickColor, font: { family: 'Inter', size: 12 } },
                     },
                     tooltip: {
-                        backgroundColor: '#14243F', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
-                        titleColor: '#F1F5F9', bodyColor: '#F1F5F9',
+                        backgroundColor: chartSurface, borderColor: gridColor, borderWidth: 1,
+                        titleColor: chartText, bodyColor: chartText,
                         callbacks: { label: (item) => `${item.dataset.label}: ₱${item.formattedValue}` },
                     },
                 },

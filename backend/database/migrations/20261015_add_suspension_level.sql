@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN suspension_level TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER locked_until;

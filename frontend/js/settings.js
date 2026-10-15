@@ -4,10 +4,19 @@ let currentTab = 'business';
 function setActiveSettingsTab(tab) {
     currentTab = tab;
 
-    document.getElementById('tabBusiness').classList.toggle('primary', tab === 'business');
-    document.getElementById('tabAccount').classList.toggle('primary', tab === 'account');
-    document.getElementById('tabCategories').classList.toggle('primary', tab === 'categories');
-    document.getElementById('tabAppearance').classList.toggle('primary', tab === 'appearance');
+    const tabs = {
+        business: 'tabBusiness',
+        account: 'tabAccount',
+        categories: 'tabCategories',
+        appearance: 'tabAppearance',
+    };
+    Object.entries(tabs).forEach(([name, id]) => {
+        const button = document.getElementById(id);
+        if (!button) return;
+        const isActive = tab === name;
+        button.classList.toggle('primary', isActive);
+        button.setAttribute('aria-selected', String(isActive));
+    });
 
     if (tab === 'business') loadBusinessTab();
     else if (tab === 'account') loadAccountTab();
@@ -44,7 +53,7 @@ async function loadBusinessTab() {
         const disabledAttr = CAN_EDIT_BUSINESS ? '' : 'disabled';
 
         container.innerHTML = `
-            <div class="panel" style="max-width: 500px;">
+            <div class="panel settings-card">
                 <div class="panel-body">
                     <form id="businessForm">
                         <div class="mb-3">
@@ -106,7 +115,7 @@ async function loadAccountTab() {
     const container = document.getElementById('settingsContent');
 
     container.innerHTML = `
-        <div class="panel mb-4" style="max-width: 500px;">
+        <div class="panel settings-card mb-4">
             <div class="panel-header"><h2 class="h6 mb-0">Change Password</h2></div>
             <div class="panel-body">
                 <form id="passwordForm">
@@ -125,7 +134,7 @@ async function loadAccountTab() {
         </div>
 
         ${IS_OWNER ? `
-        <div class="panel" style="max-width: 500px;">
+        <div class="panel settings-card">
             <div class="panel-header"><h2 class="h6 mb-0">Change Security PIN</h2></div>
             <div class="panel-body">
                 <form id="pinForm">
@@ -237,7 +246,7 @@ async function loadCategoriesTab() {
         `).join('');
 
         container.innerHTML = `
-            <div class="panel mb-4" style="max-width: 500px;">
+            <div class="panel settings-card mb-4">
                 <div class="panel-header"><h2 class="h6 mb-0">Add Category</h2></div>
                 <div class="panel-body">
                     <form id="categoryForm" class="d-flex gap-2">
@@ -319,31 +328,50 @@ async function toggleCategory(categoryId) {
 
 function loadAppearanceTab() {
     const container = document.getElementById('settingsContent');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
 
     container.innerHTML = `
-        <div class="panel" style="max-width: 500px;">
-            <div class="panel-header"><h2 class="h6 mb-0">Theme</h2></div>
-            <div class="panel-body">
-                <p class="small mb-3" style="color: var(--dark-text-muted);">Choose how the app looks on this device.</p>
-                <div class="d-flex gap-2">
-                    <button class="quick-action-btn ${currentTheme === 'dark' ? 'primary' : ''}" id="themeDarkBtn">
-                        <i class="bi bi-moon-stars"></i> Dark
-                    </button>
-                    <button class="quick-action-btn ${currentTheme === 'light' ? 'primary' : ''}" id="themeLightBtn">
-                        <i class="bi bi-sun"></i> Light
-                    </button>
+        <section class="panel settings-card" aria-labelledby="appearanceHeading">
+            <div class="panel-header">
+                <div>
+                    <h2 class="h6 mb-1" id="appearanceHeading">Appearance</h2>
+                    <p class="small mb-0" style="color: var(--dark-text-muted);">Choose a consistent theme for every module, report, and modal on this browser.</p>
                 </div>
             </div>
-        </div>
+            <div class="panel-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <button type="button" class="appearance-choice ${currentTheme === 'light' ? 'active' : ''}" id="themeLightBtn" aria-pressed="${currentTheme === 'light'}">
+                            <span class="appearance-choice-icon"><i class="bi bi-sun"></i></span>
+                            <span>
+                                <span class="d-block fw-semibold">Light</span>
+                                <span class="d-block small" style="color: var(--dark-text-muted);">Bright surfaces with clear contrast.</span>
+                            </span>
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button type="button" class="appearance-choice ${currentTheme === 'dark' ? 'active' : ''}" id="themeDarkBtn" aria-pressed="${currentTheme === 'dark'}">
+                            <span class="appearance-choice-icon"><i class="bi bi-moon-stars"></i></span>
+                            <span>
+                                <span class="d-block fw-semibold">Dark</span>
+                                <span class="d-block small" style="color: var(--dark-text-muted);">Low-light surfaces across the app.</span>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+                <div class="small mt-3" style="color: var(--dark-text-muted);">
+                    <i class="bi bi-info-circle me-1"></i> Your preference is saved in this browser and applied on all application pages.
+                </div>
+            </div>
+        </section>
     `;
 
-    document.getElementById('themeDarkBtn').addEventListener('click', () => {
+    document.getElementById('themeDarkBtn')?.addEventListener('click', () => {
         applyTheme('dark');
-        loadAppearanceTab(); // re-render so the active button highlight updates
+        loadAppearanceTab();
     });
 
-    document.getElementById('themeLightBtn').addEventListener('click', () => {
+    document.getElementById('themeLightBtn')?.addEventListener('click', () => {
         applyTheme('light');
         loadAppearanceTab();
     });

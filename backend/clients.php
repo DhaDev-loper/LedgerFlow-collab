@@ -13,6 +13,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Clients Directory — WRS Accounting</title>
+      <script src="../frontend/js/theme.js"></script>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
       <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -38,11 +39,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                       <div>
                           <h1 class="h4 mb-1">Clients Directory</h1>
-                          <p class="small mb-0" style="color: var(--dark-text-muted);">Manage customer profiles and business accounts.</p>
+                          <p class="small mb-0" style="color: var(--dark-text-muted);">Manage customer and vendor profiles and business accounts.</p>
                       </div>
                       <?php if ($canCreate): ?>
                           <div class="d-flex gap-2">
-                              <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#clientModal">+ Add New Client</button>
+                              <button class="quick-action-btn primary" id="addClientBtn" data-bs-toggle="modal" data-bs-target="#clientModal">+ Add New Client</button>
                           </div>
                       <?php endif; ?>
                   </div>
@@ -54,6 +55,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                   <tr>
                                       <th>Name</th>
                                       <th>Company</th>
+                                      <th>Party Type</th>
                                       <th>Email</th>
                                       <th>Phone</th>
                                       <th>Status</th>
@@ -62,7 +64,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                               </thead>
                               <tbody id="clientsTableBody">
                                   <tr>
-                                      <td colspan="6" class="text-center py-4" style="color: var(--dark-text-muted);">Loading clients...</td>
+                                      <td colspan="7" class="text-center py-4" style="color: var(--dark-text-muted);">Loading clients...</td>
                                   </tr>
                               </tbody>
                           </table>
@@ -142,31 +144,100 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
           </a>
       </nav>
 
+      <!-- Client Profile and Transaction History -->
+      <div class="modal fade" id="clientDetailModal" tabindex="-1" aria-labelledby="clientDetailName" aria-hidden="true">
+          <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+              <div class="modal-content modal-dark">
+                  <div class="modal-header align-items-start">
+                      <div>
+                          <h5 class="modal-title" id="clientDetailName">Client Details</h5>
+                          <p class="small mb-0 client-detail-muted" id="clientDetailCompany"></p>
+                      </div>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 p-3 mb-4 rounded border" style="border-color: var(--dark-border) !important; background: rgba(255,255,255,.025);">
+                          <div>
+                              <div class="small client-detail-muted mb-1" id="clientDetailBalanceLabel">Total Unsettled Balance (A/R)</div>
+                              <div class="h4 mb-0 text-light" id="clientDetailBalance">₱0.00</div>
+                          </div>
+                          <?php if ($canCreate): ?>
+                          <div class="d-flex gap-2">
+                              <button type="button" class="btn quick-action-btn primary" id="clientReceivePaymentBtn" onclick="openPaymentModal('ar', window.currentClientDetailId)">
+                                  <i class="bi bi-plus-lg me-1"></i> Receive Payment (A/R)
+                              </button>
+                              <button type="button" class="btn quick-action-btn" id="clientMakePaymentBtn" onclick="openPaymentModal('ap', window.currentClientDetailId)">
+                                  <i class="bi bi-cash-coin me-1"></i> Make Payment (A/P)
+                              </button>
+                          </div>
+                          <?php endif; ?>
+                      </div>
+                      <div class="row g-3 mb-4">
+                          <div class="col-md-6"><div class="small client-detail-muted">Email</div><div id="clientDetailEmail"></div></div>
+                          <div class="col-md-6"><div class="small client-detail-muted">Phone</div><div id="clientDetailPhone"></div></div>
+                          <div class="col-md-6"><div class="small client-detail-muted">Party Type</div><div class="text-capitalize" id="clientDetailPartyType"></div></div>
+                          <div class="col-md-6"><div class="small client-detail-muted">Status</div><div id="clientDetailStatus"></div></div>
+                      </div>
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                          <h6 class="mb-0">Transaction History</h6>
+                          <span class="small client-detail-muted">Journal activity</span>
+                      </div>
+                      <div class="client-history-panel">
+                          <div class="table-responsive">
+                          <table class="table client-history-table mb-0">
+                              <thead><tr><th>Date</th><th>Description</th><th>Journal Lines</th><th class="text-end">Amount</th></tr></thead>
+                              <tbody id="clientHistoryBody">
+                                  <tr><td colspan="4" class="text-center py-3 client-detail-muted">Select a client to view transactions.</td></tr>
+                              </tbody>
+                          </table>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+
       <!-- Add Client Modal -->
       <div class="modal fade" id="clientModal" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog">
               <div class="modal-content modal-dark">
                   <div class="modal-header">
-                      <h5 class="modal-title">Add New Client</h5>
+                      <h5 class="modal-title" id="clientModalTitle">Add New Client</h5>
                       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                   </div>
                   <form id="clientForm">
                       <div class="modal-body">
+                          <input type="hidden" id="clientId">
                           <div class="mb-3">
-                              <label class="form-label small">Full Name *</label>
+                              <label for="clientName" class="form-label small">Full Name *</label>
                               <input type="text" class="form-control form-control-dark" id="clientName" required>
                           </div>
                           <div class="mb-3">
-                              <label class="form-label small">Company Name</label>
+                              <label for="clientCompany" class="form-label small">Company Name</label>
                               <input type="text" class="form-control form-control-dark" id="clientCompany">
                           </div>
                           <div class="mb-3">
-                              <label class="form-label small">Email Address</label>
+                              <label for="clientPartyType" class="form-label small">Party Type</label>
+                              <select class="form-select form-control-dark" id="clientPartyType" required>
+                                  <option value="customer">Customer</option>
+                                  <option value="vendor">Vendor</option>
+                                  <option value="both">Customer and vendor</option>
+                              </select>
+                          </div>
+                          <div class="mb-3">
+                              <label for="clientEmail" class="form-label small">Email Address</label>
                               <input type="email" class="form-control form-control-dark" id="clientEmail">
                           </div>
                           <div class="mb-3">
-                              <label class="form-label small">Phone Number</label>
+                              <label for="clientPhone" class="form-label small">Phone Number</label>
                               <input type="text" class="form-control form-control-dark" id="clientPhone">
+                          </div>
+                          <div class="mb-3">
+                              <label for="clientStatus" class="form-label small">Status</label>
+                              <select class="form-select form-control-dark" id="clientStatus">
+                                  <option value="active">Active</option>
+                                  <option value="inactive">Inactive</option>
+                              </select>
                           </div>
                           <div id="clientError" class="alert alert-danger py-2 px-3 small d-none"></div>
                       </div>
@@ -178,6 +249,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
               </div>
           </div>
       </div>
+
+      <?php if ($canCreate) { require __DIR__ . '/partials/payment-modal.php'; } ?>
 
       <!-- RECEIPT SCANNER & EDIT MODAL -->
       <div class="modal fade" id="receiptScannerModal" tabindex="-1" aria-hidden="true">
@@ -283,6 +356,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <!-- Scripts -->
       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+      <script src="../frontend/js/settlement.js"></script>
+      <script src="../frontend/js/clients.js"></script>
       <script>
          const API_URL = 'routes/journal.php';
           async function loadClients() {
@@ -293,30 +368,117 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   
                   if (data.success && data.clients.length > 0) {
                       tbody.innerHTML = data.clients.map(c => `
-                          <tr>
-                              <td><strong>${escapeHtml(c.name)}</strong></td>
+                          <tr class="client-row" data-client-id="${Number(c.id)}" tabindex="0" role="button" aria-label="View details for ${escapeHtml(c.name)}" style="cursor: pointer;">
+                              <td class="fw-semibold">${escapeHtml(c.name)}</td>
                               <td>${escapeHtml(c.company_name || '-')}</td>
+                              <td class="text-capitalize">${escapeHtml(c.party_type || 'customer')}</td>
                               <td>${escapeHtml(c.email || '-')}</td>
                               <td>${escapeHtml(c.phone || '-')}</td>
                               <td>
-                                  <span class="badge bg-success bg-opacity-25 text-success px-2 py-1 text-uppercase" style="font-size: 0.75rem;">
+                                  <span class="badge ${c.status === 'active' ? 'bg-success bg-opacity-25 text-success' : 'bg-secondary bg-opacity-25 text-secondary'} px-2 py-1 text-uppercase" style="font-size: 0.75rem;">
                                       ${escapeHtml(c.status)}
                                   </span>
                               </td>
                               <td class="text-end">
-                                  <button class="btn btn-sm btn-dark border border-secondary text-light px-2 py-1" onclick="viewClient(${c.id})" title="View Details">
-                                      <i class="bi bi-eye"></i>
-                                  </button>
+                                  ${<?= $canCreate ? 'true' : 'false' ?> ? `
+                                      <button type="button" class="btn btn-sm btn-dark border border-secondary text-light px-2 py-1 edit-client-btn" data-client-id="${Number(c.id)}" title="Edit client" aria-label="Edit ${escapeHtml(c.name)}"><i class="bi bi-pencil"></i></button>
+                                      <button type="button" class="btn btn-sm ${c.status === 'active' ? 'btn-outline-warning' : 'btn-outline-success'} px-2 py-1 toggle-client-status-btn" data-client-id="${Number(c.id)}" data-status="${c.status === 'active' ? 'inactive' : 'active'}" title="${c.status === 'active' ? 'Deactivate' : 'Activate'} client" aria-label="${c.status === 'active' ? 'Deactivate' : 'Activate'} ${escapeHtml(c.name)}"><i class="bi ${c.status === 'active' ? 'bi-person-dash' : 'bi-person-check'}"></i></button>
+                                  ` : '<span class="client-detail-muted">—</span>'}
                               </td>
                           </tr>
                       `).join('');
                   } else {
-                      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4" style="color: var(--dark-text-muted);">No clients recorded yet.</td></tr>`;
+                      tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4" style="color: var(--dark-text-muted);">No clients recorded yet.</td></tr>`;
                   }
               } catch (e) {
                   console.error('Error loading clients:', e);
               }
           }
+
+          document.getElementById('clientsTableBody').addEventListener('click', (event) => {
+              const statusButton = event.target.closest('.toggle-client-status-btn');
+              if (statusButton) {
+                  event.stopPropagation();
+                  toggleClientStatus(
+                      Number(statusButton.dataset.clientId),
+                      statusButton.dataset.status,
+                      statusButton
+                  );
+                  return;
+              }
+              const editButton = event.target.closest('.edit-client-btn');
+              if (editButton) {
+                  event.stopPropagation();
+                  openClientEdit(Number(editButton.dataset.clientId));
+                  return;
+              }
+              const row = event.target.closest('.client-row');
+              if (row) viewClient(Number(row.dataset.clientId));
+          });
+
+          async function toggleClientStatus(clientId, status, button) {
+              const action = status === 'inactive' ? 'deactivate' : 'activate';
+              if (!window.confirm(`Are you sure you want to ${action} this client? Their financial history will be preserved.`)) {
+                  return;
+              }
+
+              button.disabled = true;
+              const formData = new FormData();
+              formData.append('action', 'toggle-client-status');
+              formData.append('client_id', String(clientId));
+              formData.append('status', status);
+              try {
+                  const response = await fetch(API_URL, { method: 'POST', body: formData });
+                  const data = await response.json();
+                  if (!response.ok || !data.success) {
+                      throw new Error(data.error || `Failed to ${action} client.`);
+                  }
+                  await loadClients();
+              } catch (error) {
+                  window.alert(error.message || `Failed to ${action} client.`);
+                  button.disabled = false;
+              }
+          }
+
+          document.getElementById('clientsTableBody').addEventListener('keydown', (event) => {
+              if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('.client-row')) {
+                  event.preventDefault();
+                  viewClient(Number(event.target.dataset.clientId));
+              }
+          });
+
+          window.openClientEdit = async function (clientId) {
+              const errorDiv = document.getElementById('clientError');
+              errorDiv.classList.add('d-none');
+              try {
+                  const res = await fetch(`${API_URL}?action=client-detail&client_id=${encodeURIComponent(clientId)}`);
+                  const data = await res.json();
+                  if (!res.ok || !data.success) throw new Error(data.error || 'Failed to load client.');
+                  const client = data.client;
+                  document.getElementById('clientId').value = client.id;
+                  document.getElementById('clientName').value = client.name || '';
+                  document.getElementById('clientCompany').value = client.company_name || '';
+                  document.getElementById('clientPartyType').value = client.party_type || 'customer';
+                  document.getElementById('clientEmail').value = client.email || '';
+                  document.getElementById('clientPhone').value = client.phone || '';
+                  document.getElementById('clientStatus').value = client.status || 'active';
+                  document.getElementById('clientModalTitle').textContent = 'Edit Client';
+                  document.getElementById('saveClientBtn').textContent = 'Save Changes';
+                  bootstrap.Modal.getOrCreateInstance(document.getElementById('clientModal')).show();
+              } catch (error) {
+                  window.alert(error.message || 'Failed to load client for editing.');
+              }
+          };
+
+          document.getElementById('addClientBtn')?.addEventListener('click', () => {
+              document.getElementById('clientForm').reset();
+              document.getElementById('clientId').value = '';
+              document.getElementById('clientPartyType').value = 'customer';
+              document.getElementById('clientStatus').value = 'active';
+              document.getElementById('clientModalTitle').textContent = 'Add New Client';
+              document.getElementById('saveClientBtn').textContent = 'Save Client';
+              document.getElementById('clientError').classList.add('d-none');
+          });
 
           document.getElementById('clientForm').addEventListener('submit', async (e) => {
               e.preventDefault();
@@ -324,11 +486,15 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
               errorDiv.classList.add('d-none');
 
               const formData = new FormData();
-              formData.append('action', 'create-client');
+              const clientId = document.getElementById('clientId').value;
+              formData.append('action', clientId ? 'update-client' : 'create-client');
+              if (clientId) formData.append('client_id', clientId);
               formData.append('name', document.getElementById('clientName').value);
               formData.append('company_name', document.getElementById('clientCompany').value);
+              formData.append('party_type', document.getElementById('clientPartyType').value);
               formData.append('email', document.getElementById('clientEmail').value);
               formData.append('phone', document.getElementById('clientPhone').value);
+              formData.append('status', document.getElementById('clientStatus').value);
 
               try {
                   const res = await fetch(API_URL, { method: 'POST', body: formData });
@@ -336,6 +502,9 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   if (data.success) {
                       bootstrap.Modal.getInstance(document.getElementById('clientModal')).hide();
                       document.getElementById('clientForm').reset();
+                      document.getElementById('clientId').value = '';
+                      document.getElementById('clientModalTitle').textContent = 'Add New Client';
+                      document.getElementById('saveClientBtn').textContent = 'Save Client';
                       loadClients();
                   } else {
                       errorDiv.textContent = data.error || 'Failed to save client.';
@@ -573,5 +742,6 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
           loadClients();
       </script>
+<script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

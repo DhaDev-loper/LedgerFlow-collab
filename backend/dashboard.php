@@ -14,9 +14,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard — WRS Accounting</title>
-<script>
-    document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
-</script>
+<script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -456,6 +454,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="../frontend/js/dashboard.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 </body>
 
 <?php if (!empty($_SESSION['just_logged_in'])): ?>

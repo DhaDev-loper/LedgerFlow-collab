@@ -17,9 +17,10 @@ if (empty($token) || !preg_match('/^[a-f0-9]{16}$/i', $token)) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        body { background-color: #0f172a; color: #f8fafc; min-height: 100vh; }
-        .upload-card { background: #1e293b; border-radius: 1rem; border: 1px solid #334155; }
+        body { background-color: #f4f6f9; color: #16233a; min-height: 100vh; }
+        .upload-card { background: #ffffff; border-radius: 1rem; border: 1px solid rgba(8, 13, 30, 0.12); box-shadow: 0 12px 32px rgba(22, 35, 58, 0.08); }
         .btn-capture { background: linear-gradient(135deg, #2563eb, #1d4ed8); border: none; font-weight: 600; }
+        .text-light { color: #16233a !important; }
     </style>
 </head>
 <body>

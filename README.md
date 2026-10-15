@@ -31,6 +31,56 @@ This installs PHPMailer into a `vendor/` folder (not included in the repo — re
 3. Create a database named `wrs_accounting`
 4. Import `backend/database/schema.sql` into it
 
+`backend/database/schema.sql` is the complete fresh-install schema for the
+application, including account codes, journal deletion approvals, receipt-scan
+sessions, audit history, and settlement allocations. Do not import it over an
+existing database; use the listed migrations to update an existing installation.
+
+If you already have an existing database, run
+`backend/database/migrations/20261015_add_suspension_level.sql` once to add the
+field required for progressive login suspensions, and run
+`backend/database/migrations/20261015_create_audit_table.sql` once to create the
+audit log table. Run `backend/database/migrations/20261015_add_single_active_session.sql`
+once to enable one active login session per account. Run
+`backend/database/migrations/20261015_add_cash_account_flag.sql` and
+`backend/database/migrations/20261015_add_party_types_and_settlement_allocations.sql`
+once to configure cash/bank account classification and customer/vendor settlement tracking.
+Run `backend/database/migrations/20261015_add_account_classification.sql` once to
+add current/non-current classification for Asset and Liability accounts. Set the
+classification in the Chart of Accounts; the Balance Sheet groups each category
+accordingly. Existing accounts default to current.
+Run `backend/database/migrations/20261015_add_journal_edit_tracking.sql` once to
+track journal header edits. Edited entries are highlighted and labeled in the
+journal list and detail view with the latest edit timestamp.
+Run `backend/database/migrations/20261015_remove_audit_ip_address.sql` once to
+remove stored IP addresses from the audit table. The audit viewer now presents
+actions and change details in plain language.
+
+Successful logins and journal, account, client, and user-management changes are
+recorded in `audit`. Audit details intentionally exclude credentials and
+password/PIN values. The audit insert is committed with related writes where
+the route uses a database transaction.
+Owners and admins can open the audit viewer at `backend/audit-log.php` or use
+the Audit Log button in User Management. The viewer supports search, action and
+entity filters, date filters, and pagination.
+
+The Appearance setting stores a light/dark preference in the current browser
+and applies it across the application modules, including shared navigation,
+forms, tables, and modals. Dark mode is the default; saved preferences can be
+changed later in Settings.
+
+An account cannot sign in on a second device while its current session is
+active. A signed-in session expires for this purpose after 30 minutes without
+an authenticated request; otherwise, the user must log out before signing in
+on another device.
+The application also signs out an idle browser after 30 minutes without user
+activity, with a one-minute warning beforehand.
+
+Non-owner accounts are suspended after five failed login attempts. Successive
+suspensions last 5 minutes, 15 minutes, and 60 minutes; the next cycle locks
+the account by deactivating it. Only the owner can reactivate a locked-out
+account, which resets its suspension level.
+
 ### 4. Configure environment variables
 1. Copy `.env.example` to a new file named `.env`
 2. Fill in your own values:
@@ -60,6 +110,30 @@ http://localhost/wrs-accounting-collab/frontend/login.html
 
 frontend/ — all user-facing pages, CSS, JS
 backend/ — PHP logic: routes, config, database
+
+## Client Settlements
+
+Client profiles show their journal history and outstanding Accounts Receivable
+balance. Authorized users can record customer receipts and vendor payments from
+the client profile or Transactions page; settlements are posted as balanced
+journal entries using active cash/bank, Accounts Receivable, and Accounts
+Payable accounts. Payments are allocated automatically to the oldest due
+invoice or bill first, and cannot exceed the selected party's open balance.
+Invoices and vendor bills require a customer/vendor and due date. Vendor bills
+can be entered from Transactions using **Record Vendor Bill**; create or edit
+parties in the Clients directory to set whether they are customers, vendors, or
+both. The party migration marks existing parties with A/P activity as
+customer/vendor until their records are reviewed; other existing clients keep
+the customer default. Clients can be deactivated or reactivated from the
+directory without deleting their profile or financial history. Inactive clients
+are excluded from new transaction selectors and cannot receive new invoices or
+bills, but can still be selected to settle existing A/R or A/P balances.
+
+Cash, bank, and wallet accounts are explicitly marked in the Chart of Accounts.
+The cash-flow reports and quick cash transaction selectors use this flag rather
+than account-name matching. Review the migrated flags before using the updated
+cash-flow summaries, and mark any newly created cash-equivalent Asset accounts
+accordingly.
 
 ## Notes for Contributors
 - Never commit `.env` — it contains real credentials

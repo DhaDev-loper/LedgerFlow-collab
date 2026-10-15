@@ -103,6 +103,15 @@ function renderTableRows(users, tbody) {
         const initials = getInitials(user.full_name);
         const roleLower = (user.role || 'staff').toLowerCase();
         const isSelf = parseInt(user.id, 10) === parseInt(typeof CURRENT_USER_ID !== 'undefined' ? CURRENT_USER_ID : 0, 10);
+        const isLockedOut = Number(user.suspension_level) >= 4;
+        const suspensionEnds = user.locked_until ? new Date(user.locked_until.replace(' ', 'T')) : null;
+        const isSuspended = suspensionEnds && suspensionEnds > new Date();
+        const isOwner = typeof CURRENT_USER_ROLE !== 'undefined' && CURRENT_USER_ROLE === 'owner';
+        const statusLabel = isLockedOut
+            ? 'Locked out — owner activation required'
+            : isSuspended
+                ? `Suspended until ${suspensionEnds.toLocaleString()}`
+                : user.is_active == 1 ? 'Active' : 'Inactive';
 
         const actionsHtml = isSelf
             ? `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit Profile">
@@ -111,9 +120,9 @@ function renderTableRows(users, tbody) {
             : `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit User">
                    <i class="bi bi-pencil"></i>
                </button>
-               <button class="action-icon-btn warning" onclick="toggleStatus(${user.id})" title="${user.is_active == 1 ? 'Deactivate' : 'Activate'} User">
+            ${isLockedOut && !isOwner ? '' : `<button class="action-icon-btn warning" onclick="toggleStatus(${user.id})" title="${isLockedOut ? 'Reactivate locked-out user' : user.is_active == 1 ? 'Deactivate' : 'Activate'} User">
                    <i class="bi bi-power"></i>
-               </button>
+            </button>`}
                <button class="action-icon-btn danger" onclick='openDeleteModal(${user.id}, ${JSON.stringify(user.full_name)})' title="Delete User">
                    <i class="bi bi-trash"></i>
                </button>`;
@@ -131,8 +140,8 @@ function renderTableRows(users, tbody) {
                 <td><span style="color: var(--dark-text-muted);">${escapeHtml(user.email)}</span></td>
                 <td><span class="role-badge role-${roleLower}">${capitalize(user.role)}</span></td>
                 <td>
-                    <span class="badge-${user.is_active == 1 ? 'in' : 'out'}">
-                        ${user.is_active == 1 ? 'Active' : 'Inactive'}
+                    <span class="badge-${user.is_active == 1 ? (isSuspended ? 'out' : 'in') : 'out'}">
+                        ${escapeHtml(statusLabel)}
                     </span>
                 </td>
                 <td><span class="small" style="color: var(--dark-text-muted);">${formatDate(user.created_at)}</span></td>
@@ -357,12 +366,15 @@ async function loadArchivedUsers() {
             <tr class="border-bottom border-secondary border-opacity-10">
                 <td class="fw-semibold text-white">${escapeHtml(user.full_name)}</td>
                 <td class="text-muted">${escapeHtml(user.email)}</td>
-                <td><span class="badge bg-secondary bg-opacity-25 text-light px-2 py-1 text-capitalize">${escapeHtml(user.role)}</span></td>
+                <td>
+                    <span class="badge bg-secondary bg-opacity-25 text-light px-2 py-1 text-capitalize">${escapeHtml(user.role)}</span>
+                    ${Number(user.suspension_level) >= 4 ? '<span class="badge bg-danger bg-opacity-25 text-danger ms-1">Locked out</span>' : ''}
+                </td>
                 <td class="text-muted small">${user.deleted_at ? new Date(user.deleted_at).toLocaleDateString() : 'N/A'}</td>
                 <td class="text-end">
-                    <button type="button" onclick="restoreUser(${user.id})" class="btn btn-sm btn-success bg-opacity-25 text-success border-0 px-3 rounded-pill">
-                        Restore
-                    </button>
+                    ${Number(user.suspension_level) >= 4 && CURRENT_USER_ROLE !== 'owner'
+                        ? '<span class="small text-muted">Owner only</span>'
+                        : `<button type="button" onclick="restoreUser(${user.id})" class="btn btn-sm btn-success bg-opacity-25 text-success border-0 px-3 rounded-pill">Restore</button>`}
                 </td>
             </tr>
         `).join('');

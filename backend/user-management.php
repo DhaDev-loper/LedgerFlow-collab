@@ -5,6 +5,7 @@ require_once __DIR__ . '/config/admin_guard.php';
 
 $fullName = $_SESSION['full_name'];
 $currentUserId = (int)($_SESSION['user_id'] ?? 0);
+$currentUserRole = $_SESSION['role'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -12,6 +13,7 @@ $currentUserId = (int)($_SESSION['user_id'] ?? 0);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>User Management — WRS Accounting</title>
+    <script src="../frontend/js/theme.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -87,6 +89,9 @@ $currentUserId = (int)($_SESSION['user_id'] ?? 0);
                     
                     <!-- Grouped Action Buttons -->
                     <div class="d-flex align-items-center gap-2">
+                        <a href="audit-log.php" class="quick-action-btn" title="View system audit log">
+                            <i class="bi bi-shield-check me-1"></i> Audit Log
+                        </a>
                         <!-- Icon-Only Archive Button -->
                         <button type="button" 
                                 onclick="openArchiveModal()" 
@@ -134,7 +139,7 @@ $currentUserId = (int)($_SESSION['user_id'] ?? 0);
                             Accountants <span class="badge rounded-pill bg-info-subtle text-info ms-1" id="cntAccountant">0</span>
                         </button>
                         <button class="btn btn-sm role-filter-btn" onclick="setRoleFilter('staff')">
-                            Staff <span class="badge rounded-pill bg-secondary-subtle text-white ms-1" id="cntStaff">0</span>
+                            Staff <span class="badge rounded-pill bg-secondary-subtle text-secondary ms-1" id="cntStaff">0</span>
                         </button>
                     </div>
                    
@@ -351,8 +356,10 @@ $currentUserId = (int)($_SESSION['user_id'] ?? 0);
 
     <script>
         const CURRENT_USER_ID = <?php echo $currentUserId; ?>;
+        const CURRENT_USER_ROLE = <?php echo json_encode($currentUserRole); ?>;
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../frontend/js/user-management.js"></script>
+    <script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

@@ -2,8 +2,11 @@
    Dashboard logic
    ===================================================================== */
 
-const gridColor = 'rgba(255, 255, 255, 0.06)';
-const tickColor = 'rgba(241, 245, 249, 0.55)';
+const dashboardThemeStyles = getComputedStyle(document.documentElement);
+const gridColor = dashboardThemeStyles.getPropertyValue('--dark-border').trim();
+const tickColor = dashboardThemeStyles.getPropertyValue('--dark-text-muted').trim();
+const chartSurface = dashboardThemeStyles.getPropertyValue('--dark-surface').trim();
+const chartText = dashboardThemeStyles.getPropertyValue('--dark-text').trim();
 
 
 async function loadCashflowChart() {
@@ -65,11 +68,11 @@ async function loadCashflowChart() {
                         labels: { boxWidth: 12, usePointStyle: true, color: tickColor, font: { family: 'Inter', size: 12 } },
                     },
                     tooltip: {
-                        backgroundColor: '#14243F',
-                        borderColor: 'rgba(255,255,255,0.1)',
+                        backgroundColor: chartSurface,
+                        borderColor: gridColor,
                         borderWidth: 1,
-                        titleColor: '#F1F5F9',
-                        bodyColor: '#F1F5F9',
+                        titleColor: chartText,
+                        bodyColor: chartText,
                         callbacks: {
                             label: (item) => `${item.dataset.label}: ₱${item.formattedValue}`,
                         },
@@ -131,10 +134,11 @@ async function loadRecentTransactions() {
 
         tbody.innerHTML = data.transactions.map(tx => {
             const isInflow = tx.type_name === 'Cash Inflow';
-            const icon = isInflow ? '↓' : '↑';
-            const iconClass = isInflow ? 'in' : 'out';
-            const amountClass = isInflow ? 'text-success' : 'text-danger';
-            const sign = isInflow ? '+' : '-';
+            const isOutflow = tx.type_name === 'Cash Outflow';
+            const icon = isInflow ? '↓' : isOutflow ? '↑' : '↔';
+            const iconClass = isInflow ? 'in' : isOutflow ? 'out' : '';
+            const amountClass = isInflow ? 'text-success' : isOutflow ? 'text-danger' : '';
+            const sign = isInflow ? '+' : isOutflow ? '-' : '';
 
             return `
                 <tr>
@@ -225,6 +229,7 @@ async function loadDashboardAccounts() {
 // =====================================================================
 
 let quickTransactionAccounts = [];
+let quickTransactionReferenceData = null;
 
 async function loadQuickTransactionAccounts() {
     try {
@@ -234,8 +239,9 @@ async function loadQuickTransactionAccounts() {
         if (!data.success) return;
 
         quickTransactionAccounts = data.accounts;
+        quickTransactionReferenceData = data;
 
-        const assetAccounts = data.accounts.filter(a => a.type_name === 'Asset');
+        const assetAccounts = data.cash_accounts || [];
         const revenueAccounts = data.accounts.filter(a => a.type_name === 'Revenue');
         const expenseAccounts = data.accounts.filter(a => a.type_name === 'Expense');
 
@@ -249,11 +255,109 @@ async function loadQuickTransactionAccounts() {
 
         window.CASH_INFLOW_TYPE_ID = data.types.find(t => t.name === 'Cash Inflow')?.id;
         window.CASH_OUTFLOW_TYPE_ID = data.types.find(t => t.name === 'Cash Outflow')?.id;
+        window.TRANSFER_TYPE_ID = data.types.find(t => t.name === 'Transfer')?.id;
+
+        const cashAccountIds = new Set(assetAccounts.map(account => Number(account.id)));
+        const billAccounts = data.accounts.filter(account =>
+            account.type_name === 'Expense'
+            || (account.type_name === 'Asset'
+                && !cashAccountIds.has(Number(account.id))
+                && account.name.toLowerCase() !== 'accounts receivable')
+        );
+        const vendors = (data.clients || []).filter(client =>
+            client.status === 'active'
+            && (client.party_type === 'vendor' || client.party_type === 'both')
+        );
+        const billAccountSelect = document.getElementById('vendorBillAccount');
+        if (billAccountSelect) {
+            billAccountSelect.replaceChildren(new Option('-- Select expense or asset --', ''));
+            billAccounts.forEach(account => billAccountSelect.add(new Option(account.name, account.id)));
+        }
+        const vendorSelect = document.getElementById('vendorBillVendor');
+        if (vendorSelect) {
+            vendorSelect.replaceChildren(new Option('-- Select vendor --', ''));
+            vendors.forEach(vendor => {
+                const label = vendor.company_name ? `${vendor.name} (${vendor.company_name})` : vendor.name;
+                vendorSelect.add(new Option(label, vendor.id));
+            });
+        }
+        const payableSelect = document.getElementById('vendorBillPayable');
+        if (payableSelect) {
+            payableSelect.replaceChildren(new Option('-- Select Accounts Payable --', ''));
+            (data.payable_accounts || []).forEach(account => payableSelect.add(new Option(account.name, account.id)));
+        }
 
     } catch (err) {
         console.error('Failed to load quick transaction accounts:', err);
     }
 }
+
+document.getElementById('vendorBillModal')?.addEventListener('show.bs.modal', () => {
+    const today = new Date();
+    const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    document.getElementById('vendorBillDate').value = localDate;
+    document.getElementById('vendorBillDueDate').value = localDate;
+});
+
+document.getElementById('vendorBillForm')?.addEventListener('submit', async event => {
+    event.preventDefault();
+    const errorBox = document.getElementById('vendorBillError');
+    const saveButton = document.getElementById('saveVendorBillBtn');
+    errorBox.classList.add('d-none');
+
+    if (!quickTransactionReferenceData || !window.TRANSFER_TYPE_ID) {
+        errorBox.textContent = 'The Transfer transaction type is not configured.';
+        errorBox.classList.remove('d-none');
+        return;
+    }
+
+    const vendorId = Number(document.getElementById('vendorBillVendor').value);
+    const debitAccountId = Number(document.getElementById('vendorBillAccount').value);
+    const payableAccountId = Number(document.getElementById('vendorBillPayable').value);
+    const amount = Number(document.getElementById('vendorBillAmount').value);
+    if (!vendorId || !debitAccountId || !payableAccountId || !Number.isFinite(amount) || amount <= 0) {
+        errorBox.textContent = 'Select a vendor and accounts, and enter an amount greater than zero.';
+        errorBox.classList.remove('d-none');
+        return;
+    }
+
+    saveButton.disabled = true;
+    saveButton.textContent = 'Saving...';
+    try {
+        const response = await fetch('routes/journal.php', {
+            method: 'POST',
+            body: new URLSearchParams({
+                action: 'create',
+                document_type: 'vendor_bill',
+                transaction_type_id: String(window.TRANSFER_TYPE_ID),
+                transaction_date: document.getElementById('vendorBillDate').value,
+                due_date: document.getElementById('vendorBillDueDate').value,
+                client_id: String(vendorId),
+                description: document.getElementById('vendorBillDescription').value.trim(),
+                reference_no: document.getElementById('vendorBillReference').value.trim(),
+                debit_lines: JSON.stringify([{ account_id: debitAccountId, amount }]),
+                credit_lines: JSON.stringify([{ account_id: payableAccountId, amount }]),
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Could not record vendor bill.');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('vendorBillModal')).hide();
+        document.getElementById('vendorBillForm').reset();
+        loadRecentTransactions();
+        loadDashboardSummary();
+        loadDashboardAccounts();
+        loadReceivablesPayables();
+    } catch (error) {
+        errorBox.textContent = error.message || 'Could not reach the server.';
+        errorBox.classList.remove('d-none');
+    } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Record Bill';
+    }
+});
 
 document.getElementById('quickSaleForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();

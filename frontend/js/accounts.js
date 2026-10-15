@@ -22,6 +22,7 @@ async function loadAccountTypes() {
         if (data.success) {
             const select = document.getElementById('accountTypeId');
             select.innerHTML = data.types.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+            select.dispatchEvent(new Event('change'));
         }
     } catch (err) {
         console.error('Failed to load account types:', err);
@@ -178,9 +179,9 @@ function renderFilterResetBar() {
     if (selectedAccountType) {
         bar.innerHTML = `
             <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15);">
-                <span class="small text-white-50">Filtered by:</span>
-                <span class="fw-semibold text-white small">${selectedAccountType} Accounts</span>
-                <button type="button" onclick="resetKpiFilter()" class="btn btn-sm btn-link text-white p-0 ms-2 border-0" title="Reset filter">
+                <span class="small" style="color: var(--dark-text-muted);">Filtered by:</span>
+                <span class="fw-semibold small">${selectedAccountType} Accounts</span>
+                <button type="button" onclick="resetKpiFilter()" class="btn btn-sm btn-link p-0 ms-2 border-0" style="color: var(--dark-text);" title="Reset filter">
                     <i class="bi bi-x-circle-fill"></i> Reset
                 </button>
             </div>
@@ -199,7 +200,11 @@ function renderTable(accounts, tbody) {
 
     tbody.innerHTML = accounts.map(acc => `
         <tr>
-            <td>${escapeHtml(acc.name)}</td>
+            <td>
+                ${acc.code ? `<code class="text-primary fw-bold me-2">${escapeHtml(acc.code)}</code>` : ''}
+                <strong>${escapeHtml(acc.name)}</strong>
+                ${Number(acc.is_cash_account) === 1 ? '<span class="badge bg-info bg-opacity-25 text-info ms-2">Cash / Bank</span>' : ''}
+            </td>
             <td><span class="role-badge role-${acc.type_name.toLowerCase()}">${acc.type_name}</span></td>
             <td class="text-end money fw-semibold">${formatMoney(acc.current_balance)}</td>
             <td>
@@ -229,10 +234,30 @@ function formatMoney(amount) {
 }
 
 if (CAN_MANAGE) {
+    const accountTypeSelect = document.getElementById('accountTypeId');
+    const cashAccountOption = document.getElementById('cashAccountOption');
+    const isCashAccountInput = document.getElementById('isCashAccount');
+    const classificationOption = document.getElementById('accountClassificationOption');
+    const classificationInput = document.getElementById('accountClassification');
+
+    function updateCashAccountOption() {
+        const selectedType = accountTypeSelect.options[accountTypeSelect.selectedIndex]?.text;
+        const isAsset = selectedType === 'Asset';
+        const supportsClassification = isAsset || selectedType === 'Liability';
+        cashAccountOption.classList.toggle('d-none', !isAsset);
+        classificationOption.classList.toggle('d-none', !supportsClassification);
+        if (!isAsset) isCashAccountInput.checked = false;
+        if (!supportsClassification) classificationInput.value = 'current';
+    }
+
+    accountTypeSelect.addEventListener('change', updateCashAccountOption);
+
     // ---------- Add Account button ----------
     document.getElementById('addAccountBtn')?.addEventListener('click', () => {
         accountForm.reset();
         document.getElementById('accountId').value = '';
+        isCashAccountInput.checked = false;
+        updateCashAccountOption();
         modalTitle.textContent = 'Add Account';
         document.getElementById('openingBalanceGroup').style.display = 'block';
         formError.classList.add('d-none');
@@ -244,9 +269,13 @@ if (CAN_MANAGE) {
         formError.classList.add('d-none');
 
         document.getElementById('accountId').value = account.id;
+        document.getElementById('accountCode').value = account.code || '';
         document.getElementById('accountName').value = account.name;
         document.getElementById('accountTypeId').value = account.account_type_id;
+        classificationInput.value = account.classification || 'current';
+        isCashAccountInput.checked = Number(account.is_cash_account) === 1;
         document.getElementById('accountNotes').value = account.notes || '';
+        updateCashAccountOption();
 
         modalTitle.textContent = 'Edit Account';
         document.getElementById('openingBalanceGroup').style.display = 'none';
@@ -399,8 +428,6 @@ async function initScanSession() {
         if (qrContainer) qrContainer.innerHTML = '<span class="text-danger small">Server connection error.</span>';
         console.error('Failed to initialize scan session:', err);
     }
-
-    
 }
 
 
@@ -502,7 +529,7 @@ function populateScanAccounts() {
 
     if (window.allAccountsForLines && window.allAccountsForLines.length > 0) {
         const optionsHtml = window.allAccountsForLines.map(a =>
-            `<option value="${a.id}">${a.name} (${a.type_name})</option>`
+            `<option value="${a.id}">${a.code ? a.code + ' - ' : ''}${a.name} (${a.type_name})</option>`
         ).join('');
 
         if (debitSelect) debitSelect.innerHTML = optionsHtml;
@@ -545,7 +572,6 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
             bootstrap.Modal.getInstance(modalEl)?.hide();
 
             showToast('Receipt transaction saved successfully!', 'success');
-            // Trigger whatever table reload function your app uses
             if (typeof loadJournalEntries === 'function') {
                 loadJournalEntries();
             } else if (typeof fetchEntries === 'function') {
@@ -553,7 +579,6 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
             } else if (typeof renderJournalTable === 'function') {
                 renderJournalTable();
             } else {
-                // Fallback: reload the page smoothly if no function matches
                 location.reload();
             }
         } else {
@@ -568,11 +593,9 @@ async function triggerCleanupRoutine() {
     try {
         await fetch('../backend/routes/cleanup-scans.php?ajax=1');
     } catch (err) {
-        // Fail silently so it never interrupts the user experience
         console.debug('Background cleanup check completed.');
     }
 }
-
 
 // ---------- Logout ----------
 document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {

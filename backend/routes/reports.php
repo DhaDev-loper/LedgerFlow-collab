@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/report_helper.php';
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -27,6 +28,7 @@ switch ($action) {
              JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
              WHERE at.name = 'Revenue'
                AND tj.transaction_date BETWEEN :date_from AND :date_to
+               AND tj.status != 'voided'
              GROUP BY a.id, a.name
              HAVING net_amount != 0
              ORDER BY a.name"
@@ -44,6 +46,7 @@ switch ($action) {
              JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
              WHERE at.name = 'Expense'
                AND tj.transaction_date BETWEEN :date_from AND :date_to
+               AND tj.status != 'voided'
              GROUP BY a.id, a.name
              HAVING net_amount != 0
              ORDER BY a.name"
@@ -67,67 +70,54 @@ switch ($action) {
         break;
 
 
-        case 'balance-sheet':
-        $asOfDate = $_GET['as_of'] ?? date('Y-m-d');
+    case 'balance-sheet':
+        $asOfDate = getReportAsOfDate($_GET);
+        $accounts = array_values(array_filter(
+            getAccountBalancesAsOf(getDbConnection(), $asOfDate),
+            static fn(array $account): bool => (int) $account['is_active'] === 1
+        ));
 
-        $pdo = getDbConnection();
+        $byType = static function (array $accounts, string $type): array {
+            return array_values(array_map(
+                static fn(array $account): array => [
+                    'id' => $account['id'],
+                    'name' => $account['name'],
+                    'classification' => $account['classification'],
+                    'current_balance' => $account['balance'],
+                ],
+                array_filter($accounts, static fn(array $account): bool => $account['type_name'] === $type)
+            ));
+        };
 
-        // Assets — using stored current_balance since it's already
-        // maintained correctly by every journal entry's balance update.
-        $assetsStmt = $pdo->query(
-            "SELECT a.id, a.name, a.current_balance
-             FROM accounts a
-             JOIN account_types at ON at.id = a.account_type_id
-             WHERE at.name = 'Asset' AND a.is_active = 1
-             ORDER BY a.name"
-        );
-        $assets = $assetsStmt->fetchAll();
-
-        $liabilitiesStmt = $pdo->query(
-            "SELECT a.id, a.name, a.current_balance
-             FROM accounts a
-             JOIN account_types at ON at.id = a.account_type_id
-             WHERE at.name = 'Liability' AND a.is_active = 1
-             ORDER BY a.name"
-        );
-        $liabilities = $liabilitiesStmt->fetchAll();
-
-        $equityStmt = $pdo->query(
-            "SELECT a.id, a.name, a.current_balance
-             FROM accounts a
-             JOIN account_types at ON at.id = a.account_type_id
-             WHERE at.name = 'Equity' AND a.is_active = 1
-             ORDER BY a.name"
-        );
-        $equity = $equityStmt->fetchAll();
-
+        $assets = $byType($accounts, 'Asset');
+        $liabilities = $byType($accounts, 'Liability');
+        $byClassification = static fn(array $items, string $classification): array => array_values(array_filter(
+            $items,
+            static fn(array $item): bool => $item['classification'] === $classification
+        ));
+        $currentAssets = $byClassification($assets, 'current');
+        $nonCurrentAssets = $byClassification($assets, 'non_current');
+        $currentLiabilities = $byClassification($liabilities, 'current');
+        $nonCurrentLiabilities = $byClassification($liabilities, 'non_current');
+        $equity = $byType($accounts, 'Equity');
+        $revenue = $byType($accounts, 'Revenue');
+        $expenses = $byType($accounts, 'Expense');
         $totalAssets = array_sum(array_column($assets, 'current_balance'));
         $totalLiabilities = array_sum(array_column($liabilities, 'current_balance'));
         $totalEquityRecorded = array_sum(array_column($equity, 'current_balance'));
-
-        // Retained Earnings: since we don't have a formal "closing the books"
-        // process yet, we treat all accumulated net income (Revenue minus
-        // Expense, all-time) as part of Equity — this is what makes the
-        // Balance Sheet actually balance: Assets = Liabilities + Equity.
-        $netIncomeStmt = $pdo->query(
-            "SELECT
-                (SELECT COALESCE(SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE -t.amount END), 0)
-                 FROM transactions t JOIN accounts a ON a.id = t.account_id JOIN account_types at ON at.id = a.account_type_id
-                 WHERE at.name = 'Revenue') AS total_revenue,
-                (SELECT COALESCE(SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE -t.amount END), 0)
-                 FROM transactions t JOIN accounts a ON a.id = t.account_id JOIN account_types at ON at.id = a.account_type_id
-                 WHERE at.name = 'Expense') AS total_expense"
-        );
-        $income = $netIncomeStmt->fetch();
-        $retainedEarnings = (float) $income['total_revenue'] - (float) $income['total_expense'];
-
+        $retainedEarnings = array_sum(array_column($revenue, 'current_balance'))
+            - array_sum(array_column($expenses, 'current_balance'));
         $totalEquity = $totalEquityRecorded + $retainedEarnings;
 
         echo json_encode([
             'success' => true,
             'as_of' => $asOfDate,
             'assets' => $assets,
+            'current_assets' => $currentAssets,
+            'non_current_assets' => $nonCurrentAssets,
             'liabilities' => $liabilities,
+            'current_liabilities' => $currentLiabilities,
+            'non_current_liabilities' => $nonCurrentLiabilities,
             'equity' => $equity,
             'retained_earnings' => $retainedEarnings,
             'total_assets' => $totalAssets,
@@ -138,33 +128,22 @@ switch ($action) {
         ]);
         break;
 
-            case 'trial-balance':
-        $asOf = $_GET['as_of'] ?? date('Y-m-d');
-
-        $pdo = getDbConnection();
-
-        $stmt = $pdo->prepare(
-            "SELECT a.id, a.name, at.name AS type_name,
-                    COALESCE(SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE 0 END), 0) AS total_debit,
-                    COALESCE(SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE 0 END), 0) AS total_credit
-             FROM accounts a
-             JOIN account_types at ON at.id = a.account_type_id
-             LEFT JOIN transactions t ON t.account_id = a.id
-             LEFT JOIN transaction_journals tj ON tj.id = t.transaction_journal_id AND tj.transaction_date <= :as_of
-             WHERE a.is_active = 1
-             GROUP BY a.id, a.name, at.name
-             HAVING (total_debit - total_credit) != 0
-             ORDER BY at.id, a.name"
-        );
-        $stmt->execute([':as_of' => $asOf]);
-        $rows = $stmt->fetchAll();
+    case 'trial-balance':
+        $asOf = getReportAsOfDate($_GET);
+        $accounts = array_values(array_filter(
+            getAccountBalancesAsOf(getDbConnection(), $asOf),
+            static fn(array $account): bool => (int) $account['is_active'] === 1
+        ));
 
         $lines = [];
         $totalDebitColumn = 0;
         $totalCreditColumn = 0;
 
-        foreach ($rows as $row) {
+        foreach ($accounts as $row) {
             $net = (float) $row['total_debit'] - (float) $row['total_credit'];
+            if (abs($net) < 0.005) {
+                continue;
+            }
 
             $debitBalance = $net > 0 ? $net : 0;
             $creditBalance = $net < 0 ? abs($net) : 0;

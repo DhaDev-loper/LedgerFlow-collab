@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/report_helper.php';
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Dompdf\Dompdf;
@@ -65,6 +66,7 @@ switch ($action) {
              JOIN account_types at ON at.id = a.account_type_id
              JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
              WHERE at.name = 'Revenue' AND tj.transaction_date BETWEEN :date_from AND :date_to
+               AND tj.status != 'voided'
              GROUP BY a.id, a.name HAVING net_amount != 0 ORDER BY a.name"
         );
         $revenueStmt->execute([':date_from' => $dateFrom, ':date_to' => $dateTo]);
@@ -78,6 +80,7 @@ switch ($action) {
              JOIN account_types at ON at.id = a.account_type_id
              JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
              WHERE at.name = 'Expense' AND tj.transaction_date BETWEEN :date_from AND :date_to
+               AND tj.status != 'voided'
              GROUP BY a.id, a.name HAVING net_amount != 0 ORDER BY a.name"
         );
         $expenseStmt->execute([':date_from' => $dateFrom, ':date_to' => $dateTo]);
@@ -163,29 +166,22 @@ switch ($action) {
         exit;
 
     case 'balance-sheet-pdf':
-        $asOf = $_GET['as_of'] ?? date('Y-m-d');
+        $asOf = getReportAsOfDate($_GET);
         $fmt = fn($n) => '&#8369;' . number_format((float) $n, 2);
 
-        // Fetch Group Balances as of specified date
-        $fetchGroup = function (string $typeName) use ($pdo, $asOf): array {
-            $isAssetOrExpense = in_array($typeName, ['Asset', 'Expense'], true);
-            $normalFormula = $isAssetOrExpense
-                ? "SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE -t.amount END)"
-                : "SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE -t.amount END)";
-
-            $stmt = $pdo->prepare(
-                "SELECT a.name, COALESCE({$normalFormula}, 0) AS balance
-                 FROM accounts a
-                 JOIN account_types at ON at.id = a.account_type_id
-                 LEFT JOIN transactions t ON t.account_id = a.id
-                 LEFT JOIN transaction_journals tj ON tj.id = t.transaction_journal_id AND tj.transaction_date <= :as_of
-                 WHERE at.name = :type AND a.is_active = 1
-                 GROUP BY a.id, a.name
-                 HAVING balance != 0
-                 ORDER BY a.name"
-            );
-            $stmt->execute([':type' => $typeName, ':as_of' => $asOf]);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $balancesAsOf = array_values(array_filter(
+            getAccountBalancesAsOf($pdo, $asOf),
+            static fn(array $account): bool => (int) $account['is_active'] === 1
+        ));
+        $fetchGroup = function (string $typeName) use ($balancesAsOf): array {
+            return array_values(array_map(
+                static fn(array $account): array => ['name' => $account['name'], 'balance' => $account['balance']],
+                array_filter(
+                    $balancesAsOf,
+                    static fn(array $account): bool => $account['type_name'] === $typeName
+                        && abs((float) $account['balance']) >= 0.005
+                )
+            ));
         };
 
         $assets = $fetchGroup('Asset');
@@ -198,28 +194,8 @@ switch ($action) {
 
         // Retained earnings up to as_of date
         // Retained earnings up to as_of date
-        $incomeStmt = $pdo->prepare(
-            "SELECT
-                (SELECT COALESCE(SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE -t.amount END), 0)
-                 FROM transactions t 
-                 JOIN accounts a ON a.id = t.account_id 
-                 JOIN account_types at ON at.id = a.account_type_id
-                 JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-                 WHERE at.name = 'Revenue' AND tj.transaction_date <= :as_of_rev) AS total_revenue,
-                (SELECT COALESCE(SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE -t.amount END), 0)
-                 FROM transactions t 
-                 JOIN accounts a ON a.id = t.account_id 
-                 JOIN account_types at ON at.id = a.account_type_id
-                 JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-                 WHERE at.name = 'Expense' AND tj.transaction_date <= :as_of_exp) AS total_expense"
-        );
-        $incomeStmt->execute([
-            ':as_of_rev' => $asOf,
-            ':as_of_exp' => $asOf
-        ]);
-        $income = $incomeStmt->fetch(PDO::FETCH_ASSOC);
-
-        $retainedEarnings = (float) ($income['total_revenue'] ?? 0) - (float) ($income['total_expense'] ?? 0);
+        $retainedEarnings = array_sum(array_column($fetchGroup('Revenue'), 'balance'))
+            - array_sum(array_column($fetchGroup('Expense'), 'balance'));
         $totalEquity = $totalEquityRecorded + $retainedEarnings;
         $totalLiabilitiesEquity = $totalLiabilities + $totalEquity;
 
@@ -301,23 +277,12 @@ switch ($action) {
         exit;
 
     case 'trial-balance-xlsx':
-        $asOf = $_GET['as_of'] ?? date('Y-m-d');
-
-        $stmt = $pdo->prepare(
-            "SELECT a.name, at.name AS type_name,
-                    COALESCE(SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE 0 END), 0) AS total_debit,
-                    COALESCE(SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE 0 END), 0) AS total_credit
-             FROM accounts a
-             JOIN account_types at ON at.id = a.account_type_id
-             LEFT JOIN transactions t ON t.account_id = a.id
-             LEFT JOIN transaction_journals tj ON tj.id = t.transaction_journal_id AND tj.transaction_date <= :as_of
-             WHERE a.is_active = 1
-             GROUP BY a.id, a.name, at.name
-             HAVING (total_debit - total_credit) != 0
-             ORDER BY at.id, a.name"
-        );
-        $stmt->execute([':as_of' => $asOf]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $asOf = getReportAsOfDate($_GET);
+        $rows = array_values(array_filter(
+            getAccountBalancesAsOf($pdo, $asOf),
+            static fn(array $account): bool => (int) $account['is_active'] === 1
+                && abs((float) $account['total_debit'] - (float) $account['total_credit']) >= 0.005
+        ));
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();

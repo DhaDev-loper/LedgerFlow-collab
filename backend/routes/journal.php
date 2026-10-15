@@ -4,6 +4,8 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/audit_helper.php';
+require_once __DIR__ . '/../config/accounting_helper.php';
 
 // Check if this is an incoming mobile upload or scan request
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -28,7 +30,7 @@ switch ($action) {
         $statusFilter= trim($_GET['status'] ?? 'active');
 
         $sql = "SELECT DISTINCT tj.id, tj.description, tj.transaction_date, tj.reference_no, 
-                       tj.total_amount, tj.due_date, tj.status, tt.name AS type_name, 
+                       tj.total_amount, tj.due_date, tj.status, tj.is_edited, tj.edited_at, tt.name AS type_name,
                        u.full_name AS created_by_name, c.name AS client_name
                 FROM transaction_journals tj
                 JOIN transaction_types tt ON tt.id = tj.transaction_type_id
@@ -92,7 +94,7 @@ switch ($action) {
     case 'reference-data':
         $pdo = getDbConnection();
         $accounts = $pdo->query(
-            "SELECT a.id, a.name, at.name AS type_name 
+            "SELECT a.id, a.name, a.is_cash_account, at.name AS type_name
              FROM accounts a
              JOIN account_types at ON at.id = a.account_type_id
              WHERE a.is_active = 1
@@ -105,16 +107,98 @@ switch ($action) {
             "SELECT id, name FROM categories WHERE is_active = 1 ORDER BY name"
         )->fetchAll(PDO::FETCH_ASSOC);
 
+        $cashAccountsStmt = $pdo->query(
+            "SELECT a.id, a.name, at.name AS type_name
+             FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE a.is_active = 1
+               AND at.name = 'Asset'
+               AND a.is_cash_account = 1
+             ORDER BY a.name"
+        );
+        $receivableAccountsStmt = $pdo->query(
+            "SELECT a.id, a.name
+             FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE a.is_active = 1 AND at.name = 'Asset'
+               AND LOWER(a.name) = 'accounts receivable'
+             ORDER BY a.name"
+        );
+        $payableAccountsStmt = $pdo->query(
+            "SELECT a.id, a.name
+             FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE a.is_active = 1 AND at.name = 'Liability'
+               AND LOWER(a.name) = 'accounts payable'
+             ORDER BY a.name"
+        );
+        $clientsStmt = $pdo->query(
+            "SELECT id, name, company_name, party_type, status FROM clients
+             ORDER BY name"
+        );
+
         echo json_encode([
             'success'    => true,
             'accounts'   => $accounts,
             'types'      => $types,
             'categories' => $categories,
+            'cash_accounts' => $cashAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
+            'receivable_accounts' => $receivableAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
+            'payable_accounts' => $payableAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
+            'clients' => $clientsStmt->fetchAll(PDO::FETCH_ASSOC),
+        ]);
+        break;
+
+    case 'party-open-items':
+        $clientId = (int) ($_GET['client_id'] ?? 0);
+        $settlementType = $_GET['type'] ?? '';
+        if ($clientId <= 0 || !in_array($settlementType, ['ar', 'ap'], true)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'A valid party and settlement type are required.']);
+            break;
+        }
+
+        $pdo = getDbConnection();
+        $accountName = $settlementType === 'ar' ? 'Accounts Receivable' : 'Accounts Payable';
+        $increaseEntryType = $settlementType === 'ar' ? 'debit' : 'credit';
+        $partyTypeStmt = $pdo->prepare('SELECT party_type FROM clients WHERE id = :id');
+        $partyTypeStmt->execute([':id' => $clientId]);
+        $partyType = $partyTypeStmt->fetchColumn();
+        $requiredPartyType = $settlementType === 'ar' ? 'customer' : 'vendor';
+        if ($partyType === false || !in_array($partyType, [$requiredPartyType, 'both'], true)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'This party is not configured for the selected settlement type.']);
+            break;
+        }
+
+        $accountsStmt = $pdo->prepare(
+            "SELECT a.id FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE LOWER(a.name) = LOWER(:name)
+               AND at.name = :type"
+        );
+        $accountsStmt->execute([
+            ':name' => $accountName,
+            ':type' => $settlementType === 'ar' ? 'Asset' : 'Liability',
+        ]);
+        $items = [];
+        foreach ($accountsStmt->fetchAll(PDO::FETCH_COLUMN) as $accountId) {
+            $items = array_merge(
+                $items,
+                getPartyOpenItems($pdo, (int) $accountId, $increaseEntryType, $clientId)
+            );
+        }
+        $openBalance = array_sum(array_column($items, 'remaining'));
+        echo json_encode([
+            'success' => true,
+            'open_balance' => round($openBalance, 2),
+            'items' => $items,
+            'allocation_method' => 'oldest due date first',
         ]);
         break;
 
     // 3. CREATE NEW JOURNAL ENTRY
-    case 'create':
+     case 'create':
         if (ob_get_length()) ob_clean();
 
         try {
@@ -124,6 +208,7 @@ switch ($action) {
             $referenceNo       = trim($_POST['reference_no'] ?? '');
             $dueDate           = !empty($_POST['due_date']) ? $_POST['due_date'] : null;
             $categoryId        = (int) ($_POST['category_id'] ?? 0);
+            $documentType      = trim($_POST['document_type'] ?? '');
 
             $clientId = !empty($_POST['client_id']) && (int)$_POST['client_id'] > 0 ? (int)$_POST['client_id'] : null;
 
@@ -134,31 +219,70 @@ switch ($action) {
                 echo json_encode(['success' => false, 'error' => 'Transaction type, description, and date are required.']);
                 exit;
             }
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $transactionDate);
+            if (!$date || $date->format('Y-m-d') !== $transactionDate) {
+                echo json_encode(['success' => false, 'error' => 'Enter a valid transaction date.']);
+                exit;
+            }
+            if ($dueDate !== null) {
+                $parsedDueDate = DateTimeImmutable::createFromFormat('!Y-m-d', $dueDate);
+                if (!$parsedDueDate || $parsedDueDate->format('Y-m-d') !== $dueDate) {
+                    echo json_encode(['success' => false, 'error' => 'Enter a valid due date.']);
+                    exit;
+                }
+            }
 
             if (!is_array($debitLines) || !is_array($creditLines) || empty($debitLines) || empty($creditLines)) {
                 echo json_encode(['success' => false, 'error' => 'At least one debit line and one credit line are required.']);
                 exit;
             }
+            if (count($debitLines) > 10 || count($creditLines) > 10) {
+                http_response_code(422);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'A journal entry can have at most 10 debit lines and 10 credit lines.',
+                ]);
+                exit;
+            }
 
             $totalDebits  = 0;
             $totalCredits = 0;
+            $debitAccountIds = [];
+            $creditAccountIds = [];
 
             foreach ($debitLines as $line) {
-                $amount = (float) ($line['amount'] ?? 0);
-                if (empty($line['account_id']) || $amount <= 0) {
-                    echo json_encode(['success' => false, 'error' => 'Every debit line needs a valid account and amount.']);
-                    exit;
+                if (!is_array($line)) {
+                    throw new DomainException('Debit lines must be valid account and amount pairs.');
+                }
+                $amount = is_numeric($line['amount'] ?? null) ? (float) $line['amount'] : 0;
+                $accId = (int) ($line['account_id'] ?? 0);
+                if ($accId === 0 || !is_finite($amount) || $amount <= 0
+                    || $amount > 999999999999.99 || round($amount, 2) !== $amount) {
+                    throw new DomainException('Every debit line needs a valid account and amount with no more than two decimal places.');
                 }
                 $totalDebits += $amount;
+                $debitAccountIds[] = $accId;
             }
 
             foreach ($creditLines as $line) {
-                $amount = (float) ($line['amount'] ?? 0);
-                if (empty($line['account_id']) || $amount <= 0) {
-                    echo json_encode(['success' => false, 'error' => 'Every credit line needs a valid account and amount.']);
-                    exit;
+                if (!is_array($line)) {
+                    throw new DomainException('Credit lines must be valid account and amount pairs.');
+                }
+                $amount = is_numeric($line['amount'] ?? null) ? (float) $line['amount'] : 0;
+                $accId = (int) ($line['account_id'] ?? 0);
+                if ($accId === 0 || !is_finite($amount) || $amount <= 0
+                    || $amount > 999999999999.99 || round($amount, 2) !== $amount) {
+                    throw new DomainException('Every credit line needs a valid account and amount with no more than two decimal places.');
                 }
                 $totalCredits += $amount;
+                $creditAccountIds[] = $accId;
+            }
+
+            // 1. PREVENT CASH-TO-CASH OR IDENTICAL ACCOUNT SELF-REFERENCING
+            $commonAccounts = array_intersect($debitAccountIds, $creditAccountIds);
+            if (!empty($commonAccounts)) {
+                echo json_encode(['success' => false, 'error' => 'Invalid entry: You cannot debit and credit the exact same account in a single transaction line.']);
+                exit;
             }
 
             if (round($totalDebits, 2) !== round($totalCredits, 2)) {
@@ -167,7 +291,168 @@ switch ($action) {
             }
 
             $pdo = getDbConnection();
+
+            // 2. FETCH ACTIVE ACCOUNTS AND THEIR ACCOUNTING CLASSIFICATION
+            $allAccountIds = array_unique(array_merge($debitAccountIds, $creditAccountIds));
+            $accountTypesMap = [];
+            if (!empty($allAccountIds)) {
+                $placeholders = implode(',', array_fill(0, count($allAccountIds), '?'));
+                $stmt = $pdo->prepare(
+                    "SELECT a.id, a.name, a.is_active, a.is_cash_account,
+                            at.name AS type_name, at.normal_balance
+                     FROM accounts a
+                     JOIN account_types at ON at.id = a.account_type_id
+                     WHERE a.id IN ($placeholders)"
+                );
+                $stmt->execute(array_values($allAccountIds));
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $accountTypesMap[(int) $row['id']] = $row;
+                }
+            }
+            if (count($accountTypesMap) !== count($allAccountIds)) {
+                throw new DomainException('One or more selected accounts do not exist.');
+            }
+            foreach ($accountTypesMap as $account) {
+                if ((int) $account['is_active'] !== 1) {
+                    throw new DomainException('Inactive accounts cannot be used in new journal entries.');
+                }
+            }
+
+            // 3. PREVENT ILLOGICAL ACCOUNT TYPE PAIRINGS (e.g., Expense vs. Expense)
+            $debitTypes = [];
+            $creditTypes = [];
+            $cashDebitTotal = 0.0;
+            $cashCreditTotal = 0.0;
+            $arIncreaseByAccount = [];
+            $arDecreaseByAccount = [];
+            $apIncreaseByAccount = [];
+            $apDecreaseByAccount = [];
+
+            foreach ($debitLines as $line) {
+                $accId = (int) $line['account_id'];
+                $account = $accountTypesMap[$accId];
+                $debitTypes[] = $account['type_name'];
+                if (isCashBankAccount($account)) {
+                    $cashDebitTotal += (float) $line['amount'];
+                }
+                if (strcasecmp($account['name'], 'Accounts Receivable') === 0 && $account['type_name'] === 'Asset') {
+                    $arIncreaseByAccount[$accId] = ($arIncreaseByAccount[$accId] ?? 0) + (float) $line['amount'];
+                }
+                if (strcasecmp($account['name'], 'Accounts Payable') === 0 && $account['type_name'] === 'Liability') {
+                    $apDecreaseByAccount[$accId] = ($apDecreaseByAccount[$accId] ?? 0) + (float) $line['amount'];
+                }
+            }
+
+            foreach ($creditLines as $line) {
+                $accId = (int) $line['account_id'];
+                $account = $accountTypesMap[$accId];
+                $creditTypes[] = $account['type_name'];
+                if (isCashBankAccount($account)) {
+                    $cashCreditTotal += (float) $line['amount'];
+                }
+                if (strcasecmp($account['name'], 'Accounts Receivable') === 0 && $account['type_name'] === 'Asset') {
+                    $arDecreaseByAccount[$accId] = ($arDecreaseByAccount[$accId] ?? 0) + (float) $line['amount'];
+                }
+                if (strcasecmp($account['name'], 'Accounts Payable') === 0 && $account['type_name'] === 'Liability') {
+                    $apIncreaseByAccount[$accId] = ($apIncreaseByAccount[$accId] ?? 0) + (float) $line['amount'];
+                }
+            }
+
+            if (in_array('Expense', $debitTypes) && in_array('Expense', $creditTypes)) {
+                throw new DomainException('Invalid transaction pairing: You cannot debit and credit two Expense accounts directly against each other.');
+            }
+
+            $transactionTypeStmt = $pdo->prepare('SELECT name FROM transaction_types WHERE id = :id');
+            $transactionTypeStmt->execute([':id' => $transactionTypeId]);
+            $transactionTypeName = $transactionTypeStmt->fetchColumn();
+            if ($transactionTypeName === false) {
+                throw new DomainException('Select a valid transaction type.');
+            }
+            if ($transactionTypeName === 'Cash Inflow'
+                && (round($cashDebitTotal, 2) !== round($totalDebits, 2) || $cashCreditTotal > 0)) {
+                throw new DomainException('Cash inflows must debit only active cash, bank, or wallet accounts.');
+            }
+            if ($transactionTypeName === 'Cash Outflow'
+                && (round($cashCreditTotal, 2) !== round($totalCredits, 2) || $cashDebitTotal > 0)) {
+                throw new DomainException('Cash outflows must credit only active cash, bank, or wallet accounts.');
+            }
+
+            $hasReceivableEntries = $arIncreaseByAccount || $arDecreaseByAccount;
+            $hasPayableEntries = $apIncreaseByAccount || $apDecreaseByAccount;
+            if (($hasReceivableEntries || $hasPayableEntries) && $clientId === null) {
+                throw new DomainException('Select the customer or vendor for every A/R or A/P entry.');
+            }
+            if (($arIncreaseByAccount || $apIncreaseByAccount) && $dueDate === null) {
+                throw new DomainException('A due date is required when recording an invoice or vendor bill.');
+            }
+
+            if ($documentType !== '' && $documentType !== 'vendor_bill') {
+                throw new DomainException('Invalid document type.');
+            }
+            if ($documentType === 'vendor_bill') {
+                $debitAccountsAreBillable = true;
+                foreach ($debitAccountIds as $accountId) {
+                    $account = $accountTypesMap[$accountId];
+                    if (!in_array($account['type_name'], ['Asset', 'Expense'], true)
+                        || isCashBankAccount($account)
+                        || (strcasecmp($account['name'], 'Accounts Receivable') === 0
+                            && $account['type_name'] === 'Asset')) {
+                        $debitAccountsAreBillable = false;
+                        break;
+                    }
+                }
+                $apCreditTotal = array_sum($apIncreaseByAccount);
+                if ($transactionTypeName !== 'Transfer'
+                    || !$hasPayableEntries
+                    || $apDecreaseByAccount
+                    || round($apCreditTotal, 2) !== round($totalCredits, 2)
+                    || !$debitAccountsAreBillable) {
+                    throw new DomainException('A vendor bill must debit non-cash expense/asset accounts and credit Accounts Payable.');
+                }
+            }
+
             $pdo->beginTransaction();
+            $allocationPlans = [];
+            if ($hasReceivableEntries || $hasPayableEntries) {
+                $partyStmt = $pdo->prepare(
+                    'SELECT id, party_type, status FROM clients WHERE id = :id FOR UPDATE'
+                );
+                $partyStmt->execute([':id' => $clientId]);
+                $party = $partyStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$party) {
+                    throw new DomainException('Select a valid customer or vendor.');
+                }
+                if (($hasReceivableEntries && !in_array($party['party_type'], ['customer', 'both'], true))
+                    || ($hasPayableEntries && !in_array($party['party_type'], ['vendor', 'both'], true))) {
+                    throw new DomainException('The selected party type does not match this A/R or A/P entry.');
+                }
+                if ($party['status'] !== 'active' && ($arIncreaseByAccount || $apIncreaseByAccount)) {
+                    throw new DomainException('Inactive parties may settle existing balances but cannot receive new invoices or bills.');
+                }
+
+                foreach ($arDecreaseByAccount as $accountId => $amount) {
+                    $items = getPartyOpenItems($pdo, (int) $accountId, 'debit', $clientId);
+                    $items = array_values(array_filter(
+                        $items,
+                        static fn (array $item): bool => $item['transaction_date'] <= $transactionDate
+                    ));
+                    $allocationPlans[$accountId] = buildSettlementAllocationPlan($items, $amount);
+                }
+                foreach ($apDecreaseByAccount as $accountId => $amount) {
+                    $items = getPartyOpenItems($pdo, (int) $accountId, 'credit', $clientId);
+                    $items = array_values(array_filter(
+                        $items,
+                        static fn (array $item): bool => $item['transaction_date'] <= $transactionDate
+                    ));
+                    $allocationPlans[$accountId] = buildSettlementAllocationPlan($items, $amount);
+                }
+            } elseif ($clientId !== null) {
+                $partyStmt = $pdo->prepare('SELECT id FROM clients WHERE id = :id AND status = \'active\'');
+                $partyStmt->execute([':id' => $clientId]);
+                if (!$partyStmt->fetchColumn()) {
+                    throw new DomainException('Select an active client.');
+                }
+            }
 
             $createdBy = $userId > 0 ? $userId : 1;
 
@@ -189,6 +474,24 @@ switch ($action) {
             ]);
 
             $journalId = (int) $pdo->lastInsertId();
+
+            if ($allocationPlans) {
+                $allocationStmt = $pdo->prepare(
+                    'INSERT INTO settlement_allocations
+                        (settlement_journal_id, document_journal_id, account_id, amount)
+                     VALUES (:settlement_id, :document_id, :account_id, :amount)'
+                );
+                foreach ($allocationPlans as $accountId => $plan) {
+                    foreach ($plan as $allocation) {
+                        $allocationStmt->execute([
+                            ':settlement_id' => $journalId,
+                            ':document_id' => $allocation['document_journal_id'],
+                            ':account_id' => (int) $accountId,
+                            ':amount' => $allocation['amount'],
+                        ]);
+                    }
+                }
+            }
 
             $lineStmt = $pdo->prepare(
                 "INSERT INTO transactions (transaction_journal_id, account_id, entry_type, amount)
@@ -223,6 +526,22 @@ switch ($action) {
                 $categoryStmt->execute([':journal_id' => $journalId, ':category_id' => $categoryId]);
             }
 
+            logAudit(
+                $pdo,
+                $userId,
+                'CREATE_JOURNAL_ENTRY',
+                'journal',
+                $journalId,
+                json_encode([
+                    'transaction_type_id' => $transactionTypeId,
+                    'total_amount' => $totalDebits,
+                    'client_id' => $clientId,
+                    'reference_no' => $referenceNo,
+                    'document_type' => $documentType !== '' ? $documentType : null,
+                    'settlement_allocations' => $allocationPlans,
+                ], JSON_THROW_ON_ERROR)
+            );
+
             foreach ($allLines as $line) {
                 $balanceStmt = $pdo->prepare(
                     "SELECT at.normal_balance FROM accounts a
@@ -250,11 +569,20 @@ switch ($action) {
             echo json_encode(['success' => true, 'message' => 'Journal entry recorded successfully.', 'journal_id' => $journalId]);
             exit;
 
+        } catch (DomainException $e) {
+            if (isset($pdo) && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            exit;
         } catch (Throwable $e) {
             if (isset($pdo) && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
-            echo json_encode(['success' => false, 'error' => 'PHP/SQL Error: ' . $e->getMessage()]);
+            error_log('Journal creation failed: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Journal entry could not be recorded. Please check the database setup and try again.']);
             exit;
         }
         break;
@@ -294,7 +622,10 @@ switch ($action) {
             $pdo->beginTransaction();
 
             $updateStmt = $pdo->prepare(
-                "UPDATE transaction_journals SET description = :description, reference_no = :reference WHERE id = :id"
+                "UPDATE transaction_journals
+                 SET description = :description, reference_no = :reference,
+                     is_edited = 1, edited_at = CURRENT_TIMESTAMP
+                 WHERE id = :id"
             );
             $updateStmt->execute([
                 ':description' => $description,
@@ -311,6 +642,19 @@ switch ($action) {
                 );
                 $insertCategoryStmt->execute([':id' => $journalId, ':category_id' => $categoryId]);
             }
+
+            logAudit(
+                $pdo,
+                $userId,
+                'EDIT_JOURNAL_ENTRY',
+                'journal',
+                $journalId,
+                json_encode([
+                    'description' => $description,
+                    'reference_no' => $referenceNo,
+                    'category_id' => $categoryId ?: null,
+                ], JSON_THROW_ON_ERROR)
+            );
 
             $pdo->commit();
 
@@ -344,6 +688,8 @@ switch ($action) {
                 tj.total_amount, 
                 tj.created_at, 
                 tj.status,
+                tj.is_edited,
+                tj.edited_at,
                 tt.name AS type_name, 
                 u.full_name AS created_by_name, 
                 c.name AS client_name,
@@ -496,6 +842,7 @@ switch ($action) {
             }
 
             $journalId = (int)$req['transaction_journal_id'];
+            ensurePartyDocumentCanBeVoided($pdo, $journalId);
 
             // Reverse balances
             $linesStmt = $pdo->prepare("SELECT account_id, amount, entry_type FROM transactions WHERE transaction_journal_id = :id");
@@ -535,10 +882,15 @@ switch ($action) {
 
             $pdo->commit();
             echo json_encode(['success' => true, 'message' => 'Entry voided and account balances adjusted.']);
+        } catch (DomainException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('Journal deletion approval failed: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['success' => false, 'error' => 'Approval failed: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'error' => 'Approval failed. Please try again.']);
         }
         break;
 
@@ -633,6 +985,8 @@ switch ($action) {
                 exit;
             }
 
+            ensurePartyDocumentCanBeVoided($pdo, $journalId);
+
             $linesStmt = $pdo->prepare("SELECT account_id, amount, entry_type FROM transactions WHERE transaction_journal_id = :id");
             $linesStmt->execute([':id' => $journalId]);
             $lines = $linesStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -668,14 +1022,28 @@ switch ($action) {
             );
             $reqStmt->execute([':uid' => $userId, ':jid' => $journalId]);
 
+            logAudit(
+                $pdo,
+                $userId,
+                'VOID_JOURNAL_ENTRY',
+                'journal',
+                $journalId
+            );
+
             $pdo->commit();
             echo json_encode(['success' => true, 'message' => 'Entry successfully voided and balances adjusted.']);
             exit;
 
+        } catch (DomainException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+            exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('Journal void failed: ' . $e->getMessage());
             http_response_code(500);
-            echo json_encode(['success' => false, 'error' => 'Database failure while voiding: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'error' => 'Database failure while voiding the entry. Please try again.']);
             exit;
         }
         break;
@@ -692,6 +1060,7 @@ switch ($action) {
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
              LEFT JOIN journal_category jc ON jc.transaction_journal_id = tj.id
              LEFT JOIN categories c ON c.id = jc.category_id
+             WHERE tj.status != 'voided'
              ORDER BY tj.transaction_date DESC, tj.id DESC
              LIMIT :limit"
         );
@@ -715,22 +1084,34 @@ switch ($action) {
         $totalAssets = (float) $assetsStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         $inflowStmt = $pdo->query(
-            "SELECT COALESCE(SUM(tj.total_amount), 0) AS total
+            "SELECT COALESCE(SUM(t.amount), 0) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              WHERE tt.name = 'Cash Inflow'
                AND tj.status != 'voided'
+               AND t.entry_type = 'debit'
+               AND at.name = 'Asset'
+               AND a.is_cash_account = 1
                AND MONTH(tj.transaction_date) = MONTH(CURDATE())
                AND YEAR(tj.transaction_date) = YEAR(CURDATE())"
         );
         $cashInflow = (float) $inflowStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         $outflowStmt = $pdo->query(
-            "SELECT COALESCE(SUM(tj.total_amount), 0) AS total
+            "SELECT COALESCE(SUM(t.amount), 0) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              WHERE tt.name = 'Cash Outflow'
                AND tj.status != 'voided'
+               AND t.entry_type = 'credit'
+               AND at.name = 'Asset'
+               AND a.is_cash_account = 1
                AND MONTH(tj.transaction_date) = MONTH(CURDATE())
                AND YEAR(tj.transaction_date) = YEAR(CURDATE())"
         );
@@ -764,10 +1145,18 @@ switch ($action) {
         $pdo  = getDbConnection();
 
         $stmt = $pdo->prepare(
-            "SELECT tj.transaction_date, tt.name AS type_name, SUM(tj.total_amount) AS total
+            "SELECT tj.transaction_date, tt.name AS type_name, SUM(t.amount) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              WHERE tt.name IN ('Cash Inflow', 'Cash Outflow')
+               AND tj.status != 'voided'
+               AND at.name = 'Asset'
+               AND a.is_cash_account = 1
+               AND ((tt.name = 'Cash Inflow' AND t.entry_type = 'debit')
+                 OR (tt.name = 'Cash Outflow' AND t.entry_type = 'credit'))
                AND tj.transaction_date >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
              GROUP BY tj.transaction_date, tt.name
              ORDER BY tj.transaction_date ASC"
@@ -811,18 +1200,29 @@ switch ($action) {
         $pdo = getDbConnection();
 
         $todayStmt = $pdo->query(
-            "SELECT COALESCE(SUM(tj.total_amount), 0) AS total
+            "SELECT COALESCE(SUM(t.amount), 0) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              WHERE tt.name = 'Cash Inflow' AND tj.transaction_date = CURDATE()"
+             . " AND tj.status != 'voided' AND t.entry_type = 'debit' AND at.name = 'Asset'
+               AND a.is_cash_account = 1"
         );
         $todaySales = (float) $todayStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         $yesterdayStmt = $pdo->query(
-            "SELECT COALESCE(SUM(tj.total_amount), 0) AS total
+            "SELECT COALESCE(SUM(t.amount), 0) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
-             WHERE tt.name = 'Cash Inflow' AND tj.transaction_date = DATE_SUB(CURDATE(), INTERVAL 1 DAY)"
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE tt.name = 'Cash Inflow' AND tj.status != 'voided'
+               AND t.entry_type = 'debit' AND at.name = 'Asset'
+               AND a.is_cash_account = 1
+               AND tj.transaction_date = DATE_SUB(CURDATE(), INTERVAL 1 DAY)"
         );
         $yesterdaySales = (float) $yesterdayStmt->fetch(PDO::FETCH_ASSOC)['total'];
 
@@ -831,10 +1231,15 @@ switch ($action) {
             : ($todaySales > 0 ? 100 : 0);
 
         $weekStmt = $pdo->prepare(
-            "SELECT tj.transaction_date, COALESCE(SUM(tj.total_amount), 0) AS total
+            "SELECT tj.transaction_date, COALESCE(SUM(t.amount), 0) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
-             WHERE tt.name = 'Cash Inflow'
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE tt.name = 'Cash Inflow' AND tj.status != 'voided'
+               AND t.entry_type = 'debit' AND at.name = 'Asset'
+               AND a.is_cash_account = 1
                AND tj.transaction_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
              GROUP BY tj.transaction_date"
         );
@@ -870,11 +1275,32 @@ switch ($action) {
         $dateTo   = $_GET['date_to'] ?? '';
         $typeId   = (int) ($_GET['transaction_type_id'] ?? 0);
 
-        $sql = "SELECT tt.name AS type_name, COUNT(*) AS entry_count, SUM(tj.total_amount) AS total
+        $sql = "SELECT tt.name AS type_name, COUNT(*) AS entry_count,
+                       SUM(CASE
+                           WHEN tt.name = 'Cash Inflow' THEN (
+                               SELECT COALESCE(SUM(t.amount), 0)
+                               FROM transactions t
+                               JOIN accounts a ON a.id = t.account_id
+                               JOIN account_types at ON at.id = a.account_type_id
+                               WHERE t.transaction_journal_id = tj.id AND t.entry_type = 'debit'
+                                 AND at.name = 'Asset'
+                                 AND a.is_cash_account = 1
+                           )
+                           WHEN tt.name = 'Cash Outflow' THEN (
+                               SELECT COALESCE(SUM(t.amount), 0)
+                               FROM transactions t
+                               JOIN accounts a ON a.id = t.account_id
+                               JOIN account_types at ON at.id = a.account_type_id
+                               WHERE t.transaction_journal_id = tj.id AND t.entry_type = 'credit'
+                                 AND at.name = 'Asset'
+                                 AND a.is_cash_account = 1
+                           )
+                           ELSE tj.total_amount
+                       END) AS total
                 FROM transaction_journals tj
                 JOIN transaction_types tt ON tt.id = tj.transaction_type_id
                 JOIN users u ON u.id = tj.created_by
-                WHERE 1=1";
+                WHERE tj.status != 'voided'";
 
         $params = [];
 
@@ -930,34 +1356,42 @@ switch ($action) {
     case 'receivables-payables':
         $pdo = getDbConnection();
 
-        $buildSummary = function (string $accountName, string $increaseEntryType) use ($pdo) {
-            $totalStmt = $pdo->prepare(
-                "SELECT COALESCE(SUM(current_balance), 0) AS total FROM accounts WHERE name = :name"
+        $buildSummary = function (
+            string $accountName,
+            string $accountType,
+            string $increaseEntryType
+        ) use ($pdo) {
+            $accountsStmt = $pdo->prepare(
+                "SELECT a.id FROM accounts a
+                 JOIN account_types at ON at.id = a.account_type_id
+                 WHERE a.name = :name AND at.name = :type"
             );
-            $totalStmt->execute([':name' => $accountName]);
-            $total = (float) $totalStmt->fetch(PDO::FETCH_ASSOC)['total'];
-
-            $agingStmt = $pdo->prepare(
-                "SELECT 
-                    SUM(CASE WHEN tj.due_date >= CURDATE() OR tj.due_date IS NULL THEN t.amount ELSE 0 END) AS current_amount,
-                    SUM(CASE WHEN tj.due_date < CURDATE() THEN t.amount ELSE 0 END) AS overdue_amount
-                 FROM transactions t
-                 JOIN accounts a ON a.id = t.account_id
-                 JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-                 WHERE a.name = :name AND t.entry_type = :entry_type"
-            );
-            $agingStmt->execute([':name' => $accountName, ':entry_type' => $increaseEntryType]);
-            $aging = $agingStmt->fetch(PDO::FETCH_ASSOC);
+            $accountsStmt->execute([':name' => $accountName, ':type' => $accountType]);
+            $accountIds = array_map('intval', $accountsStmt->fetchAll(PDO::FETCH_COLUMN));
+            $currentAmount = 0.0;
+            $overdueAmount = 0.0;
+            $today = date('Y-m-d');
+            foreach ($accountIds as $accountId) {
+                $items = getPartyOpenItems($pdo, $accountId, $increaseEntryType);
+                foreach ($items as $item) {
+                    if ($item['due_date'] === null || $item['due_date'] >= $today) {
+                        $currentAmount += (float) $item['remaining'];
+                    } else {
+                        $overdueAmount += (float) $item['remaining'];
+                    }
+                }
+            }
+            $total = $currentAmount + $overdueAmount;
 
             return [
-                'total'   => $total,
-                'current' => (float) ($aging['current_amount'] ?? 0),
-                'overdue' => (float) ($aging['overdue_amount'] ?? 0),
+                'total' => round($total, 2),
+                'current' => round($currentAmount, 2),
+                'overdue' => round($overdueAmount, 2),
             ];
         };
 
-        $receivables = $buildSummary('Accounts Receivable', 'debit');
-        $payables    = $buildSummary('Accounts Payable', 'credit');
+        $receivables = $buildSummary('Accounts Receivable', 'Asset', 'debit');
+        $payables    = $buildSummary('Accounts Payable', 'Liability', 'credit');
 
         echo json_encode([
             'success'     => true,
@@ -1002,7 +1436,8 @@ switch ($action) {
                     COALESCE(SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE 0 END), 0) AS total_credit
                  FROM transactions t
                  JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-                 WHERE t.account_id = :id AND tj.transaction_date < :date_from"
+                 WHERE t.account_id = :id AND tj.status != 'voided'
+                   AND tj.transaction_date < :date_from"
             );
             $openingStmt->execute([':id' => $accountId, ':date_from' => $dateFrom]);
             $row = $openingStmt->fetch(PDO::FETCH_ASSOC);
@@ -1014,7 +1449,7 @@ switch ($action) {
         $sql = "SELECT tj.transaction_date, tj.description, tj.reference_no, t.entry_type, t.amount
                 FROM transactions t
                 JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-                WHERE t.account_id = :id";
+                WHERE t.account_id = :id AND tj.status != 'voided'";
         $params = [':id' => $accountId];
 
         if ($dateFrom !== '') {
@@ -1065,14 +1500,38 @@ switch ($action) {
     case 'cashflow-report':
         $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
         $dateTo   = $_GET['date_to'] ?? date('Y-m-d');
+        if (!is_string($dateFrom) || !is_string($dateTo)
+            || preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateFrom) !== 1
+            || preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateTo) !== 1) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Enter a valid cash flow date range.']);
+            break;
+        }
+        $parsedDateFrom = DateTimeImmutable::createFromFormat('!Y-m-d', $dateFrom);
+        $parsedDateTo = DateTimeImmutable::createFromFormat('!Y-m-d', $dateTo);
+        if (!$parsedDateFrom || !$parsedDateTo
+            || $parsedDateFrom->format('Y-m-d') !== $dateFrom
+            || $parsedDateTo->format('Y-m-d') !== $dateTo
+            || $parsedDateFrom > $parsedDateTo) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Enter a valid cash flow date range.']);
+            break;
+        }
 
         $pdo = getDbConnection();
 
         $totalsStmt = $pdo->prepare(
-            "SELECT tt.name AS type_name, COALESCE(SUM(tj.total_amount), 0) AS total
+            "SELECT tt.name AS type_name, COALESCE(SUM(t.amount), 0) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              WHERE tt.name IN ('Cash Inflow', 'Cash Outflow')
+               AND tj.status != 'voided' AND at.name = 'Asset'
+               AND a.is_cash_account = 1
+               AND ((tt.name = 'Cash Inflow' AND t.entry_type = 'debit')
+                 OR (tt.name = 'Cash Outflow' AND t.entry_type = 'credit'))
                AND tj.transaction_date BETWEEN :date_from AND :date_to
              GROUP BY tt.name"
         );
@@ -1087,10 +1546,17 @@ switch ($action) {
         }
 
         $dailyStmt = $pdo->prepare(
-            "SELECT tj.transaction_date, tt.name AS type_name, SUM(tj.total_amount) AS total
+            "SELECT tj.transaction_date, tt.name AS type_name, SUM(t.amount) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              WHERE tt.name IN ('Cash Inflow', 'Cash Outflow')
+               AND tj.status != 'voided' AND at.name = 'Asset'
+               AND a.is_cash_account = 1
+               AND ((tt.name = 'Cash Inflow' AND t.entry_type = 'debit')
+                 OR (tt.name = 'Cash Outflow' AND t.entry_type = 'credit'))
                AND tj.transaction_date BETWEEN :date_from AND :date_to
              GROUP BY tj.transaction_date, tt.name
              ORDER BY tj.transaction_date ASC"
@@ -1109,7 +1575,7 @@ switch ($action) {
         $labels  = [];
         $cashIn  = [];
         $cashOut = [];
-        $period  = new DatePeriod(new DateTime($dateFrom), new DateInterval('P1D'), (new DateTime($dateTo))->modify('+1 day'));
+        $period  = new DatePeriod($parsedDateFrom, new DateInterval('P1D'), $parsedDateTo->modify('+1 day'));
         foreach ($period as $date) {
             $key       = $date->format('Y-m-d');
             $labels[]  = $date->format('M j');
@@ -1119,12 +1585,19 @@ switch ($action) {
 
         $breakdownStmt = $pdo->prepare(
             "SELECT tt.name AS type_name, COALESCE(c.name, 'Uncategorized') AS category_name, 
-                    SUM(tj.total_amount) AS total
+                    SUM(t.amount) AS total
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             JOIN transactions t ON t.transaction_journal_id = tj.id
+             JOIN accounts a ON a.id = t.account_id
+             JOIN account_types at ON at.id = a.account_type_id
              LEFT JOIN journal_category jc ON jc.transaction_journal_id = tj.id
              LEFT JOIN categories c ON c.id = jc.category_id
              WHERE tt.name IN ('Cash Inflow', 'Cash Outflow')
+               AND tj.status != 'voided' AND at.name = 'Asset'
+               AND a.is_cash_account = 1
+               AND ((tt.name = 'Cash Inflow' AND t.entry_type = 'debit')
+                 OR (tt.name = 'Cash Outflow' AND t.entry_type = 'credit'))
                AND tj.transaction_date BETWEEN :date_from AND :date_to
              GROUP BY tt.name, category_name
              ORDER BY total DESC"
@@ -1158,7 +1631,7 @@ switch ($action) {
     // 19. FETCH ACTIVE CLIENTS LIST
     case 'get_clients':
         $pdo  = getDbConnection();
-        $stmt = $pdo->query("SELECT id, name, company_name FROM clients WHERE status = 'active' ORDER BY name ASC");
+        $stmt = $pdo->query("SELECT id, name, company_name, party_type FROM clients WHERE status = 'active' ORDER BY name ASC");
         $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode(['success' => true, 'clients' => $clients]);
@@ -1338,28 +1811,315 @@ switch ($action) {
         echo json_encode(['success' => true, 'clients' => $clients]);
         break;
 
+    case 'client-detail':
+        $clientId = (int) ($_GET['client_id'] ?? 0);
+        if ($clientId <= 0) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'A valid client ID is required.']);
+            break;
+        }
+
+        $pdo = getDbConnection();
+        $clientStmt = $pdo->prepare(
+            "SELECT id, name, company_name, party_type, email, phone, status
+             FROM clients WHERE id = :id"
+        );
+        $clientStmt->execute([':id' => $clientId]);
+        $client = $clientStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$client) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Client not found.']);
+            break;
+        }
+
+        $receivableAccountsStmt = $pdo->query(
+            "SELECT a.id FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE LOWER(a.name) = 'accounts receivable' AND at.name = 'Asset'"
+        );
+        $clientOpenItems = [];
+        foreach ($receivableAccountsStmt->fetchAll(PDO::FETCH_COLUMN) as $accountId) {
+            $clientOpenItems = array_merge(
+                $clientOpenItems,
+                getPartyOpenItems($pdo, (int) $accountId, 'debit', $clientId)
+            );
+        }
+        $client['unsettled_balance'] = round(
+            array_sum(array_column($clientOpenItems, 'remaining')),
+            2
+        );
+        $payableAccountsStmt = $pdo->query(
+            "SELECT a.id FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE LOWER(a.name) = 'accounts payable' AND at.name = 'Liability'"
+        );
+        $clientOpenPayables = [];
+        foreach ($payableAccountsStmt->fetchAll(PDO::FETCH_COLUMN) as $accountId) {
+            $clientOpenPayables = array_merge(
+                $clientOpenPayables,
+                getPartyOpenItems($pdo, (int) $accountId, 'credit', $clientId)
+            );
+        }
+        $client['unsettled_payable_balance'] = round(
+            array_sum(array_column($clientOpenPayables, 'remaining')),
+            2
+        );
+
+        $historyStmt = $pdo->prepare(
+            "SELECT tj.id, tj.description, tj.transaction_date, tj.reference_no,
+                    tj.total_amount, tj.status, tt.name AS transaction_type,
+                    (
+                        SELECT GROUP_CONCAT(
+                            CONCAT(a.name, ' (', UPPER(t.entry_type), ' ', FORMAT(t.amount, 2), ')')
+                            ORDER BY t.entry_type, a.name SEPARATOR ' · '
+                        )
+                        FROM transactions t
+                        JOIN accounts a ON a.id = t.account_id
+                        WHERE t.transaction_journal_id = tj.id
+                    ) AS entries
+             FROM transaction_journals tj
+             JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+             WHERE tj.client_id = :client_id
+             ORDER BY tj.transaction_date DESC, tj.id DESC"
+        );
+        $historyStmt->execute([':client_id' => $clientId]);
+
+        echo json_encode([
+            'success' => true,
+            'client' => $client,
+            'history' => $historyStmt->fetchAll(PDO::FETCH_ASSOC),
+        ]);
+        break;
+
+    case 'toggle-client-status':
+        if (!in_array($userRole, ['admin', 'accountant', 'owner'], true)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to manage clients.']);
+            break;
+        }
+
+        $clientId = (int) ($_POST['client_id'] ?? 0);
+        $status = trim($_POST['status'] ?? '');
+        if ($clientId <= 0 || !in_array($status, ['active', 'inactive'], true)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'A valid client ID and status are required.']);
+            break;
+        }
+
+        $pdo = getDbConnection();
+        try {
+            $pdo->beginTransaction();
+            $clientStmt = $pdo->prepare('SELECT id, status FROM clients WHERE id = :id FOR UPDATE');
+            $clientStmt->execute([':id' => $clientId]);
+            $client = $clientStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$client) {
+                $pdo->rollBack();
+                http_response_code(404);
+                echo json_encode(['success' => false, 'error' => 'Client not found.']);
+                break;
+            }
+
+            if ($client['status'] !== $status) {
+                $updateStmt = $pdo->prepare('UPDATE clients SET status = :status WHERE id = :id');
+                $updateStmt->execute([
+                    ':status' => $status,
+                    ':id' => $clientId,
+                ]);
+                logAudit(
+                    $pdo,
+                    $userId,
+                    'TOGGLE_CLIENT_STATUS',
+                    'client',
+                    $clientId,
+                    json_encode([
+                        'old_status' => $client['status'],
+                        'new_status' => $status,
+                    ], JSON_THROW_ON_ERROR)
+                );
+            }
+
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Client status update failed: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Failed to update client status. Please try again.']);
+            break;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'status' => $status,
+            'message' => $status === 'active' ? 'Client activated successfully.' : 'Client deactivated successfully.',
+        ]);
+        break;
+
     // Create a new client profile
     case 'create-client':
+        if (!in_array($userRole, ['admin', 'accountant', 'owner'], true)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to manage clients.']);
+            break;
+        }
+
         $pdo = getDbConnection();
         $name = trim($_POST['name'] ?? '');
         $company = trim($_POST['company_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
         $phone = trim($_POST['phone'] ?? '');
+        $status = trim($_POST['status'] ?? 'active');
+        $partyType = trim($_POST['party_type'] ?? 'customer');
 
-        if (empty($name)) {
-            echo json_encode(['success' => false, 'error' => 'Client name is required.']);
+        if ($name === '' || !in_array($status, ['active', 'inactive'], true)
+            || !in_array($partyType, ['customer', 'vendor', 'both'], true)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Client name, party type, and status are required.']);
             exit;
         }
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Enter a valid client email address.']);
+            break;
+        }
 
-        $stmt = $pdo->prepare("INSERT INTO clients (name, company_name, email, phone, status, created_at) VALUES (:name, :company, :email, :phone, 'active', NOW())");
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare(
+            "INSERT INTO clients (name, company_name, party_type, email, phone, status, created_at)
+             VALUES (:name, :company, :party_type, :email, :phone, :status, NOW())"
+        );
         $stmt->execute([
             ':name' => $name,
             ':company' => $company,
+            ':party_type' => $partyType,
             ':email' => $email,
-            ':phone' => $phone
+            ':phone' => $phone,
+            ':status' => $status,
         ]);
 
+        $clientId = (int) $pdo->lastInsertId();
+        logAudit(
+            $pdo,
+            $userId,
+            'CREATE_CLIENT',
+            'client',
+            $clientId,
+            json_encode([
+                'name' => $name,
+                'company_name' => $company,
+                'party_type' => $partyType,
+            ], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
+
         echo json_encode(['success' => true, 'message' => 'Client created successfully.']);
+        break;
+
+    case 'update-client':
+        if (!in_array($userRole, ['admin', 'accountant', 'owner'], true)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'You do not have permission to manage clients.']);
+            break;
+        }
+
+        $clientId = (int) ($_POST['client_id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $company = trim($_POST['company_name'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $phone = trim($_POST['phone'] ?? '');
+        $status = trim($_POST['status'] ?? '');
+        $partyType = trim($_POST['party_type'] ?? '');
+
+        if ($clientId <= 0 || $name === '' || !in_array($status, ['active', 'inactive'], true)
+            || !in_array($partyType, ['customer', 'vendor', 'both'], true)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'A valid client ID, name, party type, and status are required.']);
+            break;
+        }
+        if ($email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Enter a valid client email address.']);
+            break;
+        }
+
+        $pdo = getDbConnection();
+        $checkStmt = $pdo->prepare('SELECT id FROM clients WHERE id = :id');
+        $checkStmt->execute([':id' => $clientId]);
+        if (!$checkStmt->fetchColumn()) {
+            http_response_code(404);
+            echo json_encode(['success' => false, 'error' => 'Client not found.']);
+            break;
+        }
+
+        try {
+            $pdo->beginTransaction();
+            $activityStmt = $pdo->prepare(
+                "SELECT
+                    SUM(CASE WHEN LOWER(a.name) = 'accounts receivable'
+                                  AND at.name = 'Asset' THEN 1 ELSE 0 END) AS has_ar,
+                    SUM(CASE WHEN LOWER(a.name) = 'accounts payable'
+                                  AND at.name = 'Liability' THEN 1 ELSE 0 END) AS has_ap
+                 FROM transaction_journals tj
+                 JOIN transactions t ON t.transaction_journal_id = tj.id
+                 JOIN accounts a ON a.id = t.account_id
+                 JOIN account_types at ON at.id = a.account_type_id
+                 WHERE tj.client_id = :client_id AND tj.status != 'voided'"
+            );
+            $activityStmt->execute([':client_id' => $clientId]);
+            $activity = $activityStmt->fetch(PDO::FETCH_ASSOC);
+            if (((int) ($activity['has_ar'] ?? 0) > 0 && !in_array($partyType, ['customer', 'both'], true))
+                || ((int) ($activity['has_ap'] ?? 0) > 0 && !in_array($partyType, ['vendor', 'both'], true))) {
+                $pdo->rollBack();
+                http_response_code(422);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'The party type cannot exclude customers or vendors with existing A/R or A/P activity.',
+                ]);
+                break;
+            }
+            $updateStmt = $pdo->prepare(
+                'UPDATE clients
+                 SET name = :name, company_name = :company, party_type = :party_type, email = :email,
+                     phone = :phone, status = :status
+                 WHERE id = :id'
+            );
+            $updateStmt->execute([
+                ':name' => $name,
+                ':company' => $company !== '' ? $company : null,
+                ':party_type' => $partyType,
+                ':email' => $email !== '' ? $email : null,
+                ':phone' => $phone !== '' ? $phone : null,
+                ':status' => $status,
+                ':id' => $clientId,
+            ]);
+            logAudit(
+                $pdo,
+                $userId,
+                'EDIT_CLIENT',
+                'client',
+                $clientId,
+                json_encode([
+                    'name' => $name,
+                    'company_name' => $company,
+                    'party_type' => $partyType,
+                    'email' => $email,
+                    'phone' => $phone,
+                    'status' => $status,
+                ], JSON_THROW_ON_ERROR)
+            );
+            $pdo->commit();
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            error_log('Client update failed: ' . $e->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Failed to update client. Please try again.']);
+            break;
+        }
+
+        echo json_encode(['success' => true, 'message' => 'Client updated successfully.']);
         break;
     
     default:

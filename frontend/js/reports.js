@@ -1,7 +1,9 @@
 const API_URL = '../backend/routes/reports.php';
 const EXPORT_URL = '../backend/routes/export.php'; // Adjust path if your export script is located elsewhere
+const JOURNAL_API_URL = '../backend/routes/journal.php';
 
 let currentReport = 'income-statement';
+let currentCashFlowData = null;
 
 // Set up default dates: 1st of current month to today
 const today = new Date().toISOString().split('T')[0];
@@ -15,14 +17,32 @@ function setActiveTab(report) {
     document.getElementById('tabIncomeStatement')?.classList.toggle('primary', report === 'income-statement');
     document.getElementById('tabBalanceSheet')?.classList.toggle('primary', report === 'balance-sheet');
     document.getElementById('tabTrialBalance')?.classList.toggle('primary', report === 'trial-balance');
-
-    // Trial Balance uses the same "as of" single-date picker as Balance Sheet
-    document.getElementById('dateRangeControls')?.classList.toggle('d-none', report !== 'income-statement');
-    document.getElementById('asOfControl')?.classList.toggle('d-none', report === 'income-statement');
+    document.getElementById('tabCashFlowStatement')?.classList.toggle('primary', report === 'cash-flow-statement');
+    document.getElementById('incomeStatementDateControls')?.classList.toggle('d-none', report !== 'income-statement');
+    document.getElementById('balanceSheetDateControl')?.classList.toggle('d-none', report !== 'balance-sheet');
+    document.getElementById('trialBalanceDateControl')?.classList.toggle('d-none', report !== 'trial-balance');
+    document.getElementById('cashFlowStatementDateControls')?.classList.toggle('d-none', report !== 'cash-flow-statement');
+    const exportButtonLabel = document.getElementById('exportButtonLabel');
+    if (exportButtonLabel) exportButtonLabel.textContent =
+        report === 'cash-flow-statement' ? 'Export CSV' : 'Export';
+    currentCashFlowData = null;
 
     const container = document.getElementById('reportContent');
     if (container) {
-        container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Click Generate to load this report.</p>`;
+        container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Loading report...</p>`;
+    }
+    loadActiveReport();
+}
+
+function loadActiveReport() {
+    if (currentReport === 'income-statement') {
+        loadIncomeStatement();
+    } else if (currentReport === 'balance-sheet') {
+        loadBalanceSheet();
+    } else if (currentReport === 'trial-balance') {
+        loadTrialBalance();
+    } else if (currentReport === 'cash-flow-statement') {
+        loadCashFlowStatement();
     }
 }
 
@@ -123,10 +143,13 @@ async function loadBalanceSheet() {
     if (!container) return;
     container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Loading...</p>`;
 
-    const asOf = document.getElementById('asOfDate')?.value || '';
+    const params = new URLSearchParams({
+        action: 'balance-sheet',
+        date_to: document.getElementById('balanceSheetAsOfDate')?.value || today,
+    });
 
     try {
-        const response = await fetch(`${API_URL}?action=balance-sheet&as_of=${asOf}`);
+        const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
 
         if (!data.success) {
@@ -140,14 +163,21 @@ async function loadBalanceSheet() {
                 <span class="money">${formatMoney(item.current_balance)}</span>
             </div>
         `).join('') || `<p class="small py-2" style="color: var(--dark-text-muted);">None recorded.</p>`;
+        const renderClassifiedRows = (currentItems, nonCurrentItems) => `
+            <h3 class="small fw-semibold mt-2 mb-1">Current</h3>
+            ${renderRows(currentItems)}
+            <h3 class="small fw-semibold mt-3 mb-1">Non-current</h3>
+            ${renderRows(nonCurrentItems)}
+        `;
 
         container.innerHTML = `
+            <p class="small mb-3" style="color: var(--dark-text-muted);">Balances as of ${escapeHtml(data.as_of)}.</p>
             <div class="panel receipt-card mb-4">
                 <div class="panel-header">
                     <h2 class="h6 mb-0">Assets</h2>
                 </div>
                 <div class="panel-body compact">
-                    ${renderRows(data.assets)}
+                    ${renderClassifiedRows(data.current_assets, data.non_current_assets)}
                     <div class="d-flex justify-content-between pt-3 fw-semibold">
                         <span>Total Assets</span>
                         <span class="money">${formatMoney(data.total_assets)}</span>
@@ -160,7 +190,7 @@ async function loadBalanceSheet() {
                     <h2 class="h6 mb-0">Liabilities</h2>
                 </div>
                 <div class="panel-body compact">
-                    ${renderRows(data.liabilities)}
+                    ${renderClassifiedRows(data.current_liabilities, data.non_current_liabilities)}
                     <div class="d-flex justify-content-between pt-3 fw-semibold">
                         <span>Total Liabilities</span>
                         <span class="money">${formatMoney(data.total_liabilities)}</span>
@@ -211,10 +241,13 @@ async function loadTrialBalance() {
     if (!container) return;
     container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Loading...</p>`;
 
-    const asOf = document.getElementById('asOfDate')?.value || '';
+    const params = new URLSearchParams({
+        action: 'trial-balance',
+        date_to: document.getElementById('trialBalanceAsOfDate')?.value || today,
+    });
 
     try {
-        const response = await fetch(`${API_URL}?action=trial-balance&as_of=${asOf}`);
+        const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
 
         if (!data.success) {
@@ -232,6 +265,7 @@ async function loadTrialBalance() {
         `).join('');
 
         container.innerHTML = `
+            <p class="small mb-3" style="color: var(--dark-text-muted);">Balances as of ${escapeHtml(data.as_of)}.</p>
             <div class="panel receipt-card">
                 <div class="table-responsive">
                     <table class="table table-transactions mb-0">
@@ -274,32 +308,146 @@ async function loadTrialBalance() {
     }
 }
 
+async function loadCashFlowStatement() {
+    const container = document.getElementById('reportContent');
+    if (!container) return;
+    currentCashFlowData = null;
+    container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Loading...</p>`;
+
+    const dateFrom = document.getElementById('cashFlowDateFrom')?.value || '';
+    const dateTo = document.getElementById('cashFlowDateTo')?.value || '';
+    if (!dateFrom || !dateTo || dateFrom > dateTo) {
+        container.innerHTML = `<p class="text-center py-5 text-danger">Choose a valid date range. The start date must not be after the end date.</p>`;
+        return;
+    }
+
+    const params = new URLSearchParams({
+        action: 'cashflow-report',
+        date_from: dateFrom,
+        date_to: dateTo,
+    });
+
+    try {
+        const response = await fetch(`${JOURNAL_API_URL}?${params.toString()}`);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Failed to load the cash flow statement.');
+        }
+        currentCashFlowData = data;
+
+        const renderRows = (items, emptyMessage) => (items || []).map(item => `
+            <tr>
+                <td>${escapeHtml(item.category)}</td>
+                <td class="text-end money">${formatMoney(item.total)}</td>
+            </tr>
+        `).join('') || `
+            <tr><td colspan="2" class="text-center py-3" style="color: var(--dark-text-muted);">${emptyMessage}</td></tr>
+        `;
+
+        const netCashFlow = Number(data.net_cash_flow) || 0;
+        const positiveNetFlow = netCashFlow >= 0;
+        container.innerHTML = `
+            <p class="small mb-3" style="color: var(--dark-text-muted);">
+                Cash activity from ${escapeHtml(data.date_from)} through ${escapeHtml(data.date_to)}.
+                Amounts include non-voided cash inflow and outflow entries using accounts marked as cash/bank.
+            </p>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <div class="panel receipt-card h-100">
+                        <div class="panel-body compact">
+                            <div class="small" style="color: var(--dark-text-muted);">Total Cash Inflows</div>
+                            <div class="h5 mb-0 money" style="color: #4ADE80;">${formatMoney(data.total_inflow)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="panel receipt-card h-100">
+                        <div class="panel-body compact">
+                            <div class="small" style="color: var(--dark-text-muted);">Total Cash Outflows</div>
+                            <div class="h5 mb-0 money" style="color: #F87171;">${formatMoney(data.total_outflow)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="panel receipt-card h-100">
+                        <div class="panel-body compact">
+                            <div class="small" style="color: var(--dark-text-muted);">Net Cash Flow</div>
+                            <div class="h5 mb-0 money" style="color: ${positiveNetFlow ? '#4ADE80' : '#F87171'};">${formatMoney(netCashFlow)}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="panel receipt-card h-100">
+                        <div class="panel-header"><h2 class="h6 mb-0">Cash Inflows</h2></div>
+                        <div class="table-responsive">
+                            <table class="table table-transactions mb-0">
+                                <thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>
+                                <tbody>${renderRows(data.inflow_breakdown, 'No cash inflows for this period.')}</tbody>
+                                <tfoot><tr><th>Total Cash Inflows</th><th class="text-end money">${formatMoney(data.total_inflow)}</th></tr></tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="panel receipt-card h-100">
+                        <div class="panel-header"><h2 class="h6 mb-0">Cash Outflows</h2></div>
+                        <div class="table-responsive">
+                            <table class="table table-transactions mb-0">
+                                <thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>
+                                <tbody>${renderRows(data.outflow_breakdown, 'No cash outflows for this period.')}</tbody>
+                                <tfoot><tr><th>Total Cash Outflows</th><th class="text-end money">${formatMoney(data.total_outflow)}</th></tr></tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel receipt-card mt-4">
+                <div class="panel-body compact d-flex justify-content-between align-items-center">
+                    <span class="h6 mb-0">Net Change in Cash</span>
+                    <span class="money fw-bold fs-5" style="color: ${positiveNetFlow ? '#4ADE80' : '#F87171'};">${formatMoney(netCashFlow)}</span>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error('Failed to load cash flow statement:', err);
+        container.innerHTML = `<p class="text-center py-5 text-danger">${escapeHtml(err.message || 'Could not reach the server.')}</p>`;
+    }
+}
+
 // ---------- DOM Content Loaded Initializations ----------
 
 document.addEventListener('DOMContentLoaded', () => {
     // Populate default date inputs
     const dateFromEl = document.getElementById('dateFrom');
     const dateToEl = document.getElementById('dateTo');
-    const asOfDateEl = document.getElementById('asOfDate');
+    const balanceSheetAsOfDateEl = document.getElementById('balanceSheetAsOfDate');
+    const trialBalanceAsOfDateEl = document.getElementById('trialBalanceAsOfDate');
+    const cashFlowDateFromEl = document.getElementById('cashFlowDateFrom');
+    const cashFlowDateToEl = document.getElementById('cashFlowDateTo');
 
     if (dateFromEl) dateFromEl.value = dateFromStr;
     if (dateToEl) dateToEl.value = today;
-    if (asOfDateEl) asOfDateEl.value = today;
+    if (balanceSheetAsOfDateEl) balanceSheetAsOfDateEl.value = today;
+    if (trialBalanceAsOfDateEl) trialBalanceAsOfDateEl.value = today;
+    if (cashFlowDateFromEl) cashFlowDateFromEl.value = dateFromStr;
+    if (cashFlowDateToEl) cashFlowDateToEl.value = today;
+    [cashFlowDateFromEl, cashFlowDateToEl].forEach(input => {
+        input?.addEventListener('change', () => {
+            currentCashFlowData = null;
+        });
+    });
 
     // Tab Event Listeners
     document.getElementById('tabIncomeStatement')?.addEventListener('click', () => setActiveTab('income-statement'));
     document.getElementById('tabBalanceSheet')?.addEventListener('click', () => setActiveTab('balance-sheet'));
     document.getElementById('tabTrialBalance')?.addEventListener('click', () => setActiveTab('trial-balance'));
+    document.getElementById('tabCashFlowStatement')?.addEventListener('click', () => setActiveTab('cash-flow-statement'));
 
     // Generate Button Listener
     document.getElementById('generateReportBtn')?.addEventListener('click', () => {
-        if (currentReport === 'income-statement') {
-            loadIncomeStatement();
-        } else if (currentReport === 'balance-sheet') {
-            loadBalanceSheet();
-        } else {
-            loadTrialBalance();
-        }
+        loadActiveReport();
     });
 
     // Journal entries expandable navigation
@@ -334,7 +482,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const dateFrom = document.getElementById('dateFrom')?.value || '';
             const dateTo = document.getElementById('dateTo')?.value || '';
-            const asOf = document.getElementById('asOfDate')?.value || dateTo || today;
+            const balanceSheetAsOf = document.getElementById('balanceSheetAsOfDate')?.value || today;
+            const trialBalanceAsOf = document.getElementById('trialBalanceAsOfDate')?.value || today;
+            const cashFlowDateFrom = document.getElementById('cashFlowDateFrom')?.value || '';
+            const cashFlowDateTo = document.getElementById('cashFlowDateTo')?.value || '';
+
+            if (activeTab === 'cash-flow-statement') {
+                if (!currentCashFlowData) {
+                    alert('Generate the cash flow statement before exporting it.');
+                    return;
+                }
+                const csvEscape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+                const csvRows = [
+                    ['Cash Flow Statement'],
+                    [`Period: ${currentCashFlowData.date_from} to ${currentCashFlowData.date_to}`],
+                    [],
+                    ['Cash Inflows'],
+                    ['Category', 'Amount'],
+                    ...(currentCashFlowData.inflow_breakdown || []).map(item => [item.category, Number(item.total).toFixed(2)]),
+                    ['Total Cash Inflows', Number(currentCashFlowData.total_inflow).toFixed(2)],
+                    [],
+                    ['Cash Outflows'],
+                    ['Category', 'Amount'],
+                    ...(currentCashFlowData.outflow_breakdown || []).map(item => [item.category, Number(item.total).toFixed(2)]),
+                    ['Total Cash Outflows', Number(currentCashFlowData.total_outflow).toFixed(2)],
+                    [],
+                    ['Net Change in Cash', Number(currentCashFlowData.net_cash_flow).toFixed(2)],
+                ];
+                const csv = '\uFEFF' + csvRows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+                const blobUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = `cash-flow-statement-${cashFlowDateFrom}-to-${cashFlowDateTo}.csv`;
+                link.click();
+                window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                return;
+            }
 
             let action = '';
             let isPdf = true;
@@ -352,13 +535,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'balance-sheet':
                     action = 'balance-sheet-pdf';
                     titleText = 'Balance Sheet Preview';
-                    if (asOf) params.append('as_of', asOf);
+                    if (balanceSheetAsOf) params.append('date_to', balanceSheetAsOf);
                     break;
 
                 case 'trial-balance':
                     action = 'trial-balance-xlsx';
                     isPdf = false; // Excel files do not support iframe preview
-                    if (asOf) params.append('as_of', asOf);
+                    if (trialBalanceAsOf) params.append('date_to', trialBalanceAsOf);
                     break;
 
                 default:

@@ -11,9 +11,7 @@ $userRole = $_SESSION['role'];
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cash Flow — WRS Accounting</title>
-<script>
-    document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'dark');
-</script>
+<script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -204,5 +202,6 @@ $userRole = $_SESSION['role'];
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="../frontend/js/cashflow.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

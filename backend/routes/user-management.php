@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../config/admin_guard.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/audit_helper.php';
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -48,7 +49,8 @@ switch ($action) {
     case 'list':
         $pdo = getDbConnection();
         $stmt = $pdo->query(
-            "SELECT id, full_name, email, role, is_active, created_at 
+            "SELECT id, full_name, email, role, is_active, failed_attempts,
+                    locked_until, suspension_level, created_at
              FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC"
         );
         $users = $stmt->fetchAll();
@@ -84,7 +86,7 @@ switch ($action) {
         $pdo = getDbConnection();
 
         // 1. Check if email belongs to an existing account (active or soft-deleted)
-        $checkStmt = $pdo->prepare("SELECT id, deleted_at FROM users WHERE email = :email");
+        $checkStmt = $pdo->prepare("SELECT id, deleted_at, suspension_level FROM users WHERE email = :email");
         $checkStmt->execute([':email' => $email]);
         $existingUser = $checkStmt->fetch();
 
@@ -96,14 +98,26 @@ switch ($action) {
                 break;
             }
 
+            if ((int) $existingUser['suspension_level'] >= 4 && ($_SESSION['role'] ?? '') !== 'owner') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only the owner can reactivate an account locked out after repeated suspensions.']);
+                break;
+            }
+
             // Case 2: Account was soft-deleted -> Restore & reactivate existing user record
             $hash = password_hash($password, PASSWORD_DEFAULT);
+            $pdo->beginTransaction();
             $restoreStmt = $pdo->prepare(
                 "UPDATE users 
                  SET full_name = :full_name, 
                      password_hash = :hash, 
                      role = :role, 
                      is_active = 1, 
+                     failed_attempts = 0,
+                     locked_until = NULL,
+                     suspension_level = 0,
+                     active_session_id = NULL,
+                     active_session_last_seen = NULL,
                      deleted_at = NULL 
                  WHERE id = :id"
             );
@@ -113,6 +127,15 @@ switch ($action) {
                 ':role'      => $role,
                 ':id'        => $existingUser['id'],
             ]);
+            logAudit(
+                $pdo,
+                (int) ($_SESSION['user_id'] ?? 0),
+                'RESTORE_USER',
+                'user',
+                (int) $existingUser['id'],
+                json_encode(['email' => $email, 'role' => $role], JSON_THROW_ON_ERROR)
+            );
+            $pdo->commit();
 
             echo json_encode(['success' => true, 'message' => 'Former employee account restored and reactivated successfully.']);
             break;
@@ -120,6 +143,7 @@ switch ($action) {
 
         // Case 3: Completely new email -> Insert new user record
         $hash = password_hash($password, PASSWORD_DEFAULT);
+        $pdo->beginTransaction();
         $insertStmt = $pdo->prepare(
             "INSERT INTO users (full_name, email, password_hash, role) VALUES (:full_name, :email, :hash, :role)"
         );
@@ -129,6 +153,16 @@ switch ($action) {
             ':hash'      => $hash,
             ':role'      => $role,
         ]);
+        $newUserId = (int) $pdo->lastInsertId();
+        logAudit(
+            $pdo,
+            (int) ($_SESSION['user_id'] ?? 0),
+            'CREATE_USER',
+            'user',
+            $newUserId,
+            json_encode(['email' => $email, 'role' => $role], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
 
         echo json_encode(['success' => true, 'message' => 'User created successfully.']);
         break;
@@ -150,7 +184,7 @@ switch ($action) {
 
         $pdo = getDbConnection();
 
-        $stmt = $pdo->prepare("SELECT id, role, is_active FROM users WHERE id = :id");
+        $stmt = $pdo->prepare("SELECT id, role, is_active, suspension_level FROM users WHERE id = :id");
         $stmt->execute([':id' => $userId]);
         $targetUser = $stmt->fetch();
 
@@ -173,8 +207,45 @@ switch ($action) {
 
         $newStatus = $targetUser['is_active'] ? 0 : 1;
 
-        $updateStmt = $pdo->prepare("UPDATE users SET is_active = :status WHERE id = :id");
-        $updateStmt->execute([':status' => $newStatus, ':id' => $userId]);
+        if ((int) $targetUser['suspension_level'] >= 4 && $newStatus === 1 && ($_SESSION['role'] ?? '') !== 'owner') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Only the owner can reactivate an account locked out after repeated suspensions.']);
+            break;
+        }
+
+        $pdo->beginTransaction();
+        if ($newStatus === 1 && (int) $targetUser['suspension_level'] >= 4) {
+            $updateStmt = $pdo->prepare(
+                "UPDATE users
+                 SET is_active = 1, failed_attempts = 0, locked_until = NULL,
+                     suspension_level = 0, active_session_id = NULL,
+                     active_session_last_seen = NULL
+                 WHERE id = :id"
+            );
+            $updateStmt->execute([':id' => $userId]);
+        } else {
+            $updateStmt = $pdo->prepare(
+                "UPDATE users
+                 SET is_active = :status,
+                     active_session_id = CASE WHEN :inactive_status = 0 THEN NULL ELSE active_session_id END,
+                     active_session_last_seen = CASE WHEN :inactive_status = 0 THEN NULL ELSE active_session_last_seen END
+                 WHERE id = :id"
+            );
+            $updateStmt->execute([
+                ':status' => $newStatus,
+                ':inactive_status' => $newStatus,
+                ':id' => $userId,
+            ]);
+        }
+        logAudit(
+            $pdo,
+            (int) ($_SESSION['user_id'] ?? 0),
+            'TOGGLE_USER_STATUS',
+            'user',
+            $userId,
+            json_encode(['is_active' => (bool) $newStatus], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
 
         echo json_encode([
             'success'   => true,
@@ -247,6 +318,7 @@ switch ($action) {
         }
 
         // 5. Update password if requested, or preserve existing password
+        $pdo->beginTransaction();
         if ($password !== '') {
             if (strlen($password) < 8) {
                 http_response_code(422);
@@ -280,6 +352,16 @@ switch ($action) {
         if ($userId === (int) ($_SESSION['user_id'] ?? 0)) {
             $_SESSION['full_name'] = $fullName;
         }
+
+        logAudit(
+            $pdo,
+            (int) ($_SESSION['user_id'] ?? 0),
+            'EDIT_USER',
+            'user',
+            $userId,
+            json_encode(['full_name' => $fullName, 'email' => $email, 'role' => $finalRole], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
 
         echo json_encode(['success' => true, 'message' => 'User updated successfully.']);
         break;
@@ -322,8 +404,22 @@ switch ($action) {
             break;
         }
 
-        $deleteStmt = $pdo->prepare("UPDATE users SET deleted_at = NOW() WHERE id = :id");
+        $pdo->beginTransaction();
+        $deleteStmt = $pdo->prepare(
+            "UPDATE users
+             SET deleted_at = NOW(), active_session_id = NULL, active_session_last_seen = NULL
+             WHERE id = :id"
+        );
         $deleteStmt->execute([':id' => $userId]);
+        logAudit(
+            $pdo,
+            (int) ($_SESSION['user_id'] ?? 0),
+            'DELETE_USER',
+            'user',
+            $userId,
+            json_encode(['role' => $targetUser['role']], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
 
         echo json_encode(['success' => true, 'message' => 'User deleted successfully.']);
         break;
@@ -332,7 +428,8 @@ switch ($action) {
     case 'list-archived':
         $pdo = getDbConnection();
         $stmt = $pdo->query(
-            "SELECT id, full_name, email, role, is_active, created_at, deleted_at 
+            "SELECT id, full_name, email, role, is_active, suspension_level,
+                    created_at, deleted_at
              FROM users WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
         );
         $archivedUsers = $stmt->fetchAll();
@@ -352,13 +449,22 @@ switch ($action) {
         $pdo = getDbConnection();
 
         // 1. Fetch soft-deleted target user
-        $targetStmt = $pdo->prepare("SELECT id, email, role FROM users WHERE id = :id AND deleted_at IS NOT NULL");
+        $targetStmt = $pdo->prepare(
+            "SELECT id, email, role, suspension_level
+             FROM users WHERE id = :id AND deleted_at IS NOT NULL"
+        );
         $targetStmt->execute([':id' => $userId]);
         $targetUser = $targetStmt->fetch();
 
         if (!$targetUser) {
             http_response_code(404);
             echo json_encode(['error' => 'Archived user not found.']);
+            break;
+        }
+
+        if ((int) $targetUser['suspension_level'] >= 4 && ($_SESSION['role'] ?? '') !== 'owner') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Only the owner can restore an account locked out after repeated suspensions.']);
             break;
         }
 
@@ -372,8 +478,24 @@ switch ($action) {
         }
 
         // 3. Restore user
-        $restoreStmt = $pdo->prepare("UPDATE users SET deleted_at = NULL, is_active = 1 WHERE id = :id");
+        $pdo->beginTransaction();
+        $restoreStmt = $pdo->prepare(
+            "UPDATE users
+             SET deleted_at = NULL, is_active = 1, failed_attempts = 0,
+                 locked_until = NULL, suspension_level = 0,
+                 active_session_id = NULL, active_session_last_seen = NULL
+             WHERE id = :id"
+        );
         $restoreStmt->execute([':id' => $userId]);
+        logAudit(
+            $pdo,
+            (int) ($_SESSION['user_id'] ?? 0),
+            'RESTORE_USER',
+            'user',
+            $userId,
+            json_encode(['email' => $targetUser['email'], 'role' => $targetUser['role']], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
 
         echo json_encode(['success' => true, 'message' => 'User account restored successfully.']);
         break;

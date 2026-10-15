@@ -12,6 +12,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Chart of Accounts — WRS Accounting</title>
+<script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -172,7 +173,23 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                             <!-- injected by accounts.js -->
                         </select>
                     </div>
-
+                    <div class="mb-3 d-none" id="accountClassificationOption">
+                        <label class="form-label small" for="accountClassification">Financial Statement Classification</label>
+                        <select class="form-select form-control-dark" id="accountClassification" name="classification">
+                            <option value="current">Current</option>
+                            <option value="non_current">Non-current</option>
+                        </select>
+                        <div class="form-text" style="color: var(--dark-text-muted);">Used to group Asset and Liability accounts on the Balance Sheet.</div>
+                    </div>
+                    <div class="form-check form-switch mb-3 d-none" id="cashAccountOption">
+                        <input class="form-check-input" type="checkbox" role="switch" id="isCashAccount" name="is_cash_account" value="1">
+                        <label class="form-check-label small" for="isCashAccount">Cash, bank, or wallet account</label>
+                        <div class="form-text" style="color: var(--dark-text-muted);">Only mark Asset accounts that hold available cash. This controls cash-flow reports and payment selectors.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Account Code (e.g. 1010)</label>
+                        <input type="text" class="form-control form-control-dark" id="accountCode" name="code" placeholder="1000">
+                    </div>
 
                     <div class="mb-3" id="openingBalanceGroup">
                         <label class="form-label small">Opening Balance</label>
@@ -331,6 +348,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
 <script src="../frontend/js/accounts.js"></script>
 <script src="../frontend/js/journal-entries.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 
 <script>
     // Trigger QR session generation when the scanner modal opens

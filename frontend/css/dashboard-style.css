@@ -4,6 +4,7 @@
    ===================================================================== */
 
 :root {
+    color-scheme: dark;
     /* Palette — KoboSocial Colors */
     --ink-navy: #080d1e;
     --marine-blue: #0096c7;
@@ -21,30 +22,35 @@
 
     --radius: 14px;
 
-    /* ---------- Dark dashboard theme (Kobo Dark Mode) ---------- */
-    --dark-bg: #080d1e;                             /* Kobo Deep Navy */
-    --dark-surface: #0d1326;                        /* Kobo Dark Card Blue */
-    --dark-surface-2: #141c33;                      /* Lighter surface tone */
-    --dark-border: rgba(255, 255, 255, 0.08);       /* Muted light border line */
-    --dark-text: #ffffff;                           /* Pure White Text */
-    --dark-text-muted: #8c909e;                     /* Kobo Muted Slate Text */
-    --accent-blue: #9a8ce2;                         /* Primary Accent -> Hot Pink */
-    --accent-blue-soft: rgba(255, 0, 102, 0.15);    /* Soft Pink Glow */
+    /* ---------- Dark dashboard theme (default) ---------- */
+    --dark-bg: #080d1e;
+    --dark-surface: #0d1326;
+    --dark-surface-2: #141c33;
+    --dark-border: rgba(255, 255, 255, 0.08);
+    --dark-text: #ffffff;
+    --dark-text-muted: #8c909e;
+    --accent-blue: #b0004b;
+    --accent-blue-soft: rgba(176, 0, 75, 0.12);
 }
 
-/* ---------- Light dashboard theme (Kobo Light Mode) ---------- */
+/* ---------- Optional light dashboard theme ---------- */
 :root[data-theme="light"] {
-    --dark-bg: #F4F6F9;
-    --dark-surface: #FFFFFF;
-    --dark-surface-2: #EEF1F5;
-    --dark-border: rgba(8, 13, 30, 0.10);
-    --dark-text: #16233A;
-    --dark-text-muted: rgba(22, 35, 58, 0.6);
+    color-scheme: light;
+    --dark-bg: #f4f6f9;
+    --dark-surface: #ffffff;
+    --dark-surface-2: #eef1f5;
+    --dark-border: rgba(8, 13, 30, 0.12);
+    --dark-text: #16233a;
+    --dark-text-muted: rgba(22, 35, 58, 0.68);
 }
 
 :root[data-theme="light"] .app-shell {
     background-color: #F4F6F9;
     background-image: none;
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
 }
 
 :root[data-theme="light"] .kpi-value.positive { color: #16A34A; }
@@ -488,6 +494,21 @@ h1, h2, h3, h4, .brand-font {
     z-index: 5;
 }
 
+.journal-table-scroll {
+    height: 560px;
+    max-height: calc(100vh - 280px);
+    overflow: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--dark-border) var(--dark-surface);
+    scrollbar-width: thin;
+}
+
+.journal-table-scroll > .table-transactions thead th {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+}
+
 /* ---------- Bookkeeping Ledger Table Styling ---------- */
 .table-transactions {
     --bs-table-bg: transparent;
@@ -671,6 +692,72 @@ h1, h2, h3, h4, .brand-font {
 .modal-dark .form-select option {
     background-color: var(--dark-surface-2);
     color: var(--dark-text);
+}
+
+#clientDetailModal .client-detail-muted {
+    color: var(--dark-text-muted) !important;
+}
+
+.client-history-panel {
+    overflow: hidden;
+    border: 1px solid var(--dark-border);
+    border-radius: 12px;
+    background: rgba(5, 9, 22, 0.42);
+}
+
+.client-history-table {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--dark-text);
+    --bs-table-hover-bg: rgba(154, 140, 226, 0.08);
+    --bs-table-hover-color: var(--dark-text);
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    color: var(--dark-text);
+}
+
+.client-history-table thead th {
+    padding: 0.8rem 0.9rem;
+    border: 0;
+    background: rgba(154, 140, 226, 0.1);
+    color: var(--dark-text-muted);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.client-history-table tbody td {
+    padding: 0.85rem 0.9rem;
+    border: 0;
+    border-top: 1px solid var(--dark-border);
+    background: transparent;
+    color: var(--dark-text);
+    font-size: 0.82rem;
+}
+
+.client-history-table tbody tr:hover td {
+    background: rgba(154, 140, 226, 0.08);
+}
+
+.client-history-date {
+    color: var(--dark-text-muted) !important;
+    font-variant-numeric: tabular-nums;
+}
+
+.client-history-description {
+    font-weight: 600;
+}
+
+.client-history-lines {
+    color: var(--dark-text-muted) !important;
+    font-size: 0.75rem !important;
+}
+
+.client-history-amount {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
 }
 
 .is-locked {
@@ -1145,4 +1232,339 @@ h1, h2, h3, h4, .brand-font {
 
 @media (max-width: 900px) {
     .sidebar { display: none; }
+}
+
+/* ---------- Cross-module light theme refinements ---------- */
+:root[data-theme="light"] body {
+    background: var(--dark-bg);
+    color: var(--dark-text);
+}
+
+:root[data-theme="light"] .app-shell {
+    background: var(--dark-bg);
+    background-image: none;
+}
+
+:root[data-theme="light"] .greeting-banner,
+:root[data-theme="light"] .panel,
+:root[data-theme="light"] .kpi-card,
+:root[data-theme="light"] .receipt-card,
+:root[data-theme="light"] .bottom-nav,
+:root[data-theme="light"] .modal-content {
+    box-shadow: 0 8px 24px rgba(22, 35, 58, 0.06);
+}
+
+:root[data-theme="light"] .greeting-banner {
+    background: var(--dark-surface);
+    border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .quick-action-btn:hover,
+:root[data-theme="light"] .bottom-nav-item:hover,
+:root[data-theme="light"] .sub-nav-item:hover {
+    background-color: rgba(22, 35, 58, 0.06);
+}
+
+:root[data-theme="light"] .role-filter-btn {
+    background: var(--dark-surface);
+    border-color: var(--dark-border);
+    color: var(--dark-text-muted);
+}
+
+:root[data-theme="light"] .role-filter-btn:hover,
+:root[data-theme="light"] .role-filter-btn.active {
+    background: var(--dark-surface-2);
+    border-color: rgba(0, 150, 199, 0.3);
+    color: var(--dark-text);
+}
+
+:root[data-theme="light"] .action-icon-btn {
+    color: var(--dark-text-muted);
+}
+
+:root[data-theme="light"] .action-icon-btn:hover {
+    background: rgba(22, 35, 58, 0.06);
+    color: var(--dark-text);
+}
+
+:root[data-theme="light"] .quick-action-btn.primary,
+:root[data-theme="light"] .bottom-nav-item.active {
+    color: #ffffff;
+}
+
+:root[data-theme="light"] .filter-input,
+:root[data-theme="light"] .filter-input-search,
+:root[data-theme="light"] .panel select,
+:root[data-theme="light"] .panel select option {
+    background-color: var(--dark-surface);
+    color: var(--dark-text);
+    border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .filter-input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: none;
+}
+
+:root[data-theme="light"] .table-transactions,
+:root[data-theme="light"] .table-transactions > :not(caption) > * > *,
+:root[data-theme="light"] .table,
+:root[data-theme="light"] .table > :not(caption) > * > * {
+    --bs-table-color: var(--dark-text);
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--dark-border);
+    color: var(--dark-text);
+}
+
+:root[data-theme="light"] .table-transactions thead th {
+    background-color: var(--dark-surface-2);
+    color: var(--dark-text-muted);
+}
+
+:root[data-theme="light"] .table-transactions tbody tr:nth-child(even) {
+    background-color: rgba(22, 35, 58, 0.025);
+}
+
+:root[data-theme="light"] .table-transactions tbody tr:hover {
+    background-color: rgba(22, 35, 58, 0.045);
+}
+
+:root[data-theme="light"] .modal,
+:root[data-theme="light"] .modal-dark {
+    --bs-modal-bg: var(--dark-surface);
+    --bs-modal-color: var(--dark-text);
+    --bs-modal-border-color: var(--dark-border);
+    --bs-modal-header-border-color: var(--dark-border);
+    --bs-modal-footer-border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .modal-content,
+:root[data-theme="light"] .modal-dark .modal-content {
+    background-color: var(--dark-surface) !important;
+    color: var(--dark-text) !important;
+    border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .modal-content::before,
+:root[data-theme="light"] .modal-dark .modal-content::before {
+    background-image: radial-gradient(circle, var(--dark-bg) 5px, transparent 6px);
+}
+
+:root[data-theme="light"] .modal-title,
+:root[data-theme="light"] .modal-dark .modal-title,
+:root[data-theme="light"] .modal .text-light:not(.btn):not(.badge),
+:root[data-theme="light"] .modal-dark .text-light:not(.btn):not(.badge) {
+    color: var(--dark-text) !important;
+}
+
+:root[data-theme="light"] .modal-header .btn-close,
+:root[data-theme="light"] .modal-dark .modal-header .btn-close {
+    filter: none;
+}
+
+:root[data-theme="light"] .modal .form-control,
+:root[data-theme="light"] .modal .form-select,
+:root[data-theme="light"] .modal-dark .form-control,
+:root[data-theme="light"] .modal-dark .form-select,
+:root[data-theme="light"] .modal-dark .form-control-dark,
+:root[data-theme="light"] .modal-dark .form-select-dark {
+    background-color: var(--dark-surface) !important;
+    border: 1px solid var(--dark-border) !important;
+    border-radius: 0.5rem !important;
+    color: var(--dark-text) !important;
+}
+
+:root[data-theme="light"] .modal .form-control:focus,
+:root[data-theme="light"] .modal .form-select:focus,
+:root[data-theme="light"] .modal-dark .form-control:focus,
+:root[data-theme="light"] .modal-dark .form-select:focus,
+:root[data-theme="light"] .modal-dark .form-control-dark:focus,
+:root[data-theme="light"] .modal-dark .form-select-dark:focus {
+    background-color: var(--dark-surface) !important;
+    border-color: var(--marine-blue) !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 150, 199, 0.16) !important;
+}
+
+:root[data-theme="light"] .modal .form-select option,
+:root[data-theme="light"] .modal-dark .form-select option {
+    background-color: var(--dark-surface);
+    color: var(--dark-text);
+}
+
+:root[data-theme="light"] .client-history-panel,
+:root[data-theme="light"] .client-history-table thead {
+    background-color: var(--dark-surface-2);
+}
+
+:root[data-theme="light"] .client-history-table tbody tr:hover td {
+    background-color: rgba(22, 35, 58, 0.04);
+}
+
+:root[data-theme="light"] .client-detail-muted {
+    color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme="light"] .wrs-table-container {
+    background: var(--dark-surface);
+    border-color: var(--dark-border);
+    box-shadow: 0 4px 20px rgba(22, 35, 58, 0.06);
+}
+
+:root[data-theme="light"] .wrs-table {
+    color: var(--dark-text);
+}
+
+:root[data-theme="light"] .wrs-table th {
+    background-color: var(--dark-surface-2);
+    color: var(--dark-text-muted);
+    border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .wrs-table td {
+    color: var(--dark-text);
+    border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .wrs-table tbody tr:hover {
+    background-color: rgba(22, 35, 58, 0.04);
+}
+
+:root[data-theme="light"] .table-dark {
+    --bs-table-color: var(--dark-text);
+    --bs-table-bg: var(--dark-surface);
+    --bs-table-border-color: var(--dark-border);
+    --bs-table-striped-bg: var(--dark-surface-2);
+    --bs-table-hover-bg: rgba(22, 35, 58, 0.05);
+}
+
+:root[data-theme="light"] .btn-dark {
+    --bs-btn-color: var(--dark-text);
+    --bs-btn-bg: var(--dark-surface);
+    --bs-btn-border-color: var(--dark-border);
+    --bs-btn-hover-color: var(--dark-text);
+    --bs-btn-hover-bg: var(--dark-surface-2);
+    --bs-btn-hover-border-color: var(--dark-border);
+}
+
+:root[data-theme="light"] .badge.bg-secondary-subtle.text-white {
+    color: var(--dark-text) !important;
+}
+
+:root[data-theme="light"] .app-shell .text-light:not(.btn):not(.badge),
+:root[data-theme="light"] .app-shell .text-white:not(.btn):not(.badge) {
+    color: var(--dark-text) !important;
+}
+
+:root[data-theme="light"] .app-shell .text-white-50:not(.btn):not(.badge) {
+    color: var(--dark-text-muted) !important;
+}
+
+:root[data-theme="light"] .app-shell [style*="background: rgba(255, 255, 255"],
+:root[data-theme="light"] .app-shell [style*="background:rgba(255,255,255"],
+:root[data-theme="light"] .app-shell [style*="background-color: #0f172a"],
+:root[data-theme="light"] .app-shell [style*="background-color: #12121c"] {
+    background-color: var(--dark-surface-2) !important;
+    background-image: none !important;
+}
+
+:root[data-theme="light"] .app-shell [style*="background: rgba(255,255,255"] {
+    background: var(--dark-surface-2) !important;
+}
+
+.settings-page-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 1.25rem;
+    background: var(--dark-surface);
+    border: 1px solid var(--dark-border);
+    border-radius: var(--radius);
+}
+
+.settings-page-heading-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    border-radius: 0.85rem;
+    background: var(--accent-blue-soft);
+    color: var(--accent-blue);
+    font-size: 1.25rem;
+}
+
+.settings-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--dark-border);
+}
+
+.settings-tabs .quick-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+}
+
+.settings-card {
+    max-width: 760px;
+    overflow: hidden;
+}
+
+.appearance-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    width: 100%;
+    padding: 1rem;
+    border: 1px solid var(--dark-border);
+    border-radius: 0.85rem;
+    background: var(--dark-surface);
+    color: var(--dark-text);
+    text-align: left;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.appearance-choice:hover {
+    border-color: var(--marine-blue);
+    background: var(--dark-surface-2);
+}
+
+.appearance-choice.active {
+    border-color: var(--marine-blue);
+    box-shadow: 0 0 0 0.2rem rgba(0, 150, 199, 0.12);
+}
+
+.appearance-choice-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    border-radius: 0.8rem;
+    background: var(--dark-surface-2);
+    font-size: 1.2rem;
+}
+
+@media (max-width: 575.98px) {
+    .settings-page-heading {
+        padding: 1rem;
+    }
+
+    .settings-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .settings-tabs .quick-action-btn {
+        justify-content: flex-start;
+        min-height: 2.75rem;
+        padding-inline: 0.65rem;
+        font-size: 0.78rem;
+    }
 }

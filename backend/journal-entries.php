@@ -13,6 +13,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Journal Entries — WRS Accounting</title>
+<script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -100,7 +101,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                 <!-- JOURNAL TABLE PANEL -->
                 <div class="col-lg-8">
                     <div class="panel">
-                        <div class="table-responsive">
+                        <div class="table-responsive journal-table-scroll">
                             <table class="table table-transactions align-middle mb-0">
                                 <thead>
                                     <tr>
@@ -123,7 +124,19 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
                         <!-- PAGINATION FOOTER -->
                         <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="border-top: 1px solid var(--dark-border);">
-                            <small id="journalPageInfo" style="color: var(--dark-text-muted);"></small>
+                            <div class="d-flex align-items-center flex-wrap gap-3">
+                                <small id="journalPageInfo" style="color: var(--dark-text-muted);"></small>
+                                <label for="journalRowsPerPage" class="d-flex align-items-center gap-2 small mb-0" style="color: var(--dark-text-muted);">
+                                    Show
+                                    <select id="journalRowsPerPage" class="form-select form-select-sm form-control-dark" style="width: auto;">
+                                        <option value="10" selected>10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                    entries
+                                </label>
+                            </div>
                             <nav aria-label="Journal entries pagination">
                                 <ul id="journalPagination" class="pagination pagination-sm mb-0"></ul>
                             </nav>
@@ -276,9 +289,9 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                             <input type="date" class="form-control form-control-dark" id="transactionDate" name="transaction_date" required>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small">Client / Account (optional)</label>
+                            <label class="form-label small">Customer / Vendor (required for A/R or A/P)</label>
                             <select class="form-select form-control-dark" id="clientIdSelect" name="client_id">
-                                <option value="">-- Optional: Select Client --</option>
+                                <option value="">-- Optional unless entering an invoice or bill --</option>
                             </select>
                         </div>
                     </div>
@@ -300,7 +313,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small">Due Date (optional)</label>
+                            <label class="form-label small">Due Date (required for invoices and bills)</label>
                             <input type="date" class="form-control form-control-dark" id="dueDate" name="due_date">
                         </div>
                     </div>
@@ -308,7 +321,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                     <hr style="border-color: var(--dark-border);">
 
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label small mb-0 fw-semibold">Debit Lines</label>
+                        <label class="form-label small mb-0 fw-semibold">Debit Lines <span class="text-secondary">(maximum 10)</span></label>
                         <button type="button" class="table-action-btn" id="addDebitLineBtn">+ Add Debit Line</button>
                     </div>
                     <div id="debitLinesContainer"></div>
@@ -316,7 +329,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                     <hr style="border-color: var(--dark-border);">
 
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label small mb-0 fw-semibold">Credit Lines</label>
+                        <label class="form-label small mb-0 fw-semibold">Credit Lines <span class="text-secondary">(maximum 10)</span></label>
                         <button type="button" class="table-action-btn" id="addCreditLineBtn">+ Add Credit Line</button>
                     </div>
                     <div id="creditLinesContainer"></div>
@@ -326,6 +339,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         <div>Total Credits: <span class="money fw-semibold" id="totalCreditsDisplay">0.00</span></div>
                         <div id="balanceStatusDisplay" class="fw-semibold"></div>
                     </div>
+                    <p class="small mt-2 mb-0" style="color: var(--dark-text-muted);">Enter full amounts or use k, m, or b (for example, 1,000,000 or 1m). Use the button beside an amount to switch its display.</p>
 
                     <div id="entryFormError" class="alert alert-danger py-2 px-3 small mt-3 d-none"></div>
                 </div>
@@ -613,5 +627,6 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 </script>
 <script src="../frontend/js/journal-entries.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

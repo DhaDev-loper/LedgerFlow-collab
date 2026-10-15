@@ -13,6 +13,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Transaction</title>
+      <script src="../frontend/js/theme.js"></script>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
       <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -45,6 +46,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     <div class="d-flex gap-2">
                                           <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#quickSaleModal">+ Record Sale</button>
                                           <button class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#quickExpenseModal">Record Expense</button>
+                                          <button class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#vendorBillModal">Record Vendor Bill</button>
+                                          <button class="quick-action-btn" type="button" onclick="openPaymentModal('ar')"><i class="bi bi-cash-coin me-1"></i>Settle A/R or A/P</button>
                                     </div>
                               <?php endif; ?>
                               </div>
@@ -193,8 +196,63 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         </div>
                   </div>
             </div>
-
-      <!-- Quick Expense Modal -->
+            <?php if ($canCreate): ?>
+            <div class="modal fade" id="vendorBillModal" tabindex="-1" aria-labelledby="vendorBillModalTitle" aria-hidden="true">
+                  <div class="modal-dialog modal-lg modal-dialog-centered">
+                        <div class="modal-content modal-dark">
+                              <div class="modal-header">
+                                    <h5 class="modal-title" id="vendorBillModalTitle">Record Vendor Bill</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                              </div>
+                              <form id="vendorBillForm">
+                                    <div class="modal-body">
+                                          <div class="alert alert-info py-2 small">This records an unpaid bill: debit an expense or non-cash asset and credit Accounts Payable. Use Make Payment (A/P) after paying it.</div>
+                                          <div id="vendorBillError" class="alert alert-danger py-2 px-3 small d-none"></div>
+                                          <div class="row g-3">
+                                                <div class="col-md-6">
+                                                      <label for="vendorBillVendor" class="form-label small">Vendor</label>
+                                                      <select id="vendorBillVendor" class="form-select form-control-dark" required></select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                      <label for="vendorBillAccount" class="form-label small">Expense / Asset Account</label>
+                                                      <select id="vendorBillAccount" class="form-select form-control-dark" required></select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                      <label for="vendorBillPayable" class="form-label small">Accounts Payable</label>
+                                                      <select id="vendorBillPayable" class="form-select form-control-dark" required></select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                      <label for="vendorBillAmount" class="form-label small">Amount (₱)</label>
+                                                      <input type="number" id="vendorBillAmount" class="form-control form-control-dark" min="0.01" step="0.01" required>
+                                                </div>
+                                                <div class="col-md-4">
+                                                      <label for="vendorBillDate" class="form-label small">Bill Date</label>
+                                                      <input type="date" id="vendorBillDate" class="form-control form-control-dark" required>
+                                                </div>
+                                                <div class="col-md-4">
+                                                      <label for="vendorBillDueDate" class="form-label small">Due Date</label>
+                                                      <input type="date" id="vendorBillDueDate" class="form-control form-control-dark" required>
+                                                </div>
+                                                <div class="col-md-4">
+                                                      <label for="vendorBillReference" class="form-label small">Bill / Reference #</label>
+                                                      <input type="text" id="vendorBillReference" class="form-control form-control-dark" maxlength="50">
+                                                </div>
+                                                <div class="col-12">
+                                                      <label for="vendorBillDescription" class="form-label small">Description</label>
+                                                      <input type="text" id="vendorBillDescription" class="form-control form-control-dark" maxlength="255" required>
+                                                </div>
+                                          </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                          <button type="button" class="btn quick-action-btn" data-bs-dismiss="modal">Cancel</button>
+                                          <button type="submit" class="btn quick-action-btn primary" id="saveVendorBillBtn">Record Bill</button>
+                                    </div>
+                              </form>
+                        </div>
+                  </div>
+            </div>
+            <?php endif; ?>
+            <!-- Quick Expense Modal -->
       <div class="modal fade" id="quickExpenseModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
                   <div class="modal-content modal-dark">
@@ -357,8 +415,13 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       
 
       
+<?php if ($canCreate) { require __DIR__ . '/partials/payment-modal.php'; } ?>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="../frontend/js/dashboard.js"></script>
+<?php if ($canCreate): ?>
+<script src="../frontend/js/settlement.js"></script>
+<?php endif; ?>
 <script>
     window.API_URL    = '../backend/routes/journal.php'; // Ensure correct path to your backend endpoint
     window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
@@ -366,6 +429,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 </script>
 <script src="../frontend/js/journal-entries.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 
 
 </body>

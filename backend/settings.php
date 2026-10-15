@@ -13,6 +13,7 @@ $canEditBusiness = in_array($userRole, ['admin', 'owner'], true);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Settings — WRS Accounting</title>
+<script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
@@ -23,19 +24,22 @@ $canEditBusiness = in_array($userRole, ['admin', 'owner'], true);
     <div class="main-content">
         <div class="content-area">
 
-            <div class="mb-4">
-                <h1 class="h4 mb-1">Settings</h1>
-                <p class="small mb-0" style="color: var(--dark-text-muted);">Manage business info, your account, and transaction categories.</p>
+            <div class="settings-page-heading">
+               <span class="settings-page-heading-icon"><i class="bi bi-sliders"></i></span>
+               <div>
+                   <h1 class="h4 mb-1">Settings</h1>
+                   <p class="small mb-0" style="color: var(--dark-text-muted);">Manage your business profile, account, categories, and appearance.</p>
+               </div>
             </div>
 
-             <div class="btn-group mb-4" role="group">
-                <button type="button" class="quick-action-btn primary" id="tabBusiness">Business Profile</button>
-                <button type="button" class="quick-action-btn" id="tabAccount">My Account</button>
-                <button type="button" class="quick-action-btn" id="tabCategories">Categories</button>
-                <button type="button" class="quick-action-btn" id="tabAppearance">Appearance</button>
+            <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+               <button type="button" class="quick-action-btn primary" id="tabBusiness" role="tab" aria-selected="true"><i class="bi bi-building"></i> Business Profile</button>
+               <button type="button" class="quick-action-btn" id="tabAccount" role="tab" aria-selected="false"><i class="bi bi-person-gear"></i> My Account</button>
+               <button type="button" class="quick-action-btn" id="tabCategories" role="tab" aria-selected="false"><i class="bi bi-tags"></i> Categories</button>
+               <button type="button" class="quick-action-btn" id="tabAppearance" role="tab" aria-selected="false"><i class="bi bi-palette"></i> Appearance</button>
             </div>
 
-            <div id="settingsContent"></div>
+            <div id="settingsContent" role="tabpanel" aria-live="polite"></div>
 
         </div>
     </div>
@@ -119,7 +123,7 @@ $canEditBusiness = in_array($userRole, ['admin', 'owner'], true);
     const IS_OWNER = <?= $isOwner ? 'true' : 'false' ?>;
     const CAN_EDIT_BUSINESS = <?= $canEditBusiness ? 'true' : 'false' ?>;
 </script>
-<script src="../frontend/js/theme.js"></script>
 <script src="../frontend/js/settings.js"></script>
+<script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

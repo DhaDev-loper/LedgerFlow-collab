@@ -4,6 +4,23 @@
 declare(strict_types=1);
 // this file handles login systems and user authentication
 // to ensure that the user is who they say they are and to manage their session
+header('Content-Type: application/json; charset=utf-8');
+
+set_exception_handler(static function (Throwable $exception): void {
+    error_log('Authentication request failed: ' . $exception->getMessage());
+
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO && $GLOBALS['pdo']->inTransaction()) {
+        $GLOBALS['pdo']->rollBack();
+    }
+
+    if (!headers_sent()) {
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+
+    echo json_encode(['error' => 'The login service encountered an error. Please check the server logs.']);
+});
+
 $remember = isset($_POST['remember']) && $_POST['remember'] === '1';
 
 if ($remember) {
@@ -14,6 +31,7 @@ if ($remember) {
 session_start(); // start session so that php can track who is logged in and who is not
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/audit_helper.php';
 //this reads a value called action from the incoming request
 
 $action = $_POST['action'] ?? $_GET['action'] ?? ''; // the double ? if the value is not set it will default and not crash the system
@@ -35,66 +53,160 @@ switch ($action) {
 
             $pdo = getDbConnection();
 
+            $pdo->beginTransaction();
             $stmt = $pdo->prepare(
-                "SELECT id, full_name, email, password_hash, role, is_active, failed_attempts, locked_until 
-                FROM users WHERE email = :email"
+                "SELECT id, full_name, email, password_hash, role, is_active,
+                        failed_attempts, locked_until, suspension_level,
+                        active_session_id, active_session_last_seen,
+                        (active_session_last_seen >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) AS active_session_is_recent,
+                        deleted_at
+                 FROM users WHERE email = :email FOR UPDATE"
             );
             $stmt->execute([':email' => $email]);
             $user = $stmt->fetch();
 
-            if ($user && $user['role'] !== 'owner' && $user['locked_until'] !== null && strtotime($user['locked_until']) > time()) {
-                $minutesLeft = (int) ceil((strtotime($user['locked_until']) - time()) / 60);
-                http_response_code(429);
-                echo json_encode(['error' => "Too many failed attempts. Please try again in {$minutesLeft} minute(s)."]);
-                break;
-            }
-
-            if (!$user || !password_verify($password, $user['password_hash'])) {
-                if ($user && $user['role'] !== 'owner') {
-                    $newAttempts = $user['failed_attempts'] + 1;
-                    $maxAttempts = 5;
-
-                    if ($newAttempts >= $maxAttempts) {
-                        $lockUntil = date('Y-m-d H:i:s', strtotime('+15 minutes'));
-                        $lockStmt = $pdo->prepare(
-                            "UPDATE users SET failed_attempts = :attempts, locked_until = :locked WHERE id = :id"
-                        );
-                        $lockStmt->execute([
-                            ':attempts' => $newAttempts,
-                            ':locked'   => $lockUntil,
-                            ':id'       => $user['id'],
-                        ]);
-                    } else {
-                        $incrementStmt = $pdo->prepare(
-                            "UPDATE users SET failed_attempts = :attempts WHERE id = :id"
-                        );
-                        $incrementStmt->execute([
-                            ':attempts' => $newAttempts,
-                            ':id'       => $user['id'],
-                        ]);
-                    }
-                }
-
+            if (!$user) {
+                $pdo->commit();
                 http_response_code(401);
                 echo json_encode(['error' => 'Invalid email or password.']);
                 break;
             }
 
-            if ((int)$user['is_active'] !== 1) {
+            if ((int) $user['is_active'] !== 1 || $user['deleted_at'] !== null) {
+                $pdo->commit();
                 http_response_code(403);
                 echo json_encode(['error' => 'This account has been deactivated.']);
                 break;
             }
 
-            // Successful login — reset failed attempt counter and lock
-            $resetStmt = $pdo->prepare(
-                "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id"
+            $isOwner = $user['role'] === 'owner';
+            $lockedUntil = $user['locked_until'] === null ? false : strtotime($user['locked_until']);
+            if (!$isOwner && $lockedUntil !== false && $lockedUntil > time()) {
+                $secondsLeft = $lockedUntil - time();
+                $minutesLeft = (int) ceil($secondsLeft / 60);
+                $pdo->commit();
+                http_response_code(429);
+                echo json_encode([
+                    'error' => "Your account is suspended. Try again in {$minutesLeft} minute(s).",
+                    'suspended' => true,
+                    'suspension_level' => (int) $user['suspension_level'],
+                    'remaining_seconds' => $secondsLeft,
+                ]);
+                break;
+            }
+
+            if (!$isOwner && $lockedUntil !== false) {
+                $pdo->prepare(
+                    "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id"
+                )->execute([':id' => $user['id']]);
+                $user['failed_attempts'] = 0;
+                $user['locked_until'] = null;
+            }
+
+            if (!password_verify($password, $user['password_hash'])) {
+                if (!$isOwner) {
+                    $failedAttempts = (int) $user['failed_attempts'] + 1;
+                    if ($failedAttempts >= 5) {
+                        $nextLevel = (int) $user['suspension_level'] + 1;
+                        $suspensionMinutes = [1 => 5, 2 => 15, 3 => 60];
+
+                        if (isset($suspensionMinutes[$nextLevel])) {
+                            $lockUntil = date('Y-m-d H:i:s', time() + ($suspensionMinutes[$nextLevel] * 60));
+                            $lockStmt = $pdo->prepare(
+                                "UPDATE users
+                                 SET failed_attempts = 0, locked_until = :locked_until,
+                                     suspension_level = :suspension_level
+                                 WHERE id = :id"
+                            );
+                            $lockStmt->execute([
+                                ':locked_until' => $lockUntil,
+                                ':suspension_level' => $nextLevel,
+                                ':id' => $user['id'],
+                            ]);
+                            $pdo->commit();
+                            http_response_code(429);
+                            echo json_encode([
+                                'error' => "Your account is suspended for {$suspensionMinutes[$nextLevel]} minute(s) after too many failed attempts.",
+                                'suspended' => true,
+                                'suspension_level' => $nextLevel,
+                                'remaining_seconds' => $suspensionMinutes[$nextLevel] * 60,
+                            ]);
+                            break;
+                        }
+
+                        $deactivateStmt = $pdo->prepare(
+                            "UPDATE users
+                             SET is_active = 0, failed_attempts = 0, locked_until = NULL,
+                                 suspension_level = 4,
+                                 active_session_id = NULL, active_session_last_seen = NULL
+                             WHERE id = :id"
+                        );
+                        $deactivateStmt->execute([':id' => $user['id']]);
+                        $pdo->commit();
+                        http_response_code(403);
+                        echo json_encode([
+                            'error' => 'Your account has been locked out after repeated suspensions. Contact the owner to reactivate it.',
+                        ]);
+                        break;
+                    }
+
+                    $incrementStmt = $pdo->prepare(
+                        "UPDATE users SET failed_attempts = :attempts WHERE id = :id"
+                    );
+                    $incrementStmt->execute([
+                        ':attempts' => $failedAttempts,
+                        ':id' => $user['id'],
+                    ]);
+                }
+
+                $pdo->commit();
+                http_response_code(401);
+                echo json_encode(['error' => 'Invalid email or password.']);
+                break;
+            }
+
+            $currentSessionId = session_id();
+            $hasRecentOtherSession = !empty($user['active_session_id'])
+                && $user['active_session_id'] !== $currentSessionId
+                && (bool) $user['active_session_is_recent'];
+
+            if ($hasRecentOtherSession) {
+                $pdo->commit();
+                http_response_code(409);
+                echo json_encode([
+                    'error' => 'This account is already signed in on another device. Log out there or wait 30 minutes after its last activity before trying again.',
+                    'active_session' => true,
+                ]);
+                break;
+            }
+
+            session_regenerate_id(true);
+            $activeSessionId = session_id();
+            $reserveSessionStmt = $pdo->prepare(
+                "UPDATE users
+                 SET failed_attempts = 0, locked_until = NULL,
+                     active_session_id = :session_id, active_session_last_seen = NOW()
+                 WHERE id = :id"
             );
-            $resetStmt->execute([':id' => $user['id']]);
+            $reserveSessionStmt->execute([
+                ':session_id' => $activeSessionId,
+                ':id' => $user['id'],
+            ]);
+
+            if ($user['role'] !== 'owner') {
+                logAudit(
+                    $pdo,
+                    (int) $user['id'],
+                    'LOGIN_SUCCESS',
+                    'user',
+                    (int) $user['id'],
+                    json_encode(['role' => $user['role']], JSON_THROW_ON_ERROR)
+                );
+            }
+            $pdo->commit();
 
             // OWNER PIN VERIFICATION
             if ($user['role'] === 'owner') {
-                session_regenerate_id(true);
                 $_SESSION['pending_owner_id'] = $user['id'];
 
                 echo json_encode(['success' => true, 'pin_required' => true]);
@@ -102,8 +214,6 @@ switch ($action) {
             }
 
             // Standard User Login (Admin / Accountant)
-            session_regenerate_id(true);
-
             $_SESSION['user_id']        = $user['id'];
             $_SESSION['full_name']      = $user['full_name'];
             $_SESSION['role']           = $user['role'];
@@ -135,19 +245,59 @@ switch ($action) {
             }
 
             $pdo = getDbConnection();
-            $stmt = $pdo->prepare("SELECT id, full_name, role, pin_hash FROM users WHERE id = :id");
+            $stmt = $pdo->prepare(
+                "SELECT id, full_name, role, pin_hash, is_active, active_session_id, deleted_at
+                 FROM users WHERE id = :id"
+            );
             $stmt->execute([':id' => $_SESSION['pending_owner_id']]);
             $user = $stmt->fetch();
 
-            if (!$user || !password_verify($pin, $user['pin_hash'])) {
+            if (
+                !$user
+                || (int) $user['is_active'] !== 1
+                || $user['deleted_at'] !== null
+                || $user['active_session_id'] !== session_id()
+            ) {
+                unset($_SESSION['pending_owner_id']);
+                http_response_code(403);
+                echo json_encode(['error' => 'This account has been deactivated.']);
+                break;
+            }
+
+            if (!password_verify($pin, $user['pin_hash'])) {
+                $pdo->prepare(
+                    "UPDATE users SET active_session_last_seen = NOW()
+                     WHERE id = :id AND active_session_id = :session_id"
+                )->execute([':id' => $user['id'], ':session_id' => session_id()]);
                 http_response_code(401);
                 echo json_encode(['error' => 'Incorrect PIN.']);
                 break;
             }
 
+            logAudit(
+                $pdo,
+                (int) $user['id'],
+                'LOGIN_SUCCESS',
+                'user',
+                (int) $user['id'],
+                json_encode(['role' => $user['role'], 'method' => 'password_and_pin'], JSON_THROW_ON_ERROR)
+            );
+
+            $pdo->prepare(
+                "UPDATE users SET active_session_last_seen = NOW()
+                 WHERE id = :id AND active_session_id = :session_id"
+            )->execute([':id' => $user['id'], ':session_id' => session_id()]);
+            logAudit(
+                $pdo,
+                (int) $user['id'],
+                'LOGIN_SUCCESS',
+                'user',
+                (int) $user['id'],
+                json_encode(['role' => $user['role'], 'method' => 'password_and_pin'], JSON_THROW_ON_ERROR)
+            );
+
             // Clear pending state and create session
             unset($_SESSION['pending_owner_id']);
-            session_regenerate_id(true);
 
             $_SESSION['user_id']        = $user['id'];
             $_SESSION['full_name']      = $user['full_name'];
@@ -332,11 +482,18 @@ switch ($action) {
     }
 
     $pdo = getDbConnection();
-    $stmt = $pdo->prepare("SELECT id, full_name, role, pin_hash FROM users WHERE id = :id");
+    $stmt = $pdo->prepare("SELECT id, full_name, role, pin_hash, is_active, deleted_at FROM users WHERE id = :id");
     $stmt->execute([':id' => $_SESSION['pending_owner_id']]);
     $user = $stmt->fetch();
 
-    if (!$user || !password_verify($pin, $user['pin_hash'])) {
+    if (!$user || (int) $user['is_active'] !== 1 || $user['deleted_at'] !== null) {
+        unset($_SESSION['pending_owner_id']);
+        http_response_code(403);
+        echo json_encode(['error' => 'This account has been deactivated.']);
+        break;
+    }
+
+    if (!password_verify($pin, $user['pin_hash'])) {
         http_response_code(401);
         echo json_encode(['error' => 'Incorrect PIN.']);
         break;
@@ -361,8 +518,22 @@ switch ($action) {
     
 
     case 'logout':
+        $logoutUserId = (int) ($_SESSION['user_id'] ?? $_SESSION['pending_owner_id'] ?? 0);
+        if ($logoutUserId > 0) {
+            $pdo = getDbConnection();
+            $pdo->prepare(
+                "UPDATE users
+                 SET active_session_id = NULL, active_session_last_seen = NULL
+                 WHERE id = :id AND active_session_id = :session_id"
+            )->execute([':id' => $logoutUserId, ':session_id' => session_id()]);
+        }
+
         $_SESSION = []; // clear all session data
         session_destroy(); // destroy the session
+        if (ini_get('session.use_cookies')) {
+            $cookie = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000, $cookie['path'], $cookie['domain'], $cookie['secure'], $cookie['httponly']);
+        }
             echo json_encode(['success' => true]);
         break;
 
