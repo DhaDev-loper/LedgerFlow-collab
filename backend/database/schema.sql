@@ -1,3 +1,4 @@
+-- Complete fresh-install schema. Migration changes are already incorporated here.
 CREATE DATABASE IF NOT EXISTS wrs_accounting CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE wrs_accounting;
 

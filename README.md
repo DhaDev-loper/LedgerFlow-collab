@@ -28,12 +28,13 @@ This installs PHPMailer into a `vendor/` folder (not included in the repo — re
 ### 3. Set up your database
 1. Start MySQL (via Laragon or XAMPP)
 2. Open phpMyAdmin (XAMPP) or HeidiSQL (Laragon)
-3. Create a database named `wrs_accounting`
-4. Import `backend/database/schema.sql` into it
+3. Import `backend/database/schema.sql` once. It creates/selects the
+   `wrs_accounting` database and includes the changes from the migration files.
 
 `backend/database/schema.sql` is the complete fresh-install schema for the
 application, including account codes, journal deletion approvals, receipt-scan
-sessions, audit history, and settlement allocations. Do not import it over an
+sessions, audit history, and settlement allocations. For a fresh installation,
+do not run the migration files separately. Do not import the schema over an
 existing database; use the listed migrations to update an existing installation.
 
 If you already have an existing database, run
