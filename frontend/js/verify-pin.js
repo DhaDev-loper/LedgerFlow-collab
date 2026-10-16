@@ -1,3 +1,8 @@
+const pinInput = document.getElementById('pin');
+pinInput.addEventListener('input', () => {
+    pinInput.value = pinInput.value.replace(/\D/g, '').slice(0, 4);
+});
+
 document.getElementById('pinForm').addEventListener('submit', async (e) => {
     e.preventDefault();
 
@@ -5,7 +10,7 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
     const errorMsg = document.getElementById('errorMsg');
     errorMsg.classList.add('d-none');
 
-    const pin = document.getElementById('pin').value;
+    const pin = pinInput.value;
 
     const originalText = btn.textContent;
     btn.disabled = true;
@@ -23,8 +28,8 @@ document.getElementById('pinForm').addEventListener('submit', async (e) => {
         } else {
             errorMsg.textContent = data.error || 'Incorrect PIN.';
             errorMsg.classList.remove('d-none');
-            document.getElementById('pin').value = '';
-            document.getElementById('pin').focus();
+            pinInput.value = '';
+            pinInput.focus();
         }
     } catch (err) {
         console.error('PIN verification failed:', err);

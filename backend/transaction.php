@@ -75,6 +75,24 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                 </tbody>
                                           </table>
                                     </div>
+                                    <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="border-top: 1px solid var(--dark-border);">
+                                          <div class="d-flex align-items-center flex-wrap gap-3">
+                                                <small id="dashboardRecentPageInfo" style="color: var(--dark-text-muted);"></small>
+                                                <label for="dashboardRecentRowsPerPage" class="d-flex align-items-center gap-2 small mb-0" style="color: var(--dark-text-muted);">
+                                                      Show
+                                                      <select id="dashboardRecentRowsPerPage" class="form-select form-select-sm form-control-dark" style="width: auto;">
+                                                            <option value="10" selected>10</option>
+                                                            <option value="25">25</option>
+                                                            <option value="50">50</option>
+                                                            <option value="100">100</option>
+                                                      </select>
+                                                      entries
+                                                </label>
+                                          </div>
+                                          <nav aria-label="Transactions pages">
+                                                <ul id="dashboardRecentPagination" class="pagination pagination-sm mb-0"></ul>
+                                          </nav>
+                                    </div>
                          </div>
 
                 </div>
@@ -427,7 +445,6 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
     window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
 </script>
-<script src="../frontend/js/journal-entries.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="../frontend/js/session-timeout.js"></script>
 

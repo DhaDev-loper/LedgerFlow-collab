@@ -6,6 +6,16 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/audit_helper.php';
 require_once __DIR__ . '/../config/accounting_helper.php';
+require_once __DIR__ . '/../services/OCRService.php';
+
+function getReceiptImageUrl(string $imagePath): string
+{
+    $projectBasePath = dirname(dirname(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))));
+    $projectBasePath = rtrim(str_replace('\\', '/', $projectBasePath), '/');
+    $relativePath = implode('/', array_map('rawurlencode', explode('/', ltrim($imagePath, '/'))));
+
+    return $projectBasePath . '/' . $relativePath;
+}
 
 // Check if this is an incoming mobile upload or scan request
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
@@ -94,7 +104,7 @@ switch ($action) {
     case 'reference-data':
         $pdo = getDbConnection();
         $accounts = $pdo->query(
-            "SELECT a.id, a.name, a.is_cash_account, at.name AS type_name
+            "SELECT a.id, a.code, a.name, a.is_cash_account, a.classification, at.name AS type_name
              FROM accounts a
              JOIN account_types at ON at.id = a.account_type_id
              WHERE a.is_active = 1
@@ -194,6 +204,83 @@ switch ($action) {
             'open_balance' => round($openBalance, 2),
             'items' => $items,
             'allocation_method' => 'oldest due date first',
+        ]);
+        break;
+
+    case 'due-notifications':
+        $pdo = getDbConnection();
+        $today = new DateTimeImmutable('today');
+        $upcomingThrough = $today->modify('+7 days')->format('Y-m-d');
+        $notificationItems = [];
+        $accountSets = [
+            ['type' => 'ar', 'name' => 'Accounts Receivable', 'increase_side' => 'debit', 'account_type' => 'Asset'],
+            ['type' => 'ap', 'name' => 'Accounts Payable', 'increase_side' => 'credit', 'account_type' => 'Liability'],
+        ];
+        $parties = $pdo->query('SELECT id, name, company_name FROM clients')
+            ->fetchAll(PDO::FETCH_ASSOC);
+        $partiesById = [];
+        foreach ($parties as $party) {
+            $partiesById[(int) $party['id']] = $party;
+        }
+
+        $accountsStmt = $pdo->prepare(
+            'SELECT a.id FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE LOWER(a.name) = LOWER(:name) AND at.name = :type'
+        );
+        foreach ($accountSets as $accountSet) {
+            $accountsStmt->execute([
+                ':name' => $accountSet['name'],
+                ':type' => $accountSet['account_type'],
+            ]);
+            foreach ($accountsStmt->fetchAll(PDO::FETCH_COLUMN) as $accountId) {
+                foreach (getPartyOpenItems(
+                    $pdo,
+                    (int) $accountId,
+                    $accountSet['increase_side']
+                ) as $item) {
+                    $dueDate = $item['due_date'];
+                    $partyId = (int) $item['client_id'];
+                    if ($dueDate === null || $dueDate > $upcomingThrough
+                        || !isset($partiesById[$partyId])) {
+                        continue;
+                    }
+
+                    $party = $partiesById[$partyId];
+                    $notificationItems[] = [
+                        'type' => $accountSet['type'],
+                        'journal_id' => (int) $item['journal_id'],
+                        'client_id' => $partyId,
+                        'party_name' => (string) $party['name'],
+                        'company_name' => $party['company_name'],
+                        'description' => $item['description'],
+                        'reference_no' => $item['reference_no'],
+                        'due_date' => $dueDate,
+                        'remaining' => round((float) $item['remaining'], 2),
+                        'is_overdue' => $dueDate < $today->format('Y-m-d'),
+                    ];
+                }
+            }
+        }
+
+        usort($notificationItems, static function (array $left, array $right): int {
+            return [
+                $left['is_overdue'] ? 0 : 1,
+                $left['due_date'],
+                $left['type'] === 'ar' ? 0 : 1,
+                $left['party_name'],
+            ] <=> [
+                $right['is_overdue'] ? 0 : 1,
+                $right['due_date'],
+                $right['type'] === 'ar' ? 0 : 1,
+                $right['party_name'],
+            ];
+        });
+
+        echo json_encode([
+            'success' => true,
+            'upcoming_days' => 7,
+            'items' => $notificationItems,
         ]);
         break;
 
@@ -693,6 +780,7 @@ switch ($action) {
                 tt.name AS type_name, 
                 u.full_name AS created_by_name, 
                 c.name AS client_name,
+                jc.category_id AS category_id,
                 cat.name AS category_name
             FROM transaction_journals tj
             JOIN transaction_types tt ON tt.id = tj.transaction_type_id
@@ -1050,25 +1138,37 @@ switch ($action) {
 
     // 11. RECENT TRANSACTIONS
     case 'recent':
-        $limit = (int) ($_GET['limit'] ?? 8);
+        $limit = min(max((int) ($_GET['limit'] ?? 8), 1), 100);
+        $offset = max((int) ($_GET['offset'] ?? 0), 0);
         $pdo = getDbConnection();
+        $total = (int) $pdo->query(
+            "SELECT COUNT(*) FROM transaction_journals WHERE status != 'voided'"
+        )->fetchColumn();
 
         $stmt = $pdo->prepare(
             "SELECT tj.id, tj.description, tj.transaction_date, tj.total_amount, 
-                    tt.name AS type_name, c.name AS category_name
+                    tt.name AS type_name, c.category_name,
+                    client.name AS client_name
              FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
-             LEFT JOIN journal_category jc ON jc.transaction_journal_id = tj.id
-             LEFT JOIN categories c ON c.id = jc.category_id
+             LEFT JOIN (
+                 SELECT jc.transaction_journal_id,
+                        GROUP_CONCAT(DISTINCT cat.name ORDER BY cat.name SEPARATOR ', ') AS category_name
+                 FROM journal_category jc
+                 JOIN categories cat ON cat.id = jc.category_id
+                 GROUP BY jc.transaction_journal_id
+             ) c ON c.transaction_journal_id = tj.id
+             LEFT JOIN clients client ON client.id = tj.client_id
              WHERE tj.status != 'voided'
              ORDER BY tj.transaction_date DESC, tj.id DESC
-             LIMIT :limit"
+             LIMIT :limit OFFSET :offset"
         );
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
         $recent = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        echo json_encode(['success' => true, 'transactions' => $recent]);
+        echo json_encode(['success' => true, 'transactions' => $recent, 'total' => $total]);
         break;
 
     // 12. SUMMARY STATISTICS
@@ -1274,6 +1374,7 @@ switch ($action) {
         $dateFrom = $_GET['date_from'] ?? '';
         $dateTo   = $_GET['date_to'] ?? '';
         $typeId   = (int) ($_GET['transaction_type_id'] ?? 0);
+        $statusFilter = trim($_GET['status'] ?? 'active');
 
         $sql = "SELECT tt.name AS type_name, COUNT(*) AS entry_count,
                        SUM(CASE
@@ -1300,9 +1401,15 @@ switch ($action) {
                 FROM transaction_journals tj
                 JOIN transaction_types tt ON tt.id = tj.transaction_type_id
                 JOIN users u ON u.id = tj.created_by
-                WHERE tj.status != 'voided'";
+                WHERE 1 = 1";
 
         $params = [];
+
+        if ($statusFilter === 'active') {
+            $sql .= " AND tj.status != 'voided'";
+        } elseif ($statusFilter === 'voided') {
+            $sql .= " AND tj.status = 'voided'";
+        }
 
         if ($search !== '') {
             $sql .= " AND (tj.description LIKE :search1 OR tj.reference_no LIKE :search2 OR u.full_name LIKE :search3)";
@@ -1397,6 +1504,77 @@ switch ($action) {
             'success'     => true,
             'receivables' => $receivables,
             'payables'    => $payables,
+        ]);
+        break;
+
+    case 'receivables-payables-items':
+        $settlementType = $_GET['type'] ?? '';
+        if (!in_array($settlementType, ['ar', 'ap'], true)) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'Select receivables or payables to view.']);
+            break;
+        }
+
+        $pdo = getDbConnection();
+        $accountName = $settlementType === 'ar' ? 'Accounts Receivable' : 'Accounts Payable';
+        $accountType = $settlementType === 'ar' ? 'Asset' : 'Liability';
+        $increaseEntryType = $settlementType === 'ar' ? 'debit' : 'credit';
+        $accountsStmt = $pdo->prepare(
+            'SELECT a.id FROM accounts a
+             JOIN account_types at ON at.id = a.account_type_id
+             WHERE LOWER(a.name) = LOWER(:name) AND at.name = :type'
+        );
+        $accountsStmt->execute([':name' => $accountName, ':type' => $accountType]);
+
+        $items = [];
+        foreach ($accountsStmt->fetchAll(PDO::FETCH_COLUMN) as $accountId) {
+            $items = array_merge(
+                $items,
+                getPartyOpenItems($pdo, (int) $accountId, $increaseEntryType)
+            );
+        }
+
+        $partyIds = array_values(array_unique(array_filter(
+            array_map(static fn(array $item): int => (int) ($item['client_id'] ?? 0), $items)
+        )));
+        $partiesById = [];
+        if ($partyIds) {
+            $placeholders = implode(',', array_fill(0, count($partyIds), '?'));
+            $partiesStmt = $pdo->prepare(
+                "SELECT id, name, company_name FROM clients WHERE id IN ({$placeholders})"
+            );
+            $partiesStmt->execute($partyIds);
+            foreach ($partiesStmt->fetchAll(PDO::FETCH_ASSOC) as $party) {
+                $partiesById[(int) $party['id']] = $party;
+            }
+        }
+
+        foreach ($items as &$item) {
+            $party = $partiesById[(int) ($item['client_id'] ?? 0)] ?? null;
+            $item['party_name'] = $party['name'] ?? 'Unassigned party';
+            $item['company_name'] = $party['company_name'] ?? null;
+        }
+        unset($item);
+
+        $today = date('Y-m-d');
+        usort($items, static function (array $left, array $right): int {
+            return [
+                $left['due_date'] ?? '9999-12-31',
+                $left['transaction_date'],
+                $left['journal_id'],
+            ] <=> [
+                $right['due_date'] ?? '9999-12-31',
+                $right['transaction_date'],
+                $right['journal_id'],
+            ];
+        });
+
+        echo json_encode([
+            'success' => true,
+            'type' => $settlementType,
+            'total' => round(array_sum(array_column($items, 'remaining')), 2),
+            'items' => $items,
+            'as_of' => $today,
         ]);
         break;
 
@@ -1631,7 +1809,7 @@ switch ($action) {
     // 19. FETCH ACTIVE CLIENTS LIST
     case 'get_clients':
         $pdo  = getDbConnection();
-        $stmt = $pdo->query("SELECT id, name, company_name, party_type FROM clients WHERE status = 'active' ORDER BY name ASC");
+        $stmt = $pdo->query("SELECT id, name, company_name, party_type, status FROM clients WHERE status = 'active' ORDER BY name ASC");
         $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
         echo json_encode(['success' => true, 'clients' => $clients]);
@@ -1682,6 +1860,7 @@ switch ($action) {
             'success' => true,
             'status' => 'completed',
             'image_path' => $row['image_path'],
+            'image_url' => getReceiptImageUrl((string) $row['image_path']),
             'extracted' => [
                 'vendor' => $extracted['vendor'] ?? 'Scanned Vendor',
                 'date' => $extracted['date'] ?? date('Y-m-d'),
@@ -1695,27 +1874,86 @@ switch ($action) {
     break;
 
            case 'push-mobile-receipt':
-    $pdo = getDbConnection();
     $token = $_POST['token'] ?? '';
-    if (empty($token) || !isset($_FILES['receipt_image'])) {
-        echo json_encode(['success' => false, 'error' => 'Missing token or image.']);
+    if (empty($_POST) && empty($_FILES) && (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        http_response_code(413);
+        echo json_encode([
+            'success' => false,
+            'error' => 'The photo is larger than the server upload limit. Use a lower-resolution photo or reduce its size.',
+        ]);
         exit;
     }
 
-    $uploadDir = '../../uploads/receipts/';
+    if (!is_string($token) || !preg_match('/^[a-f0-9]{16}$/i', $token)) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'This scanner link is invalid. Reopen the scanner from your computer and scan its new QR code.']);
+        exit;
+    }
+
+    if (!isset($_FILES['receipt_image'])) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'No photo was received. Please take or choose a photo and try again.']);
+        exit;
+    }
+
+    $uploadError = (int) ($_FILES['receipt_image']['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        $uploadErrors = [
+            UPLOAD_ERR_INI_SIZE => 'The photo is larger than the server upload limit. Use a lower-resolution photo or reduce its size.',
+            UPLOAD_ERR_FORM_SIZE => 'The photo is larger than the allowed upload size.',
+            UPLOAD_ERR_PARTIAL => 'The photo upload was interrupted. Please try again.',
+            UPLOAD_ERR_NO_FILE => 'No photo was received. Please take or choose a photo and try again.',
+            UPLOAD_ERR_NO_TMP_DIR => 'The server is not configured to receive uploads. Contact the administrator.',
+            UPLOAD_ERR_CANT_WRITE => 'The server could not save the uploaded photo. Contact the administrator.',
+            UPLOAD_ERR_EXTENSION => 'A server extension stopped the photo upload. Contact the administrator.',
+        ];
+        http_response_code(in_array($uploadError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) ? 413 : 422);
+        echo json_encode([
+            'success' => false,
+            'error' => $uploadErrors[$uploadError] ?? 'The photo upload failed. Please try again.',
+        ]);
+        exit;
+    }
+
+    $pdo = getDbConnection();
+    $scanStmt = $pdo->prepare("SELECT id FROM pending_receipt_scans WHERE token = :token AND status = 'pending' LIMIT 1");
+    $scanStmt->execute([':token' => $token]);
+    if (!$scanStmt->fetchColumn()) {
+        http_response_code(410);
+        echo json_encode([
+            'success' => false,
+            'error' => 'This scanner link has expired or was already used. Reopen the scanner from your computer and scan its new QR code.',
+        ]);
+        exit;
+    }
+
+    $uploadDir = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'receipts';
     if (!is_dir($uploadDir)) {
-        mkdir($uploadDir, 0777, true);
+        if (!mkdir($uploadDir, 0775, true) && !is_dir($uploadDir)) {
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Could not prepare receipt storage.']);
+            exit;
+        }
     }
 
     $fileExt = pathinfo($_FILES['receipt_image']['name'], PATHINFO_EXTENSION);
     $fileName = 'receipt_' . uniqid() . '.' . ($fileExt ?: 'jpg');
-    $targetPath = $uploadDir . $fileName;
+    $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
 
     if (move_uploaded_file($_FILES['receipt_image']['tmp_name'], $targetPath)) {
         $imagePath = 'uploads/receipts/' . $fileName;
 
         // Preprocess image for blurry/faded receipts using GD library
         $info = @getimagesize($targetPath);
+        if ($info === false) {
+            if (!unlink($targetPath)) {
+                error_log('Failed to remove invalid mobile receipt upload: ' . $targetPath);
+            }
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => 'The uploaded file is not a readable image. Please take the receipt photo again.']);
+            exit;
+        }
+
         if ($info) {
             $img = null;
             if ($info['mime'] == 'image/jpeg') {
@@ -1743,41 +1981,48 @@ switch ($action) {
             'amount' => '0.00'
         ];
 
-        try {
-            $tesseractPath = '"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"';
-            // Added --oem 1 --psm 6 to better handle messy receipt fonts and blocks of text
-            $command = "$tesseractPath " . escapeshellarg($targetPath) . " stdout --dpi 300 --oem 1 --psm 6 2>&1";
-            $rawText = @shell_exec($command);
+        $absoluteTargetPath = realpath($targetPath);
+        $ocrResult = $absoluteTargetPath === false
+            ? ['success' => false, 'parsed_text' => '', 'error' => 'The uploaded receipt file could not be read.']
+            : extractTextFromOCRSpace($absoluteTargetPath);
 
-            error_log("TESSERACT RAW TEXT: " . $rawText);
+        if (!$ocrResult['success']) {
+            if (!unlink($targetPath)) {
+                error_log('Failed to remove receipt upload after OCR failure: ' . $targetPath);
+            }
+            http_response_code(502);
+            echo json_encode([
+                'success' => false,
+                'error' => $ocrResult['error'],
+            ], JSON_THROW_ON_ERROR);
+            exit;
+        }
 
-            if ($rawText) {
-                if (preg_match('/(?:^|\n)\s*total[^0-9]*([0-9]+\.[0-9]{2})/i', $rawText, $matches)) {
-                    $extracted['amount'] = $matches[1];
-                } elseif (preg_match('/total\D+([0-9]+\.[0-9]{2})/i', $rawText, $matches)) {
-                    $extracted['amount'] = $matches[1];
-                } else {
-                    preg_match_all('/\b\d+\.\d{2}\b/', $rawText, $allPrices);
-                    if (!empty($allPrices[0])) {
-                        $extracted['amount'] = max(array_map('floatval', $allPrices[0]));
-                    }
-                }
-
-                if (preg_match('/(\d{2}\/\d{2}\/\d{4})/', $rawText, $dateMatches)) {
-                    $extracted['date'] = date('Y-m-d', strtotime($dateMatches[1]));
-                }
-
-                $lines = array_filter(explode("\n", $rawText));
-                foreach ($lines as $line) {
-                    $line = trim($line);
-                    if (strlen($line) > 3 && !str_contains($line, '---')) {
-                        $extracted['vendor'] = substr($line, 0, 50);
-                        break;
-                    }
+        $rawText = $ocrResult['parsed_text'];
+        if ($rawText !== '') {
+            if (preg_match('/(?:^|\n)\s*total[^0-9]*([0-9]+\.[0-9]{2})/i', $rawText, $matches)) {
+                $extracted['amount'] = $matches[1];
+            } elseif (preg_match('/total\D+([0-9]+\.[0-9]{2})/i', $rawText, $matches)) {
+                $extracted['amount'] = $matches[1];
+            } else {
+                preg_match_all('/\b\d+\.\d{2}\b/', $rawText, $allPrices);
+                if (!empty($allPrices[0])) {
+                    $extracted['amount'] = max(array_map('floatval', $allPrices[0]));
                 }
             }
-        } catch (Exception $e) {
-            // Ignore
+
+            if (preg_match('/(\d{2}\/\d{2}\/\d{4})/', $rawText, $dateMatches)) {
+                $extracted['date'] = date('Y-m-d', strtotime($dateMatches[1]));
+            }
+
+            $lines = array_filter(explode("\n", $rawText));
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (strlen($line) > 3 && !str_contains($line, '---')) {
+                    $extracted['vendor'] = substr($line, 0, 50);
+                    break;
+                }
+            }
         }
 
         $stmt = $pdo->prepare("UPDATE pending_receipt_scans SET status = 'completed', image_path = :path, extracted_data = :extracted WHERE token = :token");
@@ -1787,9 +2032,23 @@ switch ($action) {
             ':token' => $token
         ]);
 
+        if ($stmt->rowCount() !== 1) {
+            if (!unlink($targetPath)) {
+                error_log('Failed to remove receipt upload for expired mobile scan: ' . $targetPath);
+            }
+            http_response_code(410);
+            echo json_encode([
+                'success' => false,
+                'error' => 'This scanner link has expired. Reopen the scanner from your computer and scan its new QR code.',
+            ]);
+            exit;
+        }
+
         echo json_encode(['success' => true]);
     } else {
-        echo json_encode(['success' => false, 'error' => 'Failed to save uploaded file.']);
+        error_log(sprintf('Failed to move mobile receipt upload (PHP upload error %d).', $uploadError));
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'The server could not save the photo. Please try again or contact the administrator.']);
     }
     break;
     

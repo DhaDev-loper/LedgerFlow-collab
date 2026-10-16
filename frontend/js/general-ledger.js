@@ -36,8 +36,13 @@ function formatMoney(amount) {
 }
 
 function formatDate(dateStr) {
-    const date = new Date(dateStr.replace(' ', 'T'));
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    if (!dateStr) return '';
+
+    const datePart = String(dateStr).split(/[ T]/, 1)[0];
+    const parts = datePart.split('-');
+    if (parts.length !== 3 || parts[0].length !== 4) return String(dateStr);
+
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 async function loadLedgerAccounts() {

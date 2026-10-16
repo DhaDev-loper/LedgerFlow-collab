@@ -18,6 +18,7 @@
     let referenceData = null;
     let reopenClientId = null;
     let openBalance = 0;
+    let openItemsRequest = 0;
 
     function showAlert(element, message) {
         element.textContent = message;
@@ -103,13 +104,15 @@
     }
 
     async function loadOpenItems() {
+        const requestId = ++openItemsRequest;
         const clientId = Number(clientSelect.value);
         if (!clientId || !referenceData) {
             openBalance = 0;
             openBalanceElement.textContent = 'Select a client or vendor';
             openItemsElement.textContent = 'Payments are applied to the oldest due invoice or bill first.';
             amountInput.removeAttribute('max');
-            submitButton.disabled = false;
+            amountInput.disabled = true;
+            submitButton.disabled = true;
             return;
         }
 
@@ -119,6 +122,8 @@
         url.searchParams.set('type', typeSelect.value);
         openBalanceElement.textContent = 'Loading outstanding balance...';
         openItemsElement.textContent = '';
+        amountInput.disabled = true;
+        submitButton.disabled = true;
 
         try {
             const response = await fetch(url);
@@ -126,14 +131,16 @@
             if (!response.ok || !data.success) {
                 throw new Error(data.error || 'Could not load outstanding documents.');
             }
+            if (requestId !== openItemsRequest) return;
 
             openBalance = Number(data.open_balance) || 0;
             openBalanceElement.textContent = formatPaymentCurrency(openBalance);
             amountInput.max = openBalance.toFixed(2);
-            submitButton.disabled = openBalance <= 0;
+            amountInput.disabled = openBalance <= 0.005;
+            submitButton.disabled = amountInput.disabled;
 
             if (!(data.items || []).length) {
-                openItemsElement.textContent = 'No open invoices or bills are available for settlement.';
+                openItemsElement.textContent = 'No outstanding invoices or bills are available for settlement.';
                 return;
             }
 
@@ -152,10 +159,12 @@
             });
             openItemsElement.append(heading, list);
         } catch (error) {
+            if (requestId !== openItemsRequest) return;
             openBalance = 0;
             openBalanceElement.textContent = 'Unable to load balance';
             openItemsElement.textContent = error.message;
             amountInput.removeAttribute('max');
+            amountInput.disabled = true;
             submitButton.disabled = true;
         }
     }
@@ -209,6 +218,10 @@
         const amount = Number(document.getElementById('paymentAmount').value);
         if (!Number.isFinite(amount) || amount <= 0) {
             showAlert(errorAlert, 'Enter a payment amount greater than zero.');
+            return;
+        }
+        if (openBalance <= 0.005) {
+            showAlert(errorAlert, 'There are no outstanding invoices or bills to settle for this party.');
             return;
         }
         if (amount > openBalance + 0.005) {
@@ -279,7 +292,6 @@
         } catch (error) {
             showAlert(errorAlert, error.message);
         } finally {
-            submitButton.disabled = false;
             submitButton.textContent = 'Save Payment';
             loadOpenItems();
         }

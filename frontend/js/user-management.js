@@ -9,7 +9,6 @@ const userForm = document.getElementById('userForm');
 const formError = document.getElementById('formError');
 const userModalTitle = document.getElementById('userModalTitle');
 const passwordGroup = document.getElementById('passwordGroup');
-const passwordInput = document.getElementById('password');
 
 let rawUsersList = [];
 let activeRoleFilter = 'all';
@@ -21,10 +20,18 @@ async function loadUsers() {
 
     try {
         const response = await fetch(`${API_URL}?action=list`);
-        const data = await response.json();
+        const responseText = await response.text();
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (parseError) {
+            console.error('User list endpoint returned a non-JSON response:', response.status, responseText);
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">The server returned an invalid response (HTTP ${response.status}). Check the PHP error log and database migrations.</td></tr>`;
+            return;
+        }
 
-        if (!data.success) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Failed to load users.</td></tr>`;
+        if (!response.ok || !data.success) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">${escapeHtml(data.error || `Failed to load users (HTTP ${response.status}).`)}</td></tr>`;
             return;
         }
 
@@ -34,7 +41,7 @@ async function loadUsers() {
 
     } catch (err) {
         console.error('Failed to load users:', err);
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Could not reach the server.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Could not contact the server. Check your connection and try again.</td></tr>`;
     }
 }
 
@@ -104,14 +111,17 @@ function renderTableRows(users, tbody) {
         const roleLower = (user.role || 'staff').toLowerCase();
         const isSelf = parseInt(user.id, 10) === parseInt(typeof CURRENT_USER_ID !== 'undefined' ? CURRENT_USER_ID : 0, 10);
         const isLockedOut = Number(user.suspension_level) >= 4;
+        const setupPending = Number(user.password_setup_required) === 1;
         const suspensionEnds = user.locked_until ? new Date(user.locked_until.replace(' ', 'T')) : null;
         const isSuspended = suspensionEnds && suspensionEnds > new Date();
         const isOwner = typeof CURRENT_USER_ROLE !== 'undefined' && CURRENT_USER_ROLE === 'owner';
         const statusLabel = isLockedOut
             ? 'Locked out — owner activation required'
-            : isSuspended
-                ? `Suspended until ${suspensionEnds.toLocaleString()}`
-                : user.is_active == 1 ? 'Active' : 'Inactive';
+            : setupPending
+                ? 'Setup pending'
+                : isSuspended
+                    ? `Suspended until ${suspensionEnds.toLocaleString()}`
+                    : user.is_active == 1 ? 'Active' : 'Inactive';
 
         const actionsHtml = isSelf
             ? `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit Profile">
@@ -140,13 +150,16 @@ function renderTableRows(users, tbody) {
                 <td><span style="color: var(--dark-text-muted);">${escapeHtml(user.email)}</span></td>
                 <td><span class="role-badge role-${roleLower}">${capitalize(user.role)}</span></td>
                 <td>
-                    <span class="badge-${user.is_active == 1 ? (isSuspended ? 'out' : 'in') : 'out'}">
+                    <span class="badge-${setupPending || user.is_active != 1 || isSuspended ? 'out' : 'in'}">
                         ${escapeHtml(statusLabel)}
                     </span>
                 </td>
                 <td><span class="small" style="color: var(--dark-text-muted);">${formatDate(user.created_at)}</span></td>
                 <td class="text-end">
                     ${actionsHtml}
+                    ${setupPending && user.is_active == 1 ? `<button class="action-icon-btn" onclick="resendSetupInvitation(${user.id})" title="Resend setup invitation">
+                        <i class="bi bi-envelope-arrow-up"></i>
+                    </button>` : ''}
                 </td>
             </tr>
         `;
@@ -185,9 +198,7 @@ document.getElementById('addUserBtn')?.addEventListener('click', () => {
     // Reset Role Container to standard dropdown
     renderRoleField(false, 'staff');
 
-    passwordInput.required = true;
-    passwordInput.disabled = false;
-    passwordGroup.querySelector('.form-text').textContent = 'Minimum 8 characters.';
+    passwordGroup.classList.remove('d-none');
     formError.classList.add('d-none');
 });
 
@@ -228,9 +239,7 @@ window.openEditModal = function (user) {
     renderRoleField(isOwner, (user.role || '').toLowerCase());
 
     userModalTitle.textContent = isOwner ? 'Edit Profile' : 'Edit User';
-    passwordInput.required = false;
-    passwordGroup.querySelector('.form-text').textContent = 'Editing password here is disabled — use Forgot Password instead.';
-    passwordInput.disabled = true;
+    passwordGroup.classList.add('d-none');
 
     userModal.show();
 };
@@ -252,8 +261,10 @@ userForm?.addEventListener('submit', async (e) => {
 
         if (data.success) {
             userModal.hide();
-            passwordInput.disabled = false;
             loadUsers();
+            if (data.warning) {
+                alert(data.warning);
+            }
         } else {
             formError.textContent = data.error || 'Something went wrong.';
             formError.classList.remove('d-none');
@@ -264,6 +275,28 @@ userForm?.addEventListener('submit', async (e) => {
         formError.classList.remove('d-none');
     }
 });
+
+window.resendSetupInvitation = async function (userId) {
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            body: new URLSearchParams({
+                action: 'resend-setup-invitation',
+                user_id: userId,
+            }),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert(data.message || 'A new setup link was sent.');
+        } else {
+            alert(data.error || 'Could not send the setup link.');
+        }
+    } catch (err) {
+        console.error('Resending setup invitation failed:', err);
+        alert('Could not reach the server.');
+    }
+};
 
 // ---------- Toggle status ----------
 window.toggleStatus = async function (userId) {
@@ -386,7 +419,7 @@ async function loadArchivedUsers() {
 
 // Restore archived account using the uniform API_URL route
 async function restoreUser(userId) {
-    if (!confirm('Are you sure you want to restore this user account?')) return;
+    if (!confirm('Restore this account and email the user a password setup link?')) return;
 
     const formData = new FormData();
     formData.append('action', 'restore');
@@ -399,6 +432,9 @@ async function restoreUser(userId) {
         if (data.success) {
             await loadArchivedUsers();
             loadUsers(); // Refresh main active users table
+            if (data.warning) {
+                alert(data.warning);
+            }
         } else {
             alert(data.error || 'Failed to restore account.');
         }

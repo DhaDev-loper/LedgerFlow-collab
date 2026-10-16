@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/report_helper.php';
+require_once __DIR__ . '/../config/cash_flow_statement.php';
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Dompdf\Dompdf;
@@ -53,6 +54,135 @@ function getReportCss(): string {
 }
 
 switch ($action) {
+
+    case 'cash-flow-statement-pdf':
+        $dateFrom = (string) ($_GET['date_from'] ?? '');
+        $dateTo = (string) ($_GET['date_to'] ?? '');
+
+        try {
+            $data = getCashFlowStatementData($pdo, $dateFrom, $dateTo);
+        } catch (InvalidArgumentException $exception) {
+            http_response_code(422);
+            exit(htmlspecialchars($exception->getMessage(), ENT_QUOTES, 'UTF-8'));
+        }
+
+        $options = new Options();
+        $options->set('isRemoteEnabled', false);
+        $options->set('defaultFont', 'DejaVu Serif');
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml(
+            '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Statement of Cash Flows</title></head><body>'
+            . renderCashFlowStatementHtml($data)
+            . '</body></html>',
+            'UTF-8'
+        );
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+        $dompdf->stream(
+            'Statement_of_Cash_Flows_' . $dateFrom . '_to_' . $dateTo . '.pdf',
+            ['Attachment' => $isPreview ? 0 : 1]
+        );
+        exit;
+
+    case 'cash-flow-statement-xlsx':
+        $dateFrom = (string) ($_GET['date_from'] ?? '');
+        $dateTo = (string) ($_GET['date_to'] ?? '');
+
+        try {
+            $data = getCashFlowStatementData($pdo, $dateFrom, $dateTo);
+        } catch (InvalidArgumentException $exception) {
+            http_response_code(422);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['success' => false, 'error' => $exception->getMessage()]);
+            exit;
+        }
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Cash Flows');
+        $sheet->setShowGridLines(false);
+        $sheet->mergeCells('A1:B1');
+        $sheet->mergeCells('A2:B2');
+        $sheet->setCellValue('A1', 'Statement of Cash Flows');
+        $sheet->setCellValue(
+            'A2',
+            'For the Period ' . formatCashFlowStatementDate($dateFrom) . ' to ' . formatCashFlowStatementDate($dateTo)
+        );
+        $sheet->getStyle('A1:B2')->getFont()->setName('Times New Roman');
+        $sheet->getStyle('A1:B1')->getFont()->setBold(true)->setSize(16);
+        $sheet->getStyle('A2:B2')->getFont()->setItalic(true)->setSize(11);
+        $sheet->getStyle('A1:B2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getRowDimension(1)->setRowHeight(26);
+        $sheet->getRowDimension(2)->setRowHeight(22);
+        $sheet->getColumnDimension('A')->setWidth(92);
+        $sheet->getColumnDimension('B')->setWidth(24);
+        $sheet->getPageSetup()
+            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT)
+            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
+            ->setFitToWidth(1)
+            ->setFitToHeight(0);
+        $sheet->getPageMargins()->setTop(0.7)->setRight(0.6)->setBottom(0.7)->setLeft(0.6);
+        $sheet->getPageSetup()->setFitToPage(true);
+
+        $row = 4;
+        $totalLabels = [
+            'operating' => 'Net cash provided by (used in) operating activities',
+            'investing' => 'Net cash provided by (used in) investing activities',
+            'financing' => 'Net cash provided by (used in) financing activities',
+        ];
+        $currencyFormat = '₱#,##0.00;(₱#,##0.00);₱0.00';
+
+        foreach ($data['sections'] as $key => $section) {
+            $sheet->setCellValue("A{$row}", $section['title']);
+            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true)->setSize(12);
+            $sheet->getRowDimension($row)->setRowHeight(21);
+            $row++;
+
+            if (!$section['items']) {
+                $activityName = strtolower(str_replace(' Activities', '', $section['title']));
+                $sheet->setCellValue("A{$row}", 'No ' . $activityName . ' transactions in this period');
+                $sheet->setCellValue("B{$row}", 0);
+                $sheet->getStyle("A{$row}:B{$row}")->getFont()
+                    ->setName('Times New Roman')->setItalic(true)->getColor()->setRGB('777777');
+                $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
+                $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $row++;
+            } else {
+                foreach ($section['items'] as $item) {
+                    $sheet->setCellValue("A{$row}", $item['label']);
+                    $sheet->setCellValue("B{$row}", (float) $item['amount']);
+                    $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setSize(11);
+                    $sheet->getStyle("A{$row}")->getAlignment()->setIndent(1);
+                    $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
+                    $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $row++;
+                }
+            }
+
+            $sheet->setCellValue("A{$row}", $totalLabels[$key]);
+            $sheet->setCellValue("B{$row}", (float) $section['total']);
+            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true);
+            $sheet->getStyle("A{$row}:B{$row}")->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN);
+            $sheet->getStyle("B{$row}")->getBorders()->getBottom()->setBorderStyle(Border::BORDER_THIN);
+            $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
+            $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $row += 2;
+        }
+
+        $sheet->setCellValue("A{$row}", 'Net Increase (Decrease) in Cash');
+        $sheet->setCellValue("B{$row}", (float) $data['net_change']);
+        $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true);
+        $sheet->getStyle("A{$row}:B{$row}")->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("B{$row}")->getBorders()->getBottom()->setBorderStyle(Border::BORDER_DOUBLE);
+        $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
+        $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+        $writer = new Xlsx($spreadsheet);
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="Statement_of_Cash_Flows_' . $dateFrom . '_to_' . $dateTo . '.xlsx"');
+        header('Cache-Control: max-age=0');
+        $writer->save('php://output');
+        exit;
 
     case 'income-statement-pdf':
         $dateFrom = $_GET['date_from'] ?? date('Y-m-01');

@@ -253,8 +253,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <?php if ($canCreate): ?>
 <!-- NEW ENTRY MODAL -->
 <div class="modal fade" id="entryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content modal-dark">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content modal-dark journal-entry-modal">
             <div class="modal-header">
                 <h5 class="modal-title">New Journal Entry</h5>
                 <div class="btn-group me-5" role="group">
@@ -269,7 +269,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                     <!-- AUTO MODE TEMPLATES -->
                     <div id="autoModeSection" class="mb-3 d-none">
                         <label class="form-label small">Transaction Template</label>
-                        <select class="form-select form-control-dark" id="templateSelect">
+                        <select class="form-select form-control-dark bg-dark text-light border-secondary" id="templateSelect">
                             <option value="">-- Select a transaction type --</option>
                         </select>
                         <div class="form-text" style="color: var(--dark-text-muted);">
@@ -280,17 +280,17 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label small">Transaction Type</label>
-                            <select class="form-select form-control-dark" id="transactionTypeId" name="transaction_type_id" required>
+                            <select class="form-select form-control-dark bg-dark text-light border-secondary" id="transactionTypeId" name="transaction_type_id" required>
                                 <!-- injected by journal-entries.js -->
                             </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Date</label>
-                            <input type="date" class="form-control form-control-dark" id="transactionDate" name="transaction_date" required>
+                            <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="transactionDate" name="transaction_date" required>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-4 d-none" id="clientFieldContainer">
                             <label class="form-label small">Customer / Vendor (required for A/R or A/P)</label>
-                            <select class="form-select form-control-dark" id="clientIdSelect" name="client_id">
+                            <select class="form-select form-control-dark bg-dark text-light border-secondary" id="clientIdSelect" name="client_id">
                                 <option value="">-- Optional unless entering an invoice or bill --</option>
                             </select>
                         </div>
@@ -298,41 +298,48 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
                     <div class="mb-3">
                         <label class="form-label small">Description</label>
-                        <input type="text" class="form-control form-control-dark" id="description" name="description" placeholder="e.g. Walk-in sale, Electricity bill" required>
+                        <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="description" name="description" placeholder="e.g. Walk-in sale, Electricity bill" required>
                     </div>
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label small">Reference No. (optional)</label>
-                            <input type="text" class="form-control form-control-dark" id="referenceNo" name="reference_no">
+                            <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="referenceNo" name="reference_no">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Category (optional)</label>
-                            <select class="form-select form-control-dark" id="categoryId" name="category_id">
+                            <select class="form-select form-control-dark bg-dark text-light border-secondary" id="categoryId" name="category_id">
                                 <option value="">-- None --</option>
                             </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Due Date (required for invoices and bills)</label>
-                            <input type="date" class="form-control form-control-dark" id="dueDate" name="due_date">
+                            <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="dueDate" name="due_date">
                         </div>
                     </div>
 
-                    <hr style="border-color: var(--dark-border);">
-
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label small mb-0 fw-semibold">Debit Lines <span class="text-secondary">(maximum 10)</span></label>
-                        <button type="button" class="table-action-btn" id="addDebitLineBtn">+ Add Debit Line</button>
+                    <div class="journal-line-section journal-line-section-debit">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <label class="form-label mb-1 fw-semibold">Debit lines</label>
+                                <div class="journal-line-caption">Accounts receiving value <span>(maximum 10)</span></div>
+                            </div>
+                            <button type="button" class="table-action-btn" id="addDebitLineBtn">+ Add Debit Line</button>
+                        </div>
+                        <div id="debitLinesContainer"></div>
                     </div>
-                    <div id="debitLinesContainer"></div>
 
-                    <hr style="border-color: var(--dark-border);">
-
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <label class="form-label small mb-0 fw-semibold">Credit Lines <span class="text-secondary">(maximum 10)</span></label>
-                        <button type="button" class="table-action-btn" id="addCreditLineBtn">+ Add Credit Line</button>
+                    <div class="journal-line-section journal-line-section-credit">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <label class="form-label mb-1 fw-semibold">Credit lines</label>
+                                <div class="journal-line-caption">Accounts giving value <span>(maximum 10)</span></div>
+                            </div>
+                            <button type="button" class="table-action-btn" id="addCreditLineBtn">+ Add Credit Line</button>
+                        </div>
+                        <div id="creditLinesContainer"></div>
                     </div>
-                    <div id="creditLinesContainer"></div>
+                    <div id="accountRuleWarning" class="alert alert-warning py-2 px-3 small mt-2 d-none" role="alert"></div>
 
                     <div class="d-flex justify-content-end gap-4 mt-3 small">
                         <div>Total Debits: <span class="money fw-semibold" id="totalDebitsDisplay">0.00</span></div>
@@ -566,6 +573,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                         <select class="form-select form-control-dark" id="scannedCreditAccount" required></select>
                                     </div>
                                 </div>
+                                <div id="scannedAccountRuleWarning" class="alert alert-warning py-2 px-3 small mt-2 d-none" role="alert"></div>
                             </form>
                         </div>
 

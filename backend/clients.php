@@ -39,7 +39,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                       <div>
                           <h1 class="h4 mb-1">Clients Directory</h1>
-                          <p class="small mb-0" style="color: var(--dark-text-muted);">Manage customer and vendor profiles and business accounts.</p>
+                          <p class="small mb-0" style="color: var(--dark-text-muted);">Manage customer and vendor profiles and business accounts. Select a row to view client details and transaction history.</p>
                       </div>
                       <?php if ($canCreate): ?>
                           <div class="d-flex gap-2">
@@ -368,8 +368,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   
                   if (data.success && data.clients.length > 0) {
                       tbody.innerHTML = data.clients.map(c => `
-                          <tr class="client-row" data-client-id="${Number(c.id)}" tabindex="0" role="button" aria-label="View details for ${escapeHtml(c.name)}" style="cursor: pointer;">
-                              <td class="fw-semibold">${escapeHtml(c.name)}</td>
+                          <tr class="client-row" data-client-id="${Number(c.id)}" tabindex="0" role="button" aria-label="View details and transaction history for ${escapeHtml(c.name)}" title="Select to view client details">
+                              <td class="client-row-name">
+                                  <span class="fw-semibold">${escapeHtml(c.name)}</span>
+                                  <span class="client-row-hint">View details <i class="bi bi-arrow-up-right" aria-hidden="true"></i></span>
+                              </td>
                               <td>${escapeHtml(c.company_name || '-')}</td>
                               <td class="text-capitalize">${escapeHtml(c.party_type || 'customer')}</td>
                               <td>${escapeHtml(c.email || '-')}</td>
@@ -526,9 +529,9 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
           document.getElementById('receiptScannerModal')?.addEventListener('show.bs.modal', async () => {
               resetScannerModalState();
+              await loadClientsIntoScanDropdown();
               await initScanSession();
               await ensureAccountsLoadedForScan();
-              await loadClientsIntoScanDropdown();
           });
 
           document.getElementById('receiptScannerModal')?.addEventListener('hide.bs.modal', () => {
@@ -588,7 +591,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                       const data = await response.json();
                       if (data.success && data.status === 'completed') {
                           stopScanPolling();
-                          openVerificationForm(data.image_path, data.extracted);
+                          openVerificationForm(data.image_path, data.extracted, data.image_url);
                       }
                   } catch (err) {
                       console.error('Polling error:', err);
@@ -626,16 +629,19 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                       const checkData = await checkRes.json();
                       if (checkData.success && checkData.status === 'completed') {
                           stopScanPolling();
-                          openVerificationForm(checkData.image_path, checkData.extracted);
+                          openVerificationForm(checkData.image_path, checkData.extracted, checkData.image_url);
                       }
+                  } else {
+                      alert(data.error || 'Failed to process receipt file.');
                   }
               } catch (err) {
-                  console.error('Local file processing error', err);
+                  console.error('Local file processing error:', err);
+                  alert('Could not reach the receipt scanning service. Please try again.');
               }
           });
 
-          function openVerificationForm(imagePath, extracted) {
-              document.getElementById('scannedImagePreview').src = imagePath;
+          function openVerificationForm(imagePath, extracted, imageUrl = imagePath) {
+              document.getElementById('scannedImagePreview').src = imageUrl;
               document.getElementById('scannedVendor').value = extracted.vendor || '';
               document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
               document.getElementById('scannedRef').value = extracted.reference_no || '';
@@ -666,18 +672,28 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
           }
 
           async function loadClientsIntoScanDropdown() {
+              const selectEl = document.getElementById('scannedClient');
+              if (!selectEl) return;
+
+              selectEl.replaceChildren(new Option('Loading active clients...', ''));
               try {
-                  const res = await fetch(`${API_URL}?action=list-clients`);
+                  const res = await fetch('routes/clients.php?action=list&status=active');
                   const data = await res.json();
-                  if (data.success && data.clients) {
-                      const selectEl = document.getElementById('scannedClient');
-                      if (selectEl) {
-                          selectEl.innerHTML = '<option value="">-- Select Client --</option>' + 
-                              data.clients.map(c => `<option value="${c.id}">${c.name} ${c.company_name ? '(' + c.company_name + ')' : ''}</option>`).join('');
-                      }
+                  if (!res.ok || !data.success || !Array.isArray(data.clients)) {
+                      throw new Error(data.error || 'Could not load active clients.');
                   }
+
+                  selectEl.replaceChildren(new Option('-- Select Client (Optional) --', ''));
+                  data.clients.forEach(client => {
+                      const label = client.company_name
+                          ? `${client.name} (${client.company_name})`
+                          : client.name;
+                      selectEl.add(new Option(label, client.id));
+                  });
               } catch (err) {
                   console.error('Failed to load clients into scan modal', err);
+                  selectEl.replaceChildren(new Option('Unable to load clients', ''));
+                  selectEl.options[0].disabled = true;
               }
           }
 
@@ -741,6 +757,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   });
 
           loadClients();
+          const requestedClientId = Number(new URLSearchParams(window.location.search).get('client_id'));
+          if (Number.isInteger(requestedClientId) && requestedClientId > 0) {
+              window.viewClient(requestedClientId);
+          }
       </script>
 <script src="../frontend/js/session-timeout.js"></script>
 </body>

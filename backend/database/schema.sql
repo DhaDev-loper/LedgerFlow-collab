@@ -7,6 +7,7 @@ CREATE TABLE users (
     full_name       VARCHAR(100)        NOT NULL,
     email           VARCHAR(150)        NOT NULL,
     password_hash   VARCHAR(255)        NOT NULL,
+    password_setup_required TINYINT(1)  NOT NULL DEFAULT 0,
     role            ENUM('owner','admin','accountant','staff') NOT NULL DEFAULT 'staff',
     pin_hash        VARCHAR(255)        NULL,
     is_active       TINYINT(1)          NOT NULL DEFAULT 1,
@@ -18,6 +19,19 @@ CREATE TABLE users (
     deleted_at      DATETIME            NULL,
     created_at      TIMESTAMP           NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_users_email (email)
+) ENGINE=InnoDB;
+
+CREATE TABLE user_setup_invitations (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id         INT UNSIGNED    NOT NULL,
+    token_hash      CHAR(64)        NOT NULL,
+    expires_at      DATETIME        NOT NULL,
+    used_at         DATETIME        NULL,
+    created_at      TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_setup_invitations_token (token_hash),
+    INDEX idx_user_setup_invitations_user (user_id, used_at),
+    CONSTRAINT fk_user_setup_invitations_user
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE audit (
@@ -87,6 +101,7 @@ INSERT INTO accounts (account_type_id, name, opening_balance, opening_balance_da
     (1, 'E-Wallet',            0.00, CURDATE(), 0.00, 1),
     (1, 'Accounts Receivable', 0.00, NULL,      0.00, 0),
     (2, 'Accounts Payable',    0.00, NULL,      0.00, 0),
+    (2, 'Client Ad Budget Liability', 0.00, NULL, 0.00, 0),
     (4, 'Sales Revenue',       0.00, NULL,      0.00, 0),
     (4, 'Service Revenue',     0.00, NULL,      0.00, 0),
     (5, 'Utilities',           0.00, NULL,      0.00, 0),

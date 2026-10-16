@@ -63,13 +63,6 @@ $canEditBusiness = in_array($userRole, ['admin', 'owner'], true);
         <span>Clients</span>
     </a>
 
-    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
-    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
-        <div class="scan-btn-icon">
-            <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <span>Scan</span>
-    </button>
     
     <!-- RIGHT SIDE (4 items balanced) -->
     <div class="bottom-nav-expandable " id="journalExpandable">

@@ -81,6 +81,8 @@ $userRole = $_SESSION['role'];
                         </div>
                     </div>
              <button class="quick-action-btn" id="generateReportBtn">Generate</button>
+             <button type="button" class="quick-action-btn d-none" id="printCashFlowBtn">Print</button>
+             <button type="button" class="quick-action-btn d-none" id="exportCashFlowExcelBtn">Export Excel</button>
              <button type="button" id="exportBtn" class="quick-action-btn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -118,13 +120,8 @@ $userRole = $_SESSION['role'];
         <span>Clients</span>
     </a>
 
-    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
-    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
-        <div class="scan-btn-icon">
-            <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <span>Scan</span>
-    </button>
+
+    
     
     <!-- RIGHT SIDE (4 items balanced) -->
     <div class="bottom-nav-expandable " id="journalExpandable">
@@ -154,7 +151,7 @@ $userRole = $_SESSION['role'];
                 <span>Users</span>
             </a>
      <?php endif; ?>
-    <a href="reports.php" class="bottom-nav-item active">
+    <a href="reports.php" class="bottom-nav-item active" aria-current="page">
         <i class="bi bi-bar-chart"></i>
         <span>Reports</span>
     </a>

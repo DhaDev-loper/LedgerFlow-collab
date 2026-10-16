@@ -1,6 +1,5 @@
 const API_URL = '../backend/routes/reports.php';
 const EXPORT_URL = '../backend/routes/export.php'; // Adjust path if your export script is located elsewhere
-const JOURNAL_API_URL = '../backend/routes/journal.php';
 
 let currentReport = 'income-statement';
 let currentCashFlowData = null;
@@ -23,9 +22,11 @@ function setActiveTab(report) {
     document.getElementById('trialBalanceDateControl')?.classList.toggle('d-none', report !== 'trial-balance');
     document.getElementById('cashFlowStatementDateControls')?.classList.toggle('d-none', report !== 'cash-flow-statement');
     const exportButtonLabel = document.getElementById('exportButtonLabel');
-    if (exportButtonLabel) exportButtonLabel.textContent =
-        report === 'cash-flow-statement' ? 'Export CSV' : 'Export';
+    if (exportButtonLabel) exportButtonLabel.textContent = 'Export';
+    document.getElementById('printCashFlowBtn')?.classList.toggle('d-none', report !== 'cash-flow-statement');
+    document.getElementById('exportCashFlowExcelBtn')?.classList.toggle('d-none', report !== 'cash-flow-statement');
     currentCashFlowData = null;
+    updateCashFlowActionAvailability();
 
     const container = document.getElementById('reportContent');
     if (container) {
@@ -312,108 +313,51 @@ async function loadCashFlowStatement() {
     const container = document.getElementById('reportContent');
     if (!container) return;
     currentCashFlowData = null;
+    updateCashFlowActionAvailability();
     container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Loading...</p>`;
 
     const dateFrom = document.getElementById('cashFlowDateFrom')?.value || '';
     const dateTo = document.getElementById('cashFlowDateTo')?.value || '';
     if (!dateFrom || !dateTo || dateFrom > dateTo) {
         container.innerHTML = `<p class="text-center py-5 text-danger">Choose a valid date range. The start date must not be after the end date.</p>`;
+        updateCashFlowActionAvailability();
         return;
     }
 
     const params = new URLSearchParams({
-        action: 'cashflow-report',
+        action: 'cash-flow-statement',
         date_from: dateFrom,
         date_to: dateTo,
     });
 
     try {
-        const response = await fetch(`${JOURNAL_API_URL}?${params.toString()}`);
+        const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
         if (!response.ok || !data.success) {
             throw new Error(data.error || 'Failed to load the cash flow statement.');
         }
         currentCashFlowData = data;
-
-        const renderRows = (items, emptyMessage) => (items || []).map(item => `
-            <tr>
-                <td>${escapeHtml(item.category)}</td>
-                <td class="text-end money">${formatMoney(item.total)}</td>
-            </tr>
-        `).join('') || `
-            <tr><td colspan="2" class="text-center py-3" style="color: var(--dark-text-muted);">${emptyMessage}</td></tr>
-        `;
-
-        const netCashFlow = Number(data.net_cash_flow) || 0;
-        const positiveNetFlow = netCashFlow >= 0;
-        container.innerHTML = `
-            <p class="small mb-3" style="color: var(--dark-text-muted);">
-                Cash activity from ${escapeHtml(data.date_from)} through ${escapeHtml(data.date_to)}.
-                Amounts include non-voided cash inflow and outflow entries using accounts marked as cash/bank.
-            </p>
-            <div class="row g-3 mb-4">
-                <div class="col-md-4">
-                    <div class="panel receipt-card h-100">
-                        <div class="panel-body compact">
-                            <div class="small" style="color: var(--dark-text-muted);">Total Cash Inflows</div>
-                            <div class="h5 mb-0 money" style="color: #4ADE80;">${formatMoney(data.total_inflow)}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="panel receipt-card h-100">
-                        <div class="panel-body compact">
-                            <div class="small" style="color: var(--dark-text-muted);">Total Cash Outflows</div>
-                            <div class="h5 mb-0 money" style="color: #F87171;">${formatMoney(data.total_outflow)}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="panel receipt-card h-100">
-                        <div class="panel-body compact">
-                            <div class="small" style="color: var(--dark-text-muted);">Net Cash Flow</div>
-                            <div class="h5 mb-0 money" style="color: ${positiveNetFlow ? '#4ADE80' : '#F87171'};">${formatMoney(netCashFlow)}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="row g-4">
-                <div class="col-lg-6">
-                    <div class="panel receipt-card h-100">
-                        <div class="panel-header"><h2 class="h6 mb-0">Cash Inflows</h2></div>
-                        <div class="table-responsive">
-                            <table class="table table-transactions mb-0">
-                                <thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>
-                                <tbody>${renderRows(data.inflow_breakdown, 'No cash inflows for this period.')}</tbody>
-                                <tfoot><tr><th>Total Cash Inflows</th><th class="text-end money">${formatMoney(data.total_inflow)}</th></tr></tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-lg-6">
-                    <div class="panel receipt-card h-100">
-                        <div class="panel-header"><h2 class="h6 mb-0">Cash Outflows</h2></div>
-                        <div class="table-responsive">
-                            <table class="table table-transactions mb-0">
-                                <thead><tr><th>Category</th><th class="text-end">Amount</th></tr></thead>
-                                <tbody>${renderRows(data.outflow_breakdown, 'No cash outflows for this period.')}</tbody>
-                                <tfoot><tr><th>Total Cash Outflows</th><th class="text-end money">${formatMoney(data.total_outflow)}</th></tr></tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="panel receipt-card mt-4">
-                <div class="panel-body compact d-flex justify-content-between align-items-center">
-                    <span class="h6 mb-0">Net Change in Cash</span>
-                    <span class="money fw-bold fs-5" style="color: ${positiveNetFlow ? '#4ADE80' : '#F87171'};">${formatMoney(netCashFlow)}</span>
-                </div>
-            </div>
-        `;
+        container.innerHTML = data.html;
+        updateCashFlowActionAvailability();
     } catch (err) {
         console.error('Failed to load cash flow statement:', err);
         container.innerHTML = `<p class="text-center py-5 text-danger">${escapeHtml(err.message || 'Could not reach the server.')}</p>`;
+        updateCashFlowActionAvailability();
     }
+}
+
+function updateCashFlowActionAvailability() {
+    const dateFrom = document.getElementById('cashFlowDateFrom')?.value || '';
+    const dateTo = document.getElementById('cashFlowDateTo')?.value || '';
+    const isCurrentReport = currentReport === 'cash-flow-statement'
+        && currentCashFlowData
+        && currentCashFlowData.date_from === dateFrom
+        && currentCashFlowData.date_to === dateTo;
+
+    ['printCashFlowBtn', 'exportCashFlowExcelBtn'].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) button.disabled = !isCurrentReport;
+    });
 }
 
 // ---------- DOM Content Loaded Initializations ----------
@@ -436,6 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
     [cashFlowDateFromEl, cashFlowDateToEl].forEach(input => {
         input?.addEventListener('change', () => {
             currentCashFlowData = null;
+            updateCashFlowActionAvailability();
         });
     });
 
@@ -475,6 +420,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const iframe = document.getElementById('pdfPreviewFrame');
     const downloadBtn = document.getElementById('pdfDownloadBtn');
     const modalTitle = document.getElementById('pdfModalTitle');
+    const printCashFlowBtn = document.getElementById('printCashFlowBtn');
+    const exportCashFlowExcelBtn = document.getElementById('exportCashFlowExcelBtn');
+
+    printCashFlowBtn?.addEventListener('click', () => {
+        if (!currentCashFlowData) return;
+        window.print();
+    });
+
+    exportCashFlowExcelBtn?.addEventListener('click', () => {
+        if (!currentCashFlowData) return;
+        const params = new URLSearchParams({
+            action: 'cash-flow-statement-xlsx',
+            date_from: currentCashFlowData.date_from,
+            date_to: currentCashFlowData.date_to,
+        });
+        window.location.href = `${EXPORT_URL}?${params.toString()}`;
+    });
 
     if (exportBtn) {
         exportBtn.addEventListener('click', () => {
@@ -488,35 +450,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const cashFlowDateTo = document.getElementById('cashFlowDateTo')?.value || '';
 
             if (activeTab === 'cash-flow-statement') {
-                if (!currentCashFlowData) {
+                if (!currentCashFlowData
+                    || currentCashFlowData.date_from !== cashFlowDateFrom
+                    || currentCashFlowData.date_to !== cashFlowDateTo) {
                     alert('Generate the cash flow statement before exporting it.');
                     return;
                 }
-                const csvEscape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
-                const csvRows = [
-                    ['Cash Flow Statement'],
-                    [`Period: ${currentCashFlowData.date_from} to ${currentCashFlowData.date_to}`],
-                    [],
-                    ['Cash Inflows'],
-                    ['Category', 'Amount'],
-                    ...(currentCashFlowData.inflow_breakdown || []).map(item => [item.category, Number(item.total).toFixed(2)]),
-                    ['Total Cash Inflows', Number(currentCashFlowData.total_inflow).toFixed(2)],
-                    [],
-                    ['Cash Outflows'],
-                    ['Category', 'Amount'],
-                    ...(currentCashFlowData.outflow_breakdown || []).map(item => [item.category, Number(item.total).toFixed(2)]),
-                    ['Total Cash Outflows', Number(currentCashFlowData.total_outflow).toFixed(2)],
-                    [],
-                    ['Net Change in Cash', Number(currentCashFlowData.net_cash_flow).toFixed(2)],
-                ];
-                const csv = '\uFEFF' + csvRows.map(row => row.map(csvEscape).join(',')).join('\r\n');
-                const blobUrl = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-                const link = document.createElement('a');
-                link.href = blobUrl;
-                link.download = `cash-flow-statement-${cashFlowDateFrom}-to-${cashFlowDateTo}.csv`;
-                link.click();
-                window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
-                return;
             }
 
             let action = '';
@@ -542,6 +481,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     action = 'trial-balance-xlsx';
                     isPdf = false; // Excel files do not support iframe preview
                     if (trialBalanceAsOf) params.append('date_to', trialBalanceAsOf);
+                    break;
+
+                case 'cash-flow-statement':
+                    action = 'cash-flow-statement-pdf';
+                    titleText = 'Statement of Cash Flows Preview';
+                    params.append('date_from', cashFlowDateFrom);
+                    params.append('date_to', cashFlowDateTo);
                     break;
 
                 default:

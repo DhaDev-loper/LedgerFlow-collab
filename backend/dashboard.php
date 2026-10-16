@@ -36,13 +36,21 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
             <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
                 <!-- Top-Left: Logo -->
                 <div class="d-flex align-items-center">
-                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
+                    <img class="dashboard-brand-logo" src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
                 </div>
 
-                <!-- Top-Right: User Profile -->
-                <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
+                <!-- Top-Right: Notifications and User Profile -->
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="dashboard-notification-button" id="dueNotificationsButton"
+                            data-bs-toggle="modal" data-bs-target="#dueNotificationsModal"
+                            aria-label="Loading payment notifications" title="Payment due notifications">
+                        <i class="bi bi-bell" aria-hidden="true"></i>
+                        <span class="dashboard-notification-badge d-none" id="dueNotificationsCount" aria-live="polite"></span>
+                    </button>
+                    <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
+                        <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
+                        <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
+                    </div>
                 </div>
             </div>
 
@@ -61,10 +69,11 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
             <!-- Receivables & Payables Summary -->
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <div class="panel">
+                    <div class="panel ar-ap-summary-card" role="button" tabindex="0" data-ar-ap-type="ar"
+                         aria-label="View outstanding accounts receivable details">
                          <div class="panel-header">
                             <h2 class="h6 mb-0">Total Receivables</h2>
-                            <a href="journal-entries.php?account=Accounts%20Receivable" class="small text-decoration-none" style="color: var(--accent-blue);">View Details</a>
+                            <span class="small text-decoration-none" style="color: var(--accent-blue);">View Details</span>
                         </div>
                         <div class="panel-body compact">
                             <div class="small mb-1" style="color: var(--dark-text-muted);">Total Unpaid Invoices</div>
@@ -82,10 +91,11 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                 </div>
 
                 <div class="col-md-6">
-                    <div class="panel">
+                    <div class="panel ar-ap-summary-card" role="button" tabindex="0" data-ar-ap-type="ap"
+                         aria-label="View outstanding accounts payable details">
                       <div class="panel-header">
                             <h2 class="h6 mb-0">Total Payables</h2>
-                            <a href="journal-entries.php?account=Accounts%20Payable" class="small text-decoration-none" style="color: var(--accent-blue);">View Details</a>
+                            <span class="small text-decoration-none" style="color: var(--accent-blue);">View Details</span>
                         </div>
                         <div class="panel-body compact">
                             <div class="small mb-1" style="color: var(--dark-text-muted);">Total Unpaid Bills</div>
@@ -120,7 +130,9 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                          </select>
                         </div>
                         <div class="panel-body">
-                            <canvas id="cashflowChart" height="90"></canvas>
+                           <div class="cashflow-chart-container">
+                               <canvas id="cashflowChart"></canvas>
+                           </div>
                         </div>
                     </div>
 
@@ -129,21 +141,39 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                             <h2 class="h6 mb-0">Recent Transactions</h2>
                             <a href="../backend/journal-entries.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
                         </div>
-                        <div class="table-responsive">
+                        <div class="table-responsive dashboard-recent-transactions">
                             <table class="table table-transactions mb-0">
                                 <thead>
                                     <tr>
                                         <th style="width:40px;"></th>
-                                        <th>Description</th>
-                                        <th>Category</th>
-                                        <th>Date</th>
-                                        <th class="text-end">Amount</th>
+                                        <th class="dashboard-recent-description">Transaction</th>
+                                        <th class="dashboard-recent-category">Category</th>
+                                        <th class="dashboard-recent-date">Date</th>
+                                        <th class="dashboard-recent-amount text-end">Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody id="recentTransactionsBody">
                                     <!-- rows injected by dashboard.js -->
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="border-top: 1px solid var(--dark-border);">
+                            <div class="d-flex align-items-center flex-wrap gap-3">
+                                <small id="dashboardRecentPageInfo" style="color: var(--dark-text-muted);"></small>
+                                <label for="dashboardRecentRowsPerPage" class="d-flex align-items-center gap-2 small mb-0" style="color: var(--dark-text-muted);">
+                                    Show
+                                    <select id="dashboardRecentRowsPerPage" class="form-select form-select-sm form-control-dark" style="width: auto;">
+                                        <option value="10" selected>10</option>
+                                        <option value="25">25</option>
+                                        <option value="50">50</option>
+                                        <option value="100">100</option>
+                                    </select>
+                                    entries
+                                </label>
+                            </div>
+                            <nav aria-label="Recent transactions pages">
+                                <ul id="dashboardRecentPagination" class="pagination pagination-sm mb-0"></ul>
+                            </nav>
                         </div>
                     </div>
 
@@ -246,9 +276,63 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
     </a>
 </nav>
 
+<div class="modal fade" id="arApDetailsModal" tabindex="-1" aria-labelledby="arApDetailsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content modal-dark">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="arApDetailsTitle">Outstanding Details</h5>
+                    <p class="small mb-0" id="arApDetailsTotal" style="color: var(--dark-text-muted);"></p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="table-responsive">
+                    <table class="table table-transactions align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Customer / Vendor</th>
+                                <th>Invoice / Bill</th>
+                                <th>Date</th>
+                                <th>Due Date</th>
+                                <th class="text-end">Original</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Outstanding</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="arApDetailsBody">
+                            <tr><td colspan="8" class="text-center py-4">Select a card to view outstanding items.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="dueNotificationsModal" tabindex="-1" aria-labelledby="dueNotificationsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content modal-dark">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="dueNotificationsTitle">Payment Due Notifications</h5>
+                    <p class="small mb-0">Overdue items first, followed by items due in the next 7 days.</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dueNotificationsList" aria-live="polite">
+                    <p class="text-center py-4 mb-0">Loading payment notifications...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Quick Sale Modal -->
 <div class="modal fade" id="quickSaleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content modal-dark">
             <div class="modal-header">
                 <h5 class="modal-title">Client Billing / Revenue</h5>
@@ -291,7 +375,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
 <!-- Quick Expense Modal -->
 <div class="modal fade" id="quickExpenseModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content modal-dark">
             <div class="modal-header">
                 <h5 class="modal-title">Record an Expense</h5>
@@ -491,5 +575,4 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
     window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="../frontend/js/journal-entries.js"></script>
 </html>

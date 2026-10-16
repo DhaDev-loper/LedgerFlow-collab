@@ -187,6 +187,16 @@ $currentUserRole = $_SESSION['role'] ?? '';
                 <i class="bi bi-wallet2"></i>
                 <span>Accounts</span>
             </a>
+            <a href="clients.php" class="bottom-nav-item">
+                <i class="bi bi-people-fill"></i>
+                <span>Clients</span>
+            </a>
+            <a href="accounts.php?openScanner=1" class="bottom-nav-scan-btn" title="Scan / Import Receipt">
+                <div class="scan-btn-icon">
+                    <i class="bi bi-qr-code-scan"></i>
+                </div>
+                <span>Scan</span>
+            </a>
             <!-- Journal Expandable Nav Item -->
             <div class="bottom-nav-expandable" id="journalExpandable">
                 <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
@@ -209,19 +219,16 @@ $currentUserRole = $_SESSION['role'] ?? '';
                     </a>
                 </div>
             </div>
-            <a href="reports.php" class="bottom-nav-item">
-                <i class="bi bi-bar-chart"></i>
-                <span>Reports</span>
-            </a>
-
             <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <div class="bottom-nav-divider"></div>
-            <a href="user-management.php" class="bottom-nav-item active">
+            <a href="user-management.php" class="bottom-nav-item active" aria-current="page">
                 <i class="bi bi-people"></i>
                 <span>Users</span>
             </a>
             <?php endif; ?>
-             <div class="bottom-nav-divider"></div>
+            <a href="reports.php" class="bottom-nav-item">
+                <i class="bi bi-bar-chart"></i>
+                <span>Reports</span>
+            </a>
             <a href="settings.php" class="bottom-nav-item">
                 <i class="bi bi-gear"></i>
                 <span>Settings</span>
@@ -257,9 +264,8 @@ $currentUserRole = $_SESSION['role'] ?? '';
                         </div>
 
                         <div class="mb-3" id="passwordGroup">
-                            <label class="form-label small">Password</label>
-                            <input type="text" class="form-control form-control-dark" id="password" name="password">
-                            <div class="form-text" style="color: var(--dark-text-muted);">Minimum 8 characters. Leave blank when editing to keep current password.</div>
+                            <label class="form-label small">Password setup</label>
+                            <div class="form-text" style="color: var(--dark-text-muted);">A one-time setup link will be emailed to the user. It expires after 24 hours.</div>
                         </div>
 
                         

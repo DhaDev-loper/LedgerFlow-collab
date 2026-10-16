@@ -66,7 +66,9 @@ $userRole = $_SESSION['role'];
                     <h2 class="h6 mb-0">Cash Flow Trend</h2>
                 </div>
                 <div class="panel-body">
-                    <canvas id="cfChart" height="90"></canvas>
+                    <div class="cashflow-chart-container">
+                        <canvas id="cfChart"></canvas>
+                    </div>
                 </div>
             </div>
 
@@ -92,51 +94,6 @@ $userRole = $_SESSION['role'];
         </div>
     </div>
 
-    <nav class="bottom-nav">
-        <a href="dashboard.php" class="bottom-nav-item">
-            <i class="bi bi-speedometer2"></i>
-            <span>Dashboard</span>
-        </a>
-        <a href="transaction.php" class="bottom-nav-item">
-            <i class="bi bi-arrow-left-right"></i>
-            <span>Transact</span>
-        </a>
-        <a href="accounts.php" class="bottom-nav-item">
-            <i class="bi bi-wallet2"></i>
-            <span>Accounts</span>
-        </a>
-        <div class="dropup">
-            <a href="#" class="bottom-nav-item active" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="bi bi-journal-text"></i>
-                <span>Journal</span>
-            </a>
-            <ul class="dropdown-menu dropdown-menu-dark">
-                <li><a class="dropdown-item" href="journal-entries.php">Journal Entries</a></li>
-                <li><a class="dropdown-item" href="general-ledger.php">General Ledger</a></li>
-                <li><a class="dropdown-item" href="cashflow.php">Cash Flow</a></li>
-            </ul>
-        </div>
-        <a href="reports.php" class="bottom-nav-item">
-            <i class="bi bi-bar-chart"></i>
-            <span>Reports</span>
-        </a>
-        <?php if (in_array($userRole, ['admin', 'owner'], true)): ?>
-        <div class="bottom-nav-divider"></div>
-        <a href="user-management.php" class="bottom-nav-item">
-            <i class="bi bi-people"></i>
-            <span>Users</span>
-        </a>
-        <?php endif; ?>
-        <div class="bottom-nav-divider"></div>
-        <a href="settings.php" class="bottom-nav-item">
-            <i class="bi bi-gear"></i>
-            <span>Settings</span>
-        </a>
-        <a href="#" class="bottom-nav-item" id="logoutBtn">
-            <i class="bi bi-box-arrow-right"></i>
-            <span>Logout</span>
-        </a>
-    </nav>
 </div>
 
 <nav class="bottom-nav">
@@ -152,6 +109,12 @@ $userRole = $_SESSION['role'];
                         <i class="bi bi-wallet2"></i>
                         <span>Accounts</span>
                     </a>
+                    <a href="accounts.php?openScanner=1" class="bottom-nav-scan-btn" title="Scan / Import Receipt">
+                        <div class="scan-btn-icon">
+                            <i class="bi bi-qr-code-scan"></i>
+                        </div>
+                        <span>Scan</span>
+                    </a>
                     <!-- Journal Expandable Nav Item -->
                     <div class="bottom-nav-expandable active" id="journalExpandable">
                         <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
@@ -160,7 +123,7 @@ $userRole = $_SESSION['role'];
                         </button>
 
                         <div class="expandable-content">
-                            <a href="journal-entries.php" class="sub-nav-item active">
+                            <a href="journal-entries.php" class="sub-nav-item">
                                 <i class="bi bi-journal-check"></i>
                                 <span>Entries</span>
                             </a>
@@ -168,7 +131,7 @@ $userRole = $_SESSION['role'];
                                 <i class="bi bi-book"></i>
                                 <span>Ledger</span>
                             </a>
-                            <a href="cashflow.php" class="sub-nav-item">
+                            <a href="cashflow.php" class="sub-nav-item active" aria-current="page">
                                 <i class="bi bi-cash-stack"></i>
                                 <span>Cash Flow</span>
                             </a>

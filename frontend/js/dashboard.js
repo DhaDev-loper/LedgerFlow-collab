@@ -36,7 +36,7 @@ async function loadCashflowChart() {
                 labels: data.labels,
                 datasets: [
                     {
-                        label: 'Cash In',
+                        label: 'Cash Inflow',
                         data: data.cash_in,
                         borderColor: '#2E90FA',
                         backgroundColor: gradientIn,
@@ -46,7 +46,7 @@ async function loadCashflowChart() {
                         borderWidth: 2,
                     },
                     {
-                        label: 'Cash Out',
+                        label: 'Cash Outflow',
                         data: data.cash_out,
                         borderColor: '#F87171',
                         backgroundColor: 'transparent',
@@ -60,6 +60,8 @@ async function loadCashflowChart() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
@@ -108,54 +110,255 @@ function escapeHtml(str) {
 
 function formatDate(dateStr) {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+    const datePart = String(dateStr).split(/[ T]/, 1)[0];
+    const parts = datePart.split('-');
+    if (parts.length !== 3 || parts[0].length !== 4) return String(dateStr);
+
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
 function formatMoney(amount) {
     return '₱' + Math.abs(parseFloat(amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
 }
 
+function showToast(message, type = 'success') {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        document.body.appendChild(container);
+    }
+
+    const iconMap = {
+        success: 'bi-check-circle-fill',
+        danger: 'bi-x-circle-fill',
+        info: 'bi-info-circle-fill',
+    };
+    const toast = document.createElement('div');
+    toast.className = `toast-glass toast-${type}`;
+    toast.innerHTML = `<i class="bi ${iconMap[type] || iconMap.info} fs-5"></i><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 50);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
+}
+
+async function loadDueNotifications() {
+    const list = document.getElementById('dueNotificationsList');
+    const countBadge = document.getElementById('dueNotificationsCount');
+    const notificationButton = document.getElementById('dueNotificationsButton');
+    if (!list || !countBadge || !notificationButton) return;
+
+    list.innerHTML = '<p class="text-center py-4 mb-0">Loading payment notifications...</p>';
+    try {
+        const response = await fetch('routes/journal.php?action=due-notifications');
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Could not load payment due notifications.');
+        }
+
+        const items = Array.isArray(data.items) ? data.items : [];
+        countBadge.textContent = items.length > 99 ? '99+' : String(items.length);
+        countBadge.classList.toggle('d-none', items.length === 0);
+        notificationButton.setAttribute(
+            'aria-label',
+            items.length ? `${items.length} payment due notifications` : 'No payment due notifications'
+        );
+
+        if (items.length === 0) {
+            list.innerHTML = '<p class="text-center py-4 mb-0">No overdue payments or items due in the next 7 days.</p>';
+            return;
+        }
+
+        list.replaceChildren();
+        const overdueItems = items.filter(item => item.is_overdue);
+        const upcomingItems = items.filter(item => !item.is_overdue);
+        const renderSection = (title, sectionItems) => {
+            if (!sectionItems.length) return;
+            const section = document.createElement('section');
+            section.className = 'mb-4';
+            const heading = document.createElement('h6');
+            heading.className = 'mb-2';
+            heading.textContent = title;
+            const itemList = document.createElement('div');
+            itemList.className = 'd-flex flex-column gap-2';
+
+            sectionItems.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'd-flex flex-wrap justify-content-between align-items-center gap-3 rounded border p-3';
+                row.style.borderColor = 'var(--dark-border)';
+
+                const details = document.createElement('div');
+                details.className = 'flex-grow-1';
+                const party = document.createElement('div');
+                party.className = 'fw-semibold';
+                party.textContent = item.company_name
+                    ? `${item.party_name} (${item.company_name})`
+                    : item.party_name;
+                const description = document.createElement('div');
+                description.className = 'small';
+                description.textContent = [
+                    item.type === 'ar' ? 'A/R · Customer invoice' : 'A/P · Vendor bill',
+                    item.reference_no ? `Ref ${item.reference_no}` : item.description,
+                    `Due ${item.due_date}`,
+                ].filter(Boolean).join(' · ');
+                details.append(party, description);
+
+                const right = document.createElement('div');
+                right.className = 'd-flex align-items-center gap-3';
+                const amount = document.createElement('strong');
+                amount.className = 'money text-nowrap';
+                amount.textContent = formatMoney(item.remaining);
+                const link = document.createElement('a');
+                link.className = 'btn quick-action-btn';
+                link.href = `clients.php?client_id=${encodeURIComponent(Number(item.client_id))}`;
+                link.textContent = 'View';
+                link.setAttribute(
+                    'aria-label',
+                    `View ${item.type === 'ar' ? 'customer' : 'vendor'} ${item.party_name}`
+                );
+                right.append(amount, link);
+                row.append(details, right);
+                itemList.appendChild(row);
+            });
+
+            section.append(heading, itemList);
+            list.appendChild(section);
+        };
+
+        renderSection('Overdue', overdueItems);
+        renderSection('Due in the next 7 days', upcomingItems);
+    } catch (error) {
+        countBadge.classList.add('d-none');
+        notificationButton.setAttribute('aria-label', 'Payment notifications unavailable');
+        list.replaceChildren();
+        const errorMessage = document.createElement('p');
+        errorMessage.className = 'text-center text-danger py-4 mb-0';
+        errorMessage.textContent = error.message;
+        list.appendChild(errorMessage);
+        console.error('Failed to load payment due notifications:', error);
+    }
+}
+
+document.getElementById('dueNotificationsModal')?.addEventListener('show.bs.modal', loadDueNotifications);
+
 // =====================================================================
 // Recent Transactions table
 // =====================================================================
+
+let recentTransactionsPage = 1;
+let recentTransactionsRowsPerPage = 10;
+
+document.getElementById('dashboardRecentRowsPerPage')?.addEventListener('change', event => {
+    const selectedPageSize = Number(event.target.value);
+    if (![10, 25, 50, 100].includes(selectedPageSize)) return;
+
+    recentTransactionsRowsPerPage = selectedPageSize;
+    recentTransactionsPage = 1;
+    loadRecentTransactions();
+});
+
+function renderRecentTransactionsPagination(total) {
+    const pagination = document.getElementById('dashboardRecentPagination');
+    const pageInfo = document.getElementById('dashboardRecentPageInfo');
+    if (!pagination || !pageInfo) return;
+
+    const totalPages = Math.max(1, Math.ceil(total / recentTransactionsRowsPerPage));
+    recentTransactionsPage = Math.min(recentTransactionsPage, totalPages);
+
+    const start = total === 0
+        ? 0
+        : (recentTransactionsPage - 1) * recentTransactionsRowsPerPage + 1;
+    const end = Math.min(recentTransactionsPage * recentTransactionsRowsPerPage, total);
+
+    pageInfo.textContent = total === 0
+        ? 'No entries'
+        : `Showing ${start}-${end} of ${total}`;
+
+    let html = `
+        <li class="page-item ${recentTransactionsPage === 1 ? 'disabled' : ''}">
+            <button class="page-link" data-page="${recentTransactionsPage - 1}">Previous</button>
+        </li>
+    `;
+
+    for (let page = 1; page <= totalPages; page++) {
+        html += `
+            <li class="page-item ${page === recentTransactionsPage ? 'active' : ''}">
+                <button class="page-link" data-page="${page}">${page}</button>
+            </li>
+        `;
+    }
+
+    html += `
+        <li class="page-item ${recentTransactionsPage === totalPages ? 'disabled' : ''}">
+            <button class="page-link" data-page="${recentTransactionsPage + 1}">Next</button>
+        </li>
+    `;
+
+    pagination.innerHTML = html;
+    pagination.querySelectorAll('[data-page]').forEach(button => {
+        button.addEventListener('click', () => {
+            const page = Number(button.dataset.page);
+            if (page < 1 || page > totalPages || page === recentTransactionsPage) return;
+
+            recentTransactionsPage = page;
+            loadRecentTransactions();
+        });
+    });
+}
 
 async function loadRecentTransactions() {
     const tbody = document.getElementById('recentTransactionsBody');
     if (!tbody) return;
 
     try {
-        const response = await fetch('routes/journal.php?action=recent&limit=8');
+        const offset = (recentTransactionsPage - 1) * recentTransactionsRowsPerPage;
+        const response = await fetch(
+            `routes/journal.php?action=recent&limit=${recentTransactionsRowsPerPage}&offset=${offset}`
+        );
         const data = await response.json();
 
-        if (!data.success || data.transactions.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3" style="color: var(--dark-text-muted);">No transactions yet.</td></tr>`;
-            return;
+        if (!response.ok || !data.success || !Array.isArray(data.transactions)) {
+            throw new Error(data.error || 'Failed to load recent transactions.');
         }
 
-        tbody.innerHTML = data.transactions.map(tx => {
-            const isInflow = tx.type_name === 'Cash Inflow';
-            const isOutflow = tx.type_name === 'Cash Outflow';
-            const icon = isInflow ? '↓' : isOutflow ? '↑' : '↔';
-            const iconClass = isInflow ? 'in' : isOutflow ? 'out' : '';
-            const amountClass = isInflow ? 'text-success' : isOutflow ? 'text-danger' : '';
-            const sign = isInflow ? '+' : isOutflow ? '-' : '';
+        if (data.transactions.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3" style="color: var(--dark-text-muted);">No transactions yet.</td></tr>`;
+        } else {
+            tbody.innerHTML = data.transactions.map(tx => {
+                const isInflow = tx.type_name === 'Cash Inflow';
+                const isOutflow = tx.type_name === 'Cash Outflow';
+                const icon = isInflow ? '↑' : isOutflow ? '↓' : '↔';
+                const iconClass = isInflow ? 'in' : isOutflow ? 'out' : '';
+                const amountClass = isInflow ? 'text-success' : isOutflow ? 'text-danger' : '';
+                const sign = isInflow ? '+' : isOutflow ? '-' : '';
 
-            return `
-                <tr>
-                    <td><span class="tx-icon ${iconClass}">${icon}</span></td>
-                    <td>${escapeHtml(tx.description)}</td>
-                    <td><span class="small" style="color: var(--dark-text-muted);">${escapeHtml(tx.category_name || tx.type_name)}</span></td>
-                    <td><span class="small" style="color: var(--dark-text-muted);">${formatDate(tx.transaction_date)}</span></td>
-                    <td class="text-end money fw-semibold ${amountClass}">
-                        ${sign}${formatMoney(tx.total_amount)}
-                    </td>
-                </tr>
-            `;
-        }).join('');
+                return `
+                    <tr>
+                        <td><span class="tx-icon ${iconClass}">${icon}</span></td>
+                        <td class="dashboard-recent-description">
+                            <div class="dashboard-recent-primary" title="${escapeHtml(tx.description || '')}">${escapeHtml(tx.description || tx.type_name)}</div>
+                            ${tx.client_name ? `<div class="dashboard-recent-secondary" title="${escapeHtml(tx.client_name)}">${escapeHtml(tx.client_name)}</div>` : ''}
+                        </td>
+                        <td class="dashboard-recent-category"><span class="small" title="${escapeHtml(tx.category_name || tx.type_name)}">${escapeHtml(tx.category_name || tx.type_name)}</span></td>
+                        <td class="dashboard-recent-date"><span class="small">${formatDate(tx.transaction_date)}</span></td>
+                        <td class="dashboard-recent-amount text-end money fw-semibold ${amountClass}">
+                            ${sign}${formatMoney(tx.total_amount)}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        renderRecentTransactionsPagination(Number(data.total) || 0);
 
     } catch (err) {
         console.error('Failed to load recent transactions:', err);
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3 text-danger">Could not load transactions.</td></tr>`;
+        renderRecentTransactionsPagination(0);
     }
 }
 
@@ -170,11 +373,15 @@ async function loadDashboardSummary() {
 
         if (!data.success) return;
 
-        document.getElementById('kpiTotalAssets').textContent = formatMoney(data.total_assets);
-        document.getElementById('kpiCashInflow').textContent = '+' + formatMoney(data.cash_inflow);
-        document.getElementById('kpiCashOutflow').textContent = '-' + formatMoney(data.cash_outflow);
+        const totalAssets = document.getElementById('kpiTotalAssets');
+        const cashInflow = document.getElementById('kpiCashInflow');
+        const cashOutflow = document.getElementById('kpiCashOutflow');
+        if (totalAssets) totalAssets.textContent = formatMoney(data.total_assets);
+        if (cashInflow) cashInflow.textContent = '+' + formatMoney(data.cash_inflow);
+        if (cashOutflow) cashOutflow.textContent = '-' + formatMoney(data.cash_outflow);
 
         const netCashFlowEl = document.getElementById('kpiNetCashFlow');
+        if (!netCashFlowEl) return;
         const isPositive = data.net_cash_flow >= 0;
         netCashFlowEl.textContent = (isPositive ? '+' : '-') + formatMoney(Math.abs(data.net_cash_flow));
         netCashFlowEl.classList.add(isPositive ? 'positive' : 'negative');
@@ -462,18 +669,97 @@ async function loadReceivablesPayables() {
 }
 
 function fillAgingCard(prefix, info) {
-    document.getElementById(`${prefix}Total`).textContent = formatMoney(info.total);
-    document.getElementById(`${prefix}CurrentAmount`).textContent = formatMoney(info.current);
-    document.getElementById(`${prefix}OverdueAmount`).textContent = formatMoney(info.overdue);
+    const totalElement = document.getElementById(`${prefix}Total`);
+    const currentAmountElement = document.getElementById(`${prefix}CurrentAmount`);
+    const overdueAmountElement = document.getElementById(`${prefix}OverdueAmount`);
+    const currentBar = document.getElementById(`${prefix}CurrentBar`);
+    const overdueBar = document.getElementById(`${prefix}OverdueBar`);
+    if (!totalElement || !currentAmountElement || !overdueAmountElement || !currentBar || !overdueBar) return;
+
+    totalElement.textContent = formatMoney(info.total);
+    currentAmountElement.textContent = formatMoney(info.current);
+    overdueAmountElement.textContent = formatMoney(info.overdue);
 
     const sum = info.current + info.overdue;
     const currentPercent = sum > 0 ? (info.current / sum) * 100 : 100;
     const overduePercent = sum > 0 ? (info.overdue / sum) * 100 : 0;
 
-    document.getElementById(`${prefix}CurrentBar`).style.width = currentPercent + '%';
-    document.getElementById(`${prefix}OverdueBar`).style.width = overduePercent + '%';
+    currentBar.style.width = currentPercent + '%';
+    overdueBar.style.width = overduePercent + '%';
 }
 
+document.querySelectorAll('.ar-ap-summary-card').forEach(card => {
+    card.addEventListener('click', () => loadArApDetails(card.dataset.arApType));
+    card.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        loadArApDetails(card.dataset.arApType);
+    });
+});
+
+async function loadArApDetails(type) {
+    if (!['ar', 'ap'].includes(type)) return;
+
+    const modalElement = document.getElementById('arApDetailsModal');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    const title = document.getElementById('arApDetailsTitle');
+    const total = document.getElementById('arApDetailsTotal');
+    const tbody = document.getElementById('arApDetailsBody');
+    const isReceivable = type === 'ar';
+
+    title.textContent = isReceivable ? 'Outstanding Accounts Receivable' : 'Outstanding Accounts Payable';
+    total.textContent = 'Loading outstanding items...';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Loading...</td></tr>';
+    modal.show();
+
+    try {
+        const response = await fetch(`routes/journal.php?action=receivables-payables-items&type=${type}`);
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Could not load outstanding details.');
+        }
+
+        total.textContent = `Total outstanding: ${formatMoney(data.total)}`;
+        if (!data.items.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4" style="color: var(--dark-text-muted);">There are no outstanding invoices or bills.</td></tr>';
+            return;
+        }
+
+        const today = data.as_of;
+        tbody.innerHTML = data.items.map(item => {
+            const isOverdue = item.due_date && item.due_date < today;
+            const party = item.company_name
+                ? `${escapeDashboardHtml(item.party_name)} <small class="d-block" style="color: var(--dark-text-muted);">${escapeDashboardHtml(item.company_name)}</small>`
+                : escapeDashboardHtml(item.party_name);
+            const reference = item.reference_no
+                ? `<small class="d-block" style="color: var(--dark-text-muted);">Ref ${escapeDashboardHtml(item.reference_no)}</small>`
+                : '';
+
+            return `
+                <tr>
+                    <td>${party}</td>
+                    <td>${escapeDashboardHtml(item.description || '')}${reference}</td>
+                    <td class="text-nowrap">${escapeDashboardHtml(item.transaction_date || '—')}</td>
+                    <td class="text-nowrap">${escapeDashboardHtml(item.due_date || 'No due date')}</td>
+                    <td class="text-end text-nowrap">${formatMoney(item.amount)}</td>
+                    <td class="text-end text-nowrap">${formatMoney(item.applied)}</td>
+                    <td class="text-end text-nowrap fw-semibold">${formatMoney(item.remaining)}</td>
+                    <td><span class="badge ${isOverdue ? 'bg-danger' : 'bg-primary'}">${isOverdue ? 'Overdue' : 'Current'}</span></td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error(`Failed to load ${isReceivable ? 'receivables' : 'payables'} details:`, error);
+        total.textContent = 'Unable to load outstanding details.';
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-danger">${escapeDashboardHtml(error.message || 'Could not load outstanding details.')}</td></tr>`;
+    }
+}
+
+function escapeDashboardHtml(value) {
+    const element = document.createElement('span');
+    element.textContent = String(value ?? '');
+    return element.innerHTML;
+}
 
 //-- journal entries navigation expandble
 document.addEventListener('DOMContentLoaded', () => {
@@ -545,6 +831,7 @@ let currentReceiptImagePath = '';
 document.getElementById('receiptScannerModal')?.addEventListener('show.bs.modal', async () => {
     resetScannerModalState();
     triggerCleanupRoutine();
+    await loadClientsIntoScanDropdown();
     await initScanSession();
     await ensureAccountsLoadedForScan();
 });
@@ -623,7 +910,7 @@ function startScanPolling() {
 
             if (data.success && data.status === 'completed') {
                 stopScanPolling();
-                openVerificationForm(data.image_path, data.extracted);
+                openVerificationForm(data.image_path, data.extracted, data.image_url);
             }
         } catch (err) {
             console.error('Polling error:', err);
@@ -663,7 +950,7 @@ fileInput?.addEventListener('change', async (e) => {
             const checkData = await checkRes.json();
             if (checkData.success && checkData.status === 'completed') {
                 stopScanPolling();
-                openVerificationForm(checkData.image_path, checkData.extracted);
+                openVerificationForm(checkData.image_path, checkData.extracted, checkData.image_url);
             }
         } else {
             showToast(data.error || 'Failed to process receipt file.', 'danger');
@@ -674,10 +961,10 @@ fileInput?.addEventListener('change', async (e) => {
 });
 
 // 4. Populate Form and Switch to Step 2 Verification Panel
-function openVerificationForm(imagePath, extracted) {
+function openVerificationForm(imagePath, extracted, imageUrl = imagePath) {
     currentReceiptImagePath = imagePath;
 
-    document.getElementById('scannedImagePreview').src = '/wrs-accounting-collab/' + imagePath;
+    document.getElementById('scannedImagePreview').src = imageUrl;
     document.getElementById('scannedVendor').value = extracted.vendor || '';
     document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
     document.getElementById('scannedRef').value = extracted.reference_no || '';
@@ -740,6 +1027,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
     formData.append('description', vendor);
     formData.append('transaction_date', date);
     formData.append('reference_no', ref);
+    formData.append('client_id', document.getElementById('scannedClient')?.value || '');
     formData.append('debit_lines', JSON.stringify(debitLines));
     formData.append('credit_lines', JSON.stringify(creditLines));
 
@@ -773,35 +1061,65 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
 
 async function triggerCleanupRoutine() {
     try {
-        await fetch('backend/routes/cleanup-scans.php?ajax=1');
+        const response = await fetch('routes/cleanup-scans.php?ajax=1');
+        if (!response.ok) {
+            console.error(`Receipt scan cleanup failed with HTTP ${response.status}.`);
+        }
     } catch (err) {
-        // Fail silently so it never interrupts the user experience
-        console.debug('Background cleanup check completed.');
+        console.error('Receipt scan cleanup request failed:', err);
     }
 }
 
-function loadClientDropdown() {
-    fetch('routes/journal.php?action=get_clients')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const clientSelect = document.getElementById('clientIdSelect');
-                if (!clientSelect) return;
-                clientSelect.innerHTML = '<option value="">-- Optional: Select Client --</option>';
-                
-                data.clients.forEach(client => {
-                    const label = client.company_name 
-                        ? `${client.name} (${client.company_name})` 
-                        : client.name;
-                    
-                    const option = document.createElement('option');
-                    option.value = client.id;
-                    option.textContent = label;
-                    clientSelect.appendChild(option);
-                });
-            }
-        })
-        .catch(err => console.error('Error loading clients:', err));
+async function loadClientDropdown() {
+    const clientSelect = document.getElementById('clientIdSelect');
+    if (!clientSelect) return;
+
+    clientSelect.replaceChildren(new Option('Loading active clients...', ''));
+    try {
+        const response = await fetch('routes/clients.php?action=list&status=active');
+        const data = await response.json();
+        if (!response.ok || !data.success || !Array.isArray(data.clients)) {
+            throw new Error(data.error || 'Could not load active clients.');
+        }
+
+        clientSelect.replaceChildren(new Option('-- Optional: Select Client --', ''));
+        data.clients.forEach(client => {
+            const label = client.company_name
+                ? `${client.name} (${client.company_name})`
+                : client.name;
+            clientSelect.add(new Option(label, client.id));
+        });
+    } catch (err) {
+        console.error('Error loading clients:', err);
+        clientSelect.replaceChildren(new Option('Unable to load clients', ''));
+        clientSelect.options[0].disabled = true;
+    }
+}
+
+async function loadClientsIntoScanDropdown() {
+    const clientSelect = document.getElementById('scannedClient');
+    if (!clientSelect) return;
+
+    clientSelect.replaceChildren(new Option('Loading active clients...', ''));
+    try {
+        const response = await fetch('routes/clients.php?action=list&status=active');
+        const data = await response.json();
+        if (!response.ok || !data.success || !Array.isArray(data.clients)) {
+            throw new Error(data.error || 'Could not load active clients.');
+        }
+
+        clientSelect.replaceChildren(new Option('-- Select Client (Optional) --', ''));
+        data.clients.forEach(client => {
+            const label = client.company_name
+                ? `${client.name} (${client.company_name})`
+                : client.name;
+            clientSelect.add(new Option(label, client.id));
+        });
+    } catch (err) {
+        console.error('Failed to load clients into scan modal:', err);
+        clientSelect.replaceChildren(new Option('Unable to load clients', ''));
+        clientSelect.options[0].disabled = true;
+    }
 }
 
 // ---------- Logout ----------
@@ -821,3 +1139,4 @@ loadDashboardSummary();
 loadCashflowChart();
 loadDashboardAccounts();
 loadReceivablesPayables() // for A/R and A/P in the dashboard and journal entry page
+loadDueNotifications();

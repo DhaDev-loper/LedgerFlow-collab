@@ -81,7 +81,7 @@ async function loadCashflowReport() {
                 labels: data.labels,
                 datasets: [
                     {
-                        label: 'Cash In',
+                        label: 'Cash Inflow',
                         data: data.cash_in,
                         borderColor: '#2E90FA',
                         backgroundColor: gradientIn,
@@ -91,7 +91,7 @@ async function loadCashflowReport() {
                         borderWidth: 2,
                     },
                     {
-                        label: 'Cash Out',
+                        label: 'Cash Outflow',
                         data: data.cash_out,
                         borderColor: '#F87171',
                         backgroundColor: 'transparent',
@@ -105,6 +105,8 @@ async function loadCashflowReport() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {

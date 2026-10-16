@@ -56,6 +56,12 @@ journal list and detail view with the latest edit timestamp.
 Run `backend/database/migrations/20261015_remove_audit_ip_address.sql` once to
 remove stored IP addresses from the audit table. The audit viewer now presents
 actions and change details in plain language.
+Run `backend/database/migrations/20261016_add_user_password_setup_invitations.sql`
+once to require newly created and restored users to set their password through
+a one-time invitation link.
+Run `backend/database/migrations/20261016_add_client_ad_budget_liability_account.sql`
+once to add the current liability account used by the client ad-budget journal
+templates. The migration skips the insert if the account already exists.
 
 Successful logins and journal, account, client, and user-management changes are
 recorded in `audit`. Audit details intentionally exclude credentials and
@@ -73,7 +79,9 @@ changed later in Settings.
 An account cannot sign in on a second device while its current session is
 active. A signed-in session expires for this purpose after 30 minutes without
 an authenticated request; otherwise, the user must log out before signing in
-on another device.
+on another device. Owners can take over a recent session by signing in with
+their password and verifying their PIN; the previous session is invalidated
+only after the PIN is correct.
 The application also signs out an idle browser after 30 minutes without user
 activity, with a one-minute warning beforehand.
 
@@ -87,6 +95,8 @@ account, which resets its suspension level.
 2. Fill in your own values:
    - Database credentials (usually `root` / no password by default on both Laragon and XAMPP)
    - Gmail SMTP credentials — **you'll need your own Gmail App Password** (see below)
+   - `APP_URL` — the absolute URL of the project root, used to build password setup links
+   - `OCR_SPACE_API_KEY` — the server-side API key used for receipt OCR; uploaded receipt images are sent to OCR.space for text extraction
 
 ### 5. Create your Gmail App Password (for OTP/password reset emails)
 1. Enable 2-Step Verification on your Google Account
@@ -102,6 +112,14 @@ http://localhost/wrs-accounting-collab/backend/database/seeds/seed_admin.php
 Default seeded login:
 - Email: `admin@wrs.test`
 - Password: `password123`
+
+### Seed the official owner account
+Run `backend/database/seeds/seed_owner.php` from PowerShell after setting
+`OWNER_SEED_PASSWORD` and `OWNER_SEED_PIN` in the current shell session. The
+password must be at least 8 characters; the PIN must be exactly 4 digits.
+These values are read at runtime and are not stored in the seed file. The
+script only runs from the command line, creates `KoboSocial@gmail.com` as an
+owner, and does not overwrite an existing account.
 
 ### 7. Access the system
 

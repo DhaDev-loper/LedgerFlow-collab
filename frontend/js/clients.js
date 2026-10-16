@@ -12,6 +12,10 @@ window.viewClient = async function (clientId) {
     document.getElementById('clientDetailName').textContent = 'Loading client...';
     document.getElementById('clientDetailCompany').textContent = '';
     document.getElementById('clientDetailBalance').textContent = '—';
+    const receiveButton = document.getElementById('clientReceivePaymentBtn');
+    const makePaymentButton = document.getElementById('clientMakePaymentBtn');
+    if (receiveButton) receiveButton.disabled = true;
+    if (makePaymentButton) makePaymentButton.disabled = true;
     document.getElementById('clientHistoryBody').innerHTML =
         '<tr><td colspan="4" class="text-center py-4 client-detail-muted">Loading transaction history...</td></tr>';
     clientDetailModal.show();
@@ -38,10 +42,16 @@ window.viewClient = async function (clientId) {
         );
         const canReceive = client.party_type === 'customer' || client.party_type === 'both' || !client.party_type;
         const canPay = client.party_type === 'vendor' || client.party_type === 'both';
-        const receiveButton = document.getElementById('clientReceivePaymentBtn');
-        const makePaymentButton = document.getElementById('clientMakePaymentBtn');
         if (receiveButton) receiveButton.classList.toggle('d-none', !canReceive);
         if (makePaymentButton) makePaymentButton.classList.toggle('d-none', !canPay);
+        if (receiveButton) {
+            receiveButton.disabled = !(Number(client.unsettled_balance) > 0.005);
+            receiveButton.title = receiveButton.disabled ? 'No outstanding invoices to receive payment for.' : '';
+        }
+        if (makePaymentButton) {
+            makePaymentButton.disabled = !(Number(client.unsettled_payable_balance) > 0.005);
+            makePaymentButton.title = makePaymentButton.disabled ? 'No outstanding bills to pay.' : '';
+        }
         const balanceLabel = document.getElementById('clientDetailBalanceLabel');
         if (balanceLabel) {
             balanceLabel.textContent = client.party_type === 'vendor'

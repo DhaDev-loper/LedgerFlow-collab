@@ -3,6 +3,9 @@ const SCAN_API_URL = 'routes/journal.php';
 let accountModal, accountForm, formError, modalTitle;
 let selectedAccountType = null;
 let rawAccountsList = []; // Caches original loaded dataset for fast filtering
+let filteredAccountsList = [];
+let accountsCurrentPage = 1;
+let accountsRowsPerPage = 10;
 
 if (CAN_MANAGE) {
     accountModal = new bootstrap.Modal(document.getElementById('accountModal'));
@@ -57,6 +60,15 @@ async function loadAccounts() {
         tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Could not reach the server.</td></tr>`;
     }
 }
+
+document.getElementById('accountsRowsPerPage')?.addEventListener('change', event => {
+    const selectedPageSize = Number(event.target.value);
+    if (![10, 25, 50, 100].includes(selectedPageSize)) return;
+
+    accountsRowsPerPage = selectedPageSize;
+    accountsCurrentPage = 1;
+    applyAccountFilter();
+});
 
 // ---------- Render Summary Cards ----------
 function renderSummaryCards(accounts, container) {
@@ -160,7 +172,9 @@ function applyAccountFilter() {
         filtered = rawAccountsList.filter(acc => acc.type_name === selectedAccountType);
     }
 
-    renderTable(filtered, tbody);
+    filteredAccountsList = filtered;
+    accountsCurrentPage = 1;
+    renderTable(filteredAccountsList, tbody);
 }
 
 function renderFilterResetBar() {
@@ -171,7 +185,10 @@ function renderFilterResetBar() {
         bar = document.createElement('div');
         bar.id = 'kpiFilterBar';
         bar.className = 'mb-3';
-        table.parentNode.insertBefore(bar, table);
+        const tableContainer = table.closest('.table-responsive');
+        if (tableContainer) {
+            tableContainer.parentNode.insertBefore(bar, tableContainer);
+        }
     }
 
     if (!bar) return;
@@ -193,12 +210,18 @@ function renderFilterResetBar() {
 
 // ---------- Render Table ----------
 function renderTable(accounts, tbody) {
+    const totalPages = Math.max(1, Math.ceil(accounts.length / accountsRowsPerPage));
+    accountsCurrentPage = Math.min(accountsCurrentPage, totalPages);
+    const startIndex = (accountsCurrentPage - 1) * accountsRowsPerPage;
+    const pageAccounts = accounts.slice(startIndex, startIndex + accountsRowsPerPage);
+
     if (accounts.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4" style="color: var(--dark-text-muted);">No accounts found.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${CAN_MANAGE ? 5 : 4}" class="text-center py-4" style="color: var(--dark-text-muted);">No accounts found.</td></tr>`;
+        renderAccountsPagination();
         return;
     }
 
-    tbody.innerHTML = accounts.map(acc => `
+    tbody.innerHTML = pageAccounts.map(acc => `
         <tr>
             <td>
                 ${acc.code ? `<code class="text-primary fw-bold me-2">${escapeHtml(acc.code)}</code>` : ''}
@@ -214,13 +237,74 @@ function renderTable(accounts, tbody) {
             </td>
             ${CAN_MANAGE ? `
             <td class="text-end">
-                <button class="table-action-btn" onclick='openEditModal(${JSON.stringify(acc)})'>Edit</button>
+                <button type="button" class="table-action-btn" data-edit-account-id="${Number(acc.id)}">Edit</button>
                 <button class="table-action-btn" onclick="toggleStatus(${acc.id})">
                     ${acc.is_active == 1 ? 'Deactivate' : 'Activate'}
                 </button>
             </td>` : ''}
         </tr>
     `).join('');
+
+    if (CAN_MANAGE) {
+        tbody.querySelectorAll('[data-edit-account-id]').forEach(button => {
+            button.addEventListener('click', () => {
+                const accountId = Number(button.dataset.editAccountId);
+                const account = pageAccounts.find(item => Number(item.id) === accountId);
+                if (account) window.openEditModal(account);
+            });
+        });
+    }
+
+    renderAccountsPagination();
+}
+
+function renderAccountsPagination() {
+    const pagination = document.getElementById('accountsPagination');
+    const pageInfo = document.getElementById('accountsPageInfo');
+    if (!pagination || !pageInfo) return;
+
+    const totalPages = Math.max(1, Math.ceil(filteredAccountsList.length / accountsRowsPerPage));
+    accountsCurrentPage = Math.min(accountsCurrentPage, totalPages);
+
+    const start = filteredAccountsList.length === 0
+        ? 0
+        : (accountsCurrentPage - 1) * accountsRowsPerPage + 1;
+    const end = Math.min(accountsCurrentPage * accountsRowsPerPage, filteredAccountsList.length);
+
+    pageInfo.textContent = filteredAccountsList.length === 0
+        ? 'No accounts'
+        : `Showing ${start}-${end} of ${filteredAccountsList.length}`;
+
+    let html = `
+        <li class="page-item ${accountsCurrentPage === 1 ? 'disabled' : ''}">
+            <button class="page-link" data-page="${accountsCurrentPage - 1}">Previous</button>
+        </li>
+    `;
+
+    for (let page = 1; page <= totalPages; page++) {
+        html += `
+            <li class="page-item ${page === accountsCurrentPage ? 'active' : ''}">
+                <button class="page-link" data-page="${page}">${page}</button>
+            </li>
+        `;
+    }
+
+    html += `
+        <li class="page-item ${accountsCurrentPage === totalPages ? 'disabled' : ''}">
+            <button class="page-link" data-page="${accountsCurrentPage + 1}">Next</button>
+        </li>
+    `;
+
+    pagination.innerHTML = html;
+    pagination.querySelectorAll('[data-page]').forEach(button => {
+        button.addEventListener('click', () => {
+            const page = Number(button.dataset.page);
+            if (page < 1 || page > totalPages) return;
+
+            accountsCurrentPage = page;
+            renderTable(filteredAccountsList, document.getElementById('accountsTableBody'));
+        });
+    });
 }
 
 function escapeHtml(str) {
@@ -231,6 +315,30 @@ function escapeHtml(str) {
 
 function formatMoney(amount) {
     return '₱' + parseFloat(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+}
+
+function showToast(message, type = 'success') {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toastContainer';
+        document.body.appendChild(container);
+    }
+
+    const iconMap = {
+        success: 'bi-check-circle-fill',
+        danger: 'bi-x-circle-fill',
+        info: 'bi-info-circle-fill',
+    };
+    const toast = document.createElement('div');
+    toast.className = `toast-glass toast-${type}`;
+    toast.innerHTML = `<i class="bi ${iconMap[type] || iconMap.info} fs-5"></i><span>${escapeHtml(message)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 50);
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3500);
 }
 
 if (CAN_MANAGE) {
@@ -367,6 +475,7 @@ let currentReceiptImagePath = '';
 document.getElementById('receiptScannerModal')?.addEventListener('show.bs.modal', async () => {
     resetScannerModalState();
     triggerCleanupRoutine();
+    await loadAccountsScanClients();
     await initScanSession();
     await ensureAccountsLoadedForScan();
 });
@@ -387,6 +496,32 @@ function resetScannerModalState() {
 
     const qrContainer = document.getElementById('qrCodeContainer');
     if (qrContainer) qrContainer.innerHTML = '';
+}
+
+async function loadAccountsScanClients() {
+    const clientSelect = document.getElementById('scannedClient');
+    if (!clientSelect) return;
+
+    clientSelect.replaceChildren(new Option('Loading active clients...', ''));
+    try {
+        const response = await fetch('../backend/routes/clients.php?action=list&status=active');
+        const data = await response.json();
+        if (!response.ok || !data.success || !Array.isArray(data.clients)) {
+            throw new Error(data.error || 'Could not load active clients.');
+        }
+
+        clientSelect.replaceChildren(new Option('-- Select Client (Optional) --', ''));
+        data.clients.forEach(client => {
+            const label = client.company_name
+                ? `${client.name} (${client.company_name})`
+                : client.name;
+            clientSelect.add(new Option(label, String(client.id)));
+        });
+    } catch (err) {
+        console.error('Failed to load clients into Accounts receipt scanner:', err);
+        clientSelect.replaceChildren(new Option('Unable to load clients', ''));
+        clientSelect.options[0].disabled = true;
+    }
 }
 
 // 1. Initialize Scan Session & Render QR Code
@@ -443,7 +578,7 @@ function startScanPolling() {
 
             if (data.success && data.status === 'completed') {
                 stopScanPolling();
-                openVerificationForm(data.image_path, data.extracted);
+                openVerificationForm(data.image_path, data.extracted, data.image_url);
             }
         } catch (err) {
             console.error('Polling error:', err);
@@ -483,7 +618,7 @@ fileInput?.addEventListener('change', async (e) => {
             const checkData = await checkRes.json();
             if (checkData.success && checkData.status === 'completed') {
                 stopScanPolling();
-                openVerificationForm(checkData.image_path, checkData.extracted);
+                openVerificationForm(checkData.image_path, checkData.extracted, checkData.image_url);
             }
         } else {
             showToast(data.error || 'Failed to process receipt file.', 'danger');
@@ -494,10 +629,10 @@ fileInput?.addEventListener('change', async (e) => {
 });
 
 // 4. Populate Form and Switch to Step 2 Verification Panel
-function openVerificationForm(imagePath, extracted) {
+function openVerificationForm(imagePath, extracted, imageUrl = imagePath) {
     currentReceiptImagePath = imagePath;
 
-    document.getElementById('scannedImagePreview').src = '/wrs-accounting-collab/' + imagePath;
+    document.getElementById('scannedImagePreview').src = imageUrl;
     document.getElementById('scannedVendor').value = extracted.vendor || '';
     document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
     document.getElementById('scannedRef').value = extracted.reference_no || '';
@@ -560,6 +695,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
     formData.append('description', vendor);
     formData.append('transaction_date', date);
     formData.append('reference_no', ref);
+    formData.append('client_id', document.getElementById('scannedClient')?.value || '');
     formData.append('debit_lines', JSON.stringify(debitLines));
     formData.append('credit_lines', JSON.stringify(creditLines));
 

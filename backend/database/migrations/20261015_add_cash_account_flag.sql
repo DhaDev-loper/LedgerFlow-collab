@@ -10,3 +10,5 @@ WHERE at.name = 'Asset'
       OR LOWER(a.name) LIKE '%bank%'
       OR LOWER(a.name) LIKE '%wallet%'
   );
+
+

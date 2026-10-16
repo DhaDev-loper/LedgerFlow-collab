@@ -55,7 +55,7 @@ switch ($action) {
 
             $pdo->beginTransaction();
             $stmt = $pdo->prepare(
-                "SELECT id, full_name, email, password_hash, role, is_active,
+                "SELECT id, full_name, email, password_hash, password_setup_required, role, is_active,
                         failed_attempts, locked_until, suspension_level,
                         active_session_id, active_session_last_seen,
                         (active_session_last_seen >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) AS active_session_is_recent,
@@ -101,6 +101,16 @@ switch ($action) {
                 )->execute([':id' => $user['id']]);
                 $user['failed_attempts'] = 0;
                 $user['locked_until'] = null;
+            }
+
+            if ((int) $user['password_setup_required'] === 1) {
+                $pdo->commit();
+                http_response_code(403);
+                echo json_encode([
+                    'error' => 'Set up your password using the one-time invitation link before signing in.',
+                    'setup_required' => true,
+                ]);
+                break;
             }
 
             if (!password_verify($password, $user['password_hash'])) {
@@ -174,7 +184,7 @@ switch ($action) {
                 $pdo->commit();
                 http_response_code(409);
                 echo json_encode([
-                    'error' => 'This account is already signed in on another device. Log out there or wait 30 minutes after its last activity before trying again.',
+                    'error' => 'This account is currently signed in on another device. Only one active session is allowed. Sign out from that device or try again after its session expires.',
                     'active_session' => true,
                 ]);
                 break;
@@ -209,7 +219,10 @@ switch ($action) {
             if ($user['role'] === 'owner') {
                 $_SESSION['pending_owner_id'] = $user['id'];
 
-                echo json_encode(['success' => true, 'pin_required' => true]);
+                echo json_encode([
+                    'success' => true,
+                    'pin_required' => true,
+                ]);
                 break;
             }
 
@@ -245,9 +258,18 @@ switch ($action) {
             }
 
             $pdo = getDbConnection();
+            if (!empty($_SESSION['pending_owner_takeover'])) {
+                unset($_SESSION['pending_owner_id'], $_SESSION['pending_owner_takeover'], $_SESSION['pending_owner_previous_session_id']);
+                http_response_code(409);
+                echo json_encode([
+                    'error' => 'Signing in on another device is not allowed while this account is active. Sign out from the active device first.',
+                    'active_session' => true,
+                ]);
+                break;
+            }
             $stmt = $pdo->prepare(
-                "SELECT id, full_name, role, pin_hash, is_active, active_session_id, deleted_at
-                 FROM users WHERE id = :id"
+                'SELECT id, full_name, role, pin_hash, is_active, active_session_id, deleted_at
+                 FROM users WHERE id = :id'
             );
             $stmt->execute([':id' => $_SESSION['pending_owner_id']]);
             $user = $stmt->fetch();
@@ -259,8 +281,9 @@ switch ($action) {
                 || $user['active_session_id'] !== session_id()
             ) {
                 unset($_SESSION['pending_owner_id']);
+                unset($_SESSION['pending_owner_takeover'], $_SESSION['pending_owner_previous_session_id']);
                 http_response_code(403);
-                echo json_encode(['error' => 'This account has been deactivated.']);
+                echo json_encode(['error' => 'The owner session changed before verification. Please sign in again.']);
                 break;
             }
 
@@ -274,19 +297,14 @@ switch ($action) {
                 break;
             }
 
-            logAudit(
-                $pdo,
-                (int) $user['id'],
-                'LOGIN_SUCCESS',
-                'user',
-                (int) $user['id'],
-                json_encode(['role' => $user['role'], 'method' => 'password_and_pin'], JSON_THROW_ON_ERROR)
-            );
-
             $pdo->prepare(
                 "UPDATE users SET active_session_last_seen = NOW()
                  WHERE id = :id AND active_session_id = :session_id"
             )->execute([':id' => $user['id'], ':session_id' => session_id()]);
+
+            $pdo->prepare(
+                "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id"
+            )->execute([':id' => $user['id']]);
             logAudit(
                 $pdo,
                 (int) $user['id'],
@@ -295,9 +313,9 @@ switch ($action) {
                 (int) $user['id'],
                 json_encode(['role' => $user['role'], 'method' => 'password_and_pin'], JSON_THROW_ON_ERROR)
             );
-
             // Clear pending state and create session
             unset($_SESSION['pending_owner_id']);
+            unset($_SESSION['pending_owner_takeover'], $_SESSION['pending_owner_previous_session_id']);
 
             $_SESSION['user_id']        = $user['id'];
             $_SESSION['full_name']      = $user['full_name'];
@@ -312,6 +330,106 @@ switch ($action) {
                 ],
             ]);
             break;
+
+    case 'validate-setup-invitation':
+            $token = trim($_POST['token'] ?? '');
+            if (!preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
+                http_response_code(401);
+                echo json_encode(['error' => 'This setup link is invalid or has expired. Ask an administrator to resend it.']);
+                break;
+            }
+
+            $pdo = getDbConnection();
+            $stmt = $pdo->prepare(
+                'SELECT 1
+                 FROM user_setup_invitations i
+                 JOIN users u ON u.id = i.user_id
+                 WHERE i.token_hash = :token_hash
+                   AND i.used_at IS NULL
+                   AND i.expires_at > NOW()
+                   AND u.password_setup_required = 1
+                   AND u.is_active = 1
+                   AND u.deleted_at IS NULL
+                 LIMIT 1'
+            );
+            $stmt->execute([':token_hash' => hash('sha256', $token)]);
+
+            if (!$stmt->fetchColumn()) {
+                http_response_code(401);
+                echo json_encode(['error' => 'This setup link is invalid or has expired. Ask an administrator to resend it.']);
+                break;
+            }
+
+            echo json_encode(['success' => true]);
+            break;
+
+    case 'accept-setup-invitation':
+            $token = trim($_POST['token'] ?? '');
+            $newPassword = $_POST['new_password'] ?? '';
+            if (!preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
+                http_response_code(401);
+                echo json_encode(['error' => 'This setup link is invalid or has expired. Ask an administrator to resend it.']);
+                break;
+            }
+
+            if (strlen($newPassword) < 8) {
+                http_response_code(422);
+                echo json_encode(['error' => 'Password must be at least 8 characters.']);
+                break;
+            }
+
+            $pdo = getDbConnection();
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare(
+                'SELECT i.id AS invitation_id, u.id AS user_id
+                 FROM user_setup_invitations i
+                 JOIN users u ON u.id = i.user_id
+                 WHERE i.token_hash = :token_hash
+                   AND i.used_at IS NULL
+                   AND i.expires_at > NOW()
+                   AND u.password_setup_required = 1
+                   AND u.is_active = 1
+                   AND u.deleted_at IS NULL
+                 LIMIT 1
+                 FOR UPDATE'
+            );
+            $stmt->execute([':token_hash' => hash('sha256', $token)]);
+            $invitation = $stmt->fetch();
+
+            if (!$invitation) {
+                $pdo->commit();
+                http_response_code(401);
+                echo json_encode(['error' => 'This setup link is invalid or has expired. Ask an administrator to resend it.']);
+                break;
+            }
+
+            $passwordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+            $pdo->prepare(
+                'UPDATE users
+                 SET password_hash = :password_hash, password_setup_required = 0,
+                     failed_attempts = 0, locked_until = NULL
+                 WHERE id = :id'
+            )->execute([
+                ':password_hash' => $passwordHash,
+                ':id' => $invitation['user_id'],
+            ]);
+            $pdo->prepare(
+                'UPDATE user_setup_invitations SET used_at = NOW()
+                 WHERE user_id = :user_id AND used_at IS NULL'
+            )->execute([':user_id' => $invitation['user_id']]);
+            logAudit(
+                $pdo,
+                (int) $invitation['user_id'],
+                'COMPLETE_PASSWORD_SETUP',
+                'user',
+                (int) $invitation['user_id'],
+                json_encode(['method' => 'invitation'], JSON_THROW_ON_ERROR)
+            );
+            $pdo->commit();
+
+            echo json_encode(['success' => true, 'message' => 'Password set. You can now sign in.']);
+            break;
+
     //FORGOT PASSWORD SYSTEM
     case 'forgot-password':
             $email = trim($_POST['email'] ?? '');
@@ -440,8 +558,14 @@ switch ($action) {
             try {
                 $pdo->beginTransaction();
 
-                $updateUser = $pdo->prepare("UPDATE users SET password_hash = :hash WHERE id = :id");
+                $updateUser = $pdo->prepare(
+                    "UPDATE users SET password_hash = :hash, password_setup_required = 0 WHERE id = :id"
+                );
                 $updateUser->execute([':hash' => $newHash, ':id' => $userId]);
+                $pdo->prepare(
+                    'UPDATE user_setup_invitations SET used_at = NOW()
+                     WHERE user_id = :user_id AND used_at IS NULL'
+                )->execute([':user_id' => $userId]);
 
                 $markUsed = $pdo->prepare("UPDATE password_resets SET is_used = 1 WHERE id = :id");
                 $markUsed->execute([':id' => $resetId]);

@@ -48,6 +48,8 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     const formData = new FormData(e.target);
     const errorMsg = document.getElementById('errorMsg');
     errorMsg.textContent = '';
+    errorMsg.classList.remove('alert-warning');
+    errorMsg.classList.add('alert-danger');
     suspensionTimer.classList.add('d-none');
     if (suspensionCountdownInterval !== null) {
         window.clearInterval(suspensionCountdownInterval);
@@ -78,6 +80,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         }
     } else {
         errorMsg.textContent = data.error || 'Login failed. Please try again.';
+        if (data.active_session) {
+            errorMsg.classList.remove('alert-danger');
+            errorMsg.classList.add('alert-warning');
+        }
         errorMsg.classList.remove('d-none');
         if (data.suspended && Number(data.remaining_seconds) > 0) {
             showSuspensionTimer(data.suspension_level, data.remaining_seconds);
@@ -94,14 +100,18 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
 document.getElementById('togglePassword').addEventListener('click', () => {
     const passwordInput = document.getElementById('password');
     const toggleBtn = document.getElementById('togglePassword');
+    const showIcon = toggleBtn.querySelector('.password-toggle-icon-show');
+    const hideIcon = toggleBtn.querySelector('.password-toggle-icon-hide');
 
     if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
-        toggleBtn.textContent = '🙈';
+        showIcon.classList.add('d-none');
+        hideIcon.classList.remove('d-none');
         toggleBtn.setAttribute('aria-label', 'Hide password');
     } else {
         passwordInput.type = 'password';
-        toggleBtn.textContent = '👁';
+        hideIcon.classList.add('d-none');
+        showIcon.classList.remove('d-none');
         toggleBtn.setAttribute('aria-label', 'Show password');
     }
 });

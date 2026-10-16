@@ -5,6 +5,12 @@
 
 :root {
     color-scheme: dark;
+    --form-control-bg: #1e293b;
+    --form-control-border: #64748b;
+    --form-control-text: #f8fafc;
+    --form-control-placeholder: #cbd5e1;
+    --form-control-focus: #60a5fa;
+    --form-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23f8fafc' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
     /* Palette — KoboSocial Colors */
     --ink-navy: #080d1e;
     --marine-blue: #0096c7;
@@ -29,7 +35,7 @@
     --dark-border: rgba(255, 255, 255, 0.08);
     --dark-text: #ffffff;
     --dark-text-muted: #8c909e;
-    --accent-blue: #b0004b;
+    --accent-blue: #5d89ca;
     --accent-blue-soft: rgba(176, 0, 75, 0.12);
 }
 
@@ -51,6 +57,12 @@
 
 :root[data-theme="light"] {
     color-scheme: light;
+    --form-control-bg: #ffffff;
+    --form-control-border: #94a3b8;
+    --form-control-text: #16233a;
+    --form-control-placeholder: #64748b;
+    --form-control-focus: #0096c7;
+    --form-select-arrow: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23212529' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
 }
 
 :root[data-theme="light"] .kpi-value.positive { color: #16A34A; }
@@ -374,6 +386,22 @@ h1, h2, h3, h4, .brand-font {
     border-radius: var(--radius);
 }
 
+.ar-ap-summary-card {
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.ar-ap-summary-card:hover,
+.ar-ap-summary-card:focus-visible {
+    border-color: var(--accent-blue);
+    transform: translateY(-2px);
+}
+
+.ar-ap-summary-card:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}
+
 .panel-header {
     padding: 1.1rem 1.4rem;
     border-bottom: 1px solid var(--dark-border);
@@ -385,6 +413,46 @@ h1, h2, h3, h4, .brand-font {
 .panel-header h2 { color: var(--dark-text); }
 .panel-body { padding: 1.1rem 1.4rem; }
 .panel-body.compact { padding: 0.9rem 1.1rem; }
+.dashboard-notification-button {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: 1px solid var(--dark-border);
+    border-radius: 50%;
+    background: var(--dark-surface);
+    color: var(--dark-text);
+    font-size: 1.1rem;
+}
+.dashboard-notification-button:hover,
+.dashboard-notification-button:focus-visible {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+}
+.dashboard-notification-badge {
+    position: absolute;
+    top: -0.3rem;
+    right: -0.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.15rem;
+    height: 1.15rem;
+    padding: 0 0.25rem;
+    border-radius: 1rem;
+    background: #F87171;
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.cashflow-chart-container {
+    position: relative;
+    width: 100%;
+    height: 280px;
+}
 
 /* ---------- Receipt / Paper Slip Style Summary Side Panel ---------- */
 .receipt-card {
@@ -487,7 +555,7 @@ h1, h2, h3, h4, .brand-font {
     bottom: 0;
     left: 12px;
     width: 12px;
-    background-image: radial-gradient(circle, #060913 5px, transparent 6px);
+    background-image: radial-gradient(circle, var(--dark-bg) 5px, transparent 6px);
     background-size: 12px 32px;
     background-repeat: repeat-y;
     background-position: center 8px;
@@ -495,7 +563,7 @@ h1, h2, h3, h4, .brand-font {
 }
 
 .journal-table-scroll {
-    height: 560px;
+    height: auto;
     max-height: calc(100vh - 280px);
     overflow: auto !important;
     overscroll-behavior: contain;
@@ -551,6 +619,70 @@ h1, h2, h3, h4, .brand-font {
     background-color: rgba(255, 0, 102, 0.05);
 }
 
+.table-transactions tbody tr.client-row {
+    cursor: pointer;
+}
+
+.table-transactions tbody tr.client-row:hover {
+    background-color: rgba(46, 144, 250, 0.11);
+    box-shadow: inset 3px 0 var(--accent-blue, #2E90FA);
+}
+
+.table-transactions tbody tr.client-row:focus-visible {
+    outline: 2px solid var(--accent-blue, #2E90FA);
+    outline-offset: -2px;
+    background-color: rgba(46, 144, 250, 0.11);
+}
+
+.client-row-name {
+    min-width: 150px;
+}
+
+.client-row-hint {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--accent-blue, #2E90FA);
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.client-row:hover .client-row-hint,
+.client-row:focus-visible .client-row-hint {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+.dashboard-recent-transactions {
+    padding-right: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.dashboard-recent-transactions .table-transactions {
+    min-width: 620px;
+    table-layout: fixed;
+}
+
+.dashboard-recent-transactions .dashboard-recent-description { width: 34%; }
+.dashboard-recent-transactions .dashboard-recent-category { width: 24%; }
+.dashboard-recent-transactions .dashboard-recent-date { width: 18%; white-space: nowrap; }
+.dashboard-recent-transactions .dashboard-recent-amount { width: 18%; white-space: nowrap; }
+
+.dashboard-recent-primary,
+.dashboard-recent-secondary,
+.dashboard-recent-category span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dashboard-recent-secondary {
+    color: var(--dark-text-muted);
+    font-size: 0.75rem;
+}
+
 .tx-icon {
     width: 32px;
     height: 32px;
@@ -591,8 +723,31 @@ h1, h2, h3, h4, .brand-font {
     color: var(--dark-text) !important;
     position: relative;
     overflow: hidden;
+    max-height: calc(100vh - 2rem);
     padding-left: 32px;
    
+}
+
+.modal .modal-content > .modal-body,
+.modal .modal-content > form > .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.modal .modal-content > form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.modal .modal-content > .modal-footer,
+.modal .modal-content > form > .modal-footer {
+    flex: 0 0 auto;
 }
 
 .modal-content::before,
@@ -603,7 +758,7 @@ h1, h2, h3, h4, .brand-font {
     bottom: 0;
     left: 10px;
     width: 12px;
-    background-image: radial-gradient(circle, #060913 5px, transparent 6px);
+    background-image: radial-gradient(circle, var(--dark-bg) 5px, transparent 6px);
     background-size: 12px 32px;
     background-repeat: repeat-y;
     background-position: center 8px;
@@ -692,6 +847,175 @@ h1, h2, h3, h4, .brand-font {
 .modal-dark .form-select option {
     background-color: var(--dark-surface-2);
     color: var(--dark-text);
+}
+
+#entryModal .journal-entry-modal {
+    --journal-field-bg: #111827;
+    --journal-field-border: #64748b;
+    --journal-field-focus: #60a5fa;
+}
+
+:root[data-theme="light"] #entryModal .journal-entry-modal {
+    --journal-field-bg: #ffffff;
+    --journal-field-border: #94a3b8;
+    --journal-field-focus: #0096c7;
+}
+
+#entryModal .journal-entry-modal .modal-body {
+    padding-top: 1.25rem;
+}
+
+#entryModal .journal-entry-modal .form-control-dark,
+#entryModal .journal-entry-modal .form-select-dark,
+#entryModal .journal-entry-modal .form-control,
+#entryModal .journal-entry-modal .form-select {
+    min-height: 2.75rem;
+    padding: 0.65rem 0.8rem;
+    border: 1px solid var(--journal-field-border) !important;
+    border-radius: 0.5rem !important;
+    background-color: var(--journal-field-bg) !important;
+    color: var(--dark-text) !important;
+    color-scheme: dark;
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+}
+
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-control-dark,
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-select-dark,
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-control,
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-select {
+    color-scheme: light;
+}
+
+#entryModal .journal-entry-modal .form-select {
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23f8fafc' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-select {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23212529' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+#entryModal .journal-entry-modal .form-control-dark:focus,
+#entryModal .journal-entry-modal .form-select-dark:focus,
+#entryModal .journal-entry-modal .form-control:focus,
+#entryModal .journal-entry-modal .form-select:focus {
+    border-color: var(--journal-field-focus) !important;
+    background-color: var(--journal-field-bg) !important;
+    box-shadow: 0 0 0 0.2rem rgba(96, 165, 250, 0.24) !important;
+    outline: none;
+}
+
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-control-dark:focus,
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-select-dark:focus,
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-control:focus,
+:root[data-theme="light"] #entryModal .journal-entry-modal .form-select:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 150, 199, 0.2) !important;
+}
+
+#entryModal .journal-entry-modal .form-control::placeholder {
+    color: var(--dark-text-muted);
+    opacity: 0.85;
+}
+
+#entryModal .journal-line-section {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    border: 1px solid var(--dark-border);
+    border-radius: 0.75rem;
+    background: var(--dark-surface-2);
+}
+
+#entryModal .journal-line-section-debit {
+    border-top: 3px solid #3b82f6;
+}
+
+#entryModal .journal-line-section-credit {
+    border-top: 3px solid #a78bfa;
+}
+
+#entryModal .journal-line-section .form-label {
+    color: var(--dark-text) !important;
+    font-size: 0.95rem;
+    letter-spacing: 0;
+}
+
+#entryModal .journal-line-caption,
+#entryModal .journal-line-caption span {
+    color: var(--dark-text-muted);
+    font-size: 0.78rem;
+    letter-spacing: 0;
+}
+
+#entryModal #debitLinesContainer > [data-line-id],
+#entryModal #creditLinesContainer > [data-line-id] {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--dark-border);
+    border-radius: 0.6rem;
+    background: var(--dark-surface);
+}
+
+#entryModal #debitLinesContainer .line-account,
+#entryModal #creditLinesContainer .line-account {
+    min-width: 0;
+    flex: 2 1 18rem !important;
+}
+
+#entryModal #debitLinesContainer .line-amount,
+#entryModal #creditLinesContainer .line-amount {
+    min-width: 7rem;
+    flex: 1 1 9rem !important;
+}
+
+#entryModal .journal-entry-modal .amount-format-toggle,
+#entryModal .journal-entry-modal .remove-line-btn {
+    min-height: 2.75rem;
+    flex: 0 0 auto;
+    padding: 0.45rem 0.75rem;
+    border-radius: 0.5rem;
+}
+
+#entryModal .journal-entry-modal .form-label {
+    color: var(--dark-text) !important;
+    font-size: 0.86rem;
+    letter-spacing: 0;
+}
+
+#entryModal .journal-entry-modal .form-text {
+    font-size: 0.8rem;
+}
+
+#entryModal .journal-entry-modal #totalDebitsDisplay,
+#entryModal .journal-entry-modal #totalCreditsDisplay {
+    color: var(--dark-text) !important;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 575.98px) {
+    #entryModal .journal-line-section {
+        padding: 0.75rem;
+    }
+
+    #entryModal #debitLinesContainer > [data-line-id],
+    #entryModal #creditLinesContainer > [data-line-id] {
+        flex-wrap: wrap;
+    }
+
+    #entryModal #debitLinesContainer .line-account,
+    #entryModal #creditLinesContainer .line-account {
+        flex: 1 1 100% !important;
+    }
+
+    #entryModal #debitLinesContainer .line-amount,
+    #entryModal #creditLinesContainer .line-amount {
+        flex: 1 1 auto !important;
+    }
+
+    #entryModal .journal-entry-modal .modal-body > .d-flex.justify-content-end {
+        flex-wrap: wrap;
+        gap: 0.75rem !important;
+    }
 }
 
 #clientDetailModal .client-detail-muted {
@@ -931,6 +1255,13 @@ h1, h2, h3, h4, .brand-font {
     /* If you want it pushed away from left items */
     margin-left: auto; 
     margin-right: auto;
+    text-decoration: none;
+}
+
+.bottom-nav-scan-btn:focus-visible {
+    outline: 2px solid #60a5fa;
+    outline-offset: 3px;
+    border-radius: 0.75rem;
 }
 
 .bottom-nav-scan-btn .scan-btn-icon {
@@ -1328,6 +1659,21 @@ h1, h2, h3, h4, .brand-font {
     background-color: rgba(22, 35, 58, 0.045);
 }
 
+:root[data-theme="light"] .table-responsive,
+:root[data-theme="light"] .panel-body:has(.table) {
+    background: var(--dark-surface);
+    border-left-color: rgba(176, 0, 75, 0.3);
+}
+
+:root[data-theme="light"] .table-responsive::before,
+:root[data-theme="light"] .panel-body:has(.table)::before {
+    background-image: radial-gradient(circle, var(--dark-bg) 5px, transparent 6px);
+}
+
+:root[data-theme="light"] .dashboard-brand-logo {
+    filter: invert(1) hue-rotate(180deg);
+}
+
 :root[data-theme="light"] .modal,
 :root[data-theme="light"] .modal-dark {
     --bs-modal-bg: var(--dark-surface);
@@ -1567,4 +1913,208 @@ h1, h2, h3, h4, .brand-font {
         padding-inline: 0.65rem;
         font-size: 0.78rem;
     }
+}
+
+/* ---------- Readability defaults across application pages ---------- */
+body {
+    font-size: 1.0625rem;
+    line-height: 1.5;
+}
+
+.app-shell .small,
+.app-shell small {
+    font-size: 0.9375rem !important;
+}
+
+.nav-link-custom,
+.quick-action-btn,
+.table-action-btn,
+.app-shell .form-label,
+.app-shell label {
+    font-size: 1rem;
+}
+
+.nav-section-label,
+.bottom-nav-item,
+.bottom-nav-scan-btn span {
+    font-size: 0.875rem;
+}
+
+.table-transactions td,
+.table-transactions th {
+    font-size: 1rem;
+}
+
+.table-transactions thead th,
+.wrs-table th {
+    font-size: 0.875rem;
+}
+
+.wrs-table td,
+.toast-glass {
+    font-size: 0.9375rem;
+}
+
+.modal .form-label,
+.modal-dark label,
+.modal-dark .form-label {
+    font-size: 0.9375rem;
+}
+
+@media (max-width: 575.98px) {
+    .settings-tabs .quick-action-btn {
+        font-size: 0.875rem;
+    }
+}
+
+/* ---------- Consistent form controls across application pages and modals ---------- */
+.app-shell .form-control,
+.app-shell .form-select,
+.app-shell .form-control-dark,
+.app-shell .form-select-dark,
+.app-shell .input-group-text,
+.app-shell form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+.app-shell form select,
+.app-shell form textarea,
+.modal .form-control,
+.modal .form-select,
+.modal .form-control-dark,
+.modal .form-select-dark,
+.modal .input-group-text,
+.modal input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+.modal select,
+.modal textarea {
+    border: 1px solid var(--form-control-border) !important;
+    border-radius: 0.5rem !important;
+    background-color: var(--form-control-bg) !important;
+    color: var(--form-control-text) !important;
+    color-scheme: var(--bs-color-scheme, dark);
+    box-shadow: none;
+}
+
+:root[data-theme="light"] .app-shell .form-control,
+:root[data-theme="light"] .app-shell .form-select,
+:root[data-theme="light"] .app-shell .form-control-dark,
+:root[data-theme="light"] .app-shell .form-select-dark,
+:root[data-theme="light"] .app-shell .input-group-text,
+:root[data-theme="light"] .app-shell form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+:root[data-theme="light"] .app-shell form select,
+:root[data-theme="light"] .app-shell form textarea,
+:root[data-theme="light"] .modal .form-control,
+:root[data-theme="light"] .modal .form-select,
+:root[data-theme="light"] .modal .form-control-dark,
+:root[data-theme="light"] .modal .form-select-dark,
+:root[data-theme="light"] .modal .input-group-text,
+:root[data-theme="light"] .modal input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+:root[data-theme="light"] .modal select,
+:root[data-theme="light"] .modal textarea {
+    color-scheme: light;
+}
+
+.app-shell .form-select,
+.app-shell .form-select-dark,
+.app-shell form select,
+.modal .form-select,
+.modal .form-select-dark,
+.modal select {
+    padding-right: 2.25rem;
+    background-image: var(--form-select-arrow) !important;
+    background-repeat: no-repeat !important;
+    background-position: right 0.75rem center !important;
+    background-size: 16px 12px !important;
+}
+
+.app-shell .form-control::placeholder,
+.app-shell form input::placeholder,
+.app-shell form textarea::placeholder,
+.modal .form-control::placeholder,
+.modal input::placeholder,
+.modal textarea::placeholder {
+    color: var(--form-control-placeholder) !important;
+    opacity: 1;
+}
+
+.app-shell .form-control:focus,
+.app-shell .form-select:focus,
+.app-shell .form-control-dark:focus,
+.app-shell .form-select-dark:focus,
+.app-shell .input-group-text:focus,
+.app-shell form input:focus,
+.app-shell form select:focus,
+.app-shell form textarea:focus,
+.modal .form-control:focus,
+.modal .form-select:focus,
+.modal .form-control-dark:focus,
+.modal .form-select-dark:focus,
+.modal .input-group-text:focus,
+.modal input:focus,
+.modal select:focus,
+.modal textarea:focus {
+    border-color: var(--form-control-focus) !important;
+    background-color: var(--form-control-bg) !important;
+    color: var(--form-control-text) !important;
+    box-shadow: 0 0 0 0.2rem rgba(96, 165, 250, 0.24) !important;
+    outline: none;
+}
+
+:root[data-theme="light"] .app-shell .form-control:focus,
+:root[data-theme="light"] .app-shell .form-select:focus,
+:root[data-theme="light"] .app-shell .form-control-dark:focus,
+:root[data-theme="light"] .app-shell .form-select-dark:focus,
+:root[data-theme="light"] .app-shell form input:focus,
+:root[data-theme="light"] .app-shell form select:focus,
+:root[data-theme="light"] .app-shell form textarea:focus,
+:root[data-theme="light"] .modal .form-control:focus,
+:root[data-theme="light"] .modal .form-select:focus,
+:root[data-theme="light"] .modal .form-control-dark:focus,
+:root[data-theme="light"] .modal .form-select-dark:focus,
+:root[data-theme="light"] .modal input:focus,
+:root[data-theme="light"] .modal select:focus,
+:root[data-theme="light"] .modal textarea:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 150, 199, 0.2) !important;
+}
+
+.app-shell .form-select option,
+.app-shell .form-select-dark option,
+.app-shell form select option,
+.modal .form-select option,
+.modal .form-select-dark option,
+.modal select option {
+    background-color: var(--form-control-bg);
+    color: var(--form-control-text);
+}
+
+.app-shell .form-control:disabled,
+.app-shell .form-select:disabled,
+.app-shell textarea:disabled,
+.modal .form-control:disabled,
+.modal .form-select:disabled,
+.modal textarea:disabled {
+    border-color: var(--dark-border) !important;
+    background-color: var(--dark-surface-2) !important;
+    color: var(--dark-text-muted) !important;
+    opacity: 0.75;
+}
+
+.app-shell form :is(button, .btn):focus-visible,
+.modal :is(button, .btn):not(.btn-close):focus-visible {
+    outline: 2px solid var(--form-control-focus);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 0.2rem rgba(96, 165, 250, 0.24);
+}
+
+.app-shell form :is(button, .btn),
+.modal :is(button, .btn):not(.btn-close) {
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-shell form :is(button, .btn):disabled,
+.modal :is(button, .btn):disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+:root[data-theme="light"] .app-shell form :is(button, .btn):focus-visible,
+:root[data-theme="light"] .modal :is(button, .btn):not(.btn-close):focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(0, 150, 199, 0.2);
 }

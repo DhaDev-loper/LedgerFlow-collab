@@ -55,8 +55,8 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
             </div>
 
             <div class="panel">
-                <div class="table-responsive">
-                    <table class="table table-transactions mb-0">
+                <div class="table-responsive journal-table-scroll">
+                    <table id="accountsTable" class="table table-transactions mb-0">
                         <thead>
                             <tr>
                                 <th>Account</th>
@@ -67,9 +67,27 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                             </tr>
                         </thead>
                         <tbody id="accountsTableBody">
-                            <tr><td colspan="6" class="text-center py-4" style="color: var(--dark-text-muted);">Loading...</td></tr>
+                            <tr><td colspan="<?= $canManage ? '5' : '4' ?>" class="text-center py-4" style="color: var(--dark-text-muted);">Loading...</td></tr>
                         </tbody>
                     </table>
+                </div>
+                <div class="table-footer d-flex justify-content-between align-items-center flex-wrap gap-2 p-3" style="border-top: 1px solid var(--dark-border);">
+                    <div class="d-flex align-items-center flex-wrap gap-3">
+                        <small id="accountsPageInfo" style="color: var(--dark-text-muted);"></small>
+                        <label for="accountsRowsPerPage" class="d-flex align-items-center gap-2 small mb-0" style="color: var(--dark-text-muted);">
+                            Show
+                            <select id="accountsRowsPerPage" class="form-select form-select-sm form-control-dark" style="width: auto;">
+                                <option value="10" selected>10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                            entries
+                        </label>
+                    </div>
+                    <nav aria-label="Chart of accounts pagination">
+                        <ul id="accountsPagination" class="pagination pagination-sm mb-0"></ul>
+                    </nav>
                 </div>
             </div>
 
@@ -339,7 +357,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
-    // Define global configuration BEFORE loading journal-entries.js
+    // Define page configuration before loading accounts.js.
     window.API_URL    = '../backend/routes/journal.php';
     window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
     window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
@@ -347,27 +365,17 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 </script>
 
 <script src="../frontend/js/accounts.js"></script>
-<script src="../frontend/js/journal-entries.js"></script>
-<script src="../frontend/js/session-timeout.js"></script>
-
 <script>
-    // Trigger QR session generation when the scanner modal opens
-    document.addEventListener('DOMContentLoaded', () => {
-        const scannerModal = document.getElementById('receiptScannerModal');
-        if (scannerModal) {
-            scannerModal.addEventListener('show.bs.modal', () => {
-                if (typeof initScanSession === 'function') {
-                    initScanSession();
-                }
-            });
-            scannerModal.addEventListener('hidden.bs.modal', () => {
-                if (typeof stopScanPolling === 'function') {
-                    stopScanPolling();
-                }
-            });
-        }
-    });
+    (() => {
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('openScanner') !== '1') return;
+
+        url.searchParams.delete('openScanner');
+        window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('receiptScannerModal')).show();
+    })();
 </script>
+<script src="../frontend/js/session-timeout.js"></script>
 
 </body>
 </html>

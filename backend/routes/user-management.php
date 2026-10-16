@@ -44,12 +44,64 @@ function canManageTarget(array $currentUser, array $targetUser): bool
     return false;
 }
 
+function createSetupInvitation(PDO $pdo, int $userId): string
+{
+    $pdo->prepare(
+        'UPDATE user_setup_invitations
+         SET used_at = NOW()
+         WHERE user_id = :user_id AND used_at IS NULL'
+    )->execute([':user_id' => $userId]);
+
+    $token = bin2hex(random_bytes(32));
+    $stmt = $pdo->prepare(
+        'INSERT INTO user_setup_invitations (user_id, token_hash, expires_at)
+         VALUES (:user_id, :token_hash, DATE_ADD(NOW(), INTERVAL 24 HOUR))'
+    );
+    $stmt->execute([
+        ':user_id' => $userId,
+        ':token_hash' => hash('sha256', $token),
+    ]);
+
+    return $token;
+}
+
+function sendSetupInvitation(string $email, string $fullName, string $token): bool
+{
+    require_once __DIR__ . '/../config/mailer.php';
+
+    $appUrl = rtrim((string) env('APP_URL', ''), '/');
+    $urlParts = parse_url($appUrl);
+    if (
+        $appUrl === ''
+        || !is_array($urlParts)
+        || !in_array($urlParts['scheme'] ?? '', ['http', 'https'], true)
+        || empty($urlParts['host'])
+    ) {
+        error_log('User setup invitation could not be sent: APP_URL must be an absolute HTTP(S) URL.');
+        return false;
+    }
+
+    $setupUrl = $appUrl . '/frontend/reset-password.html?invite=' . rawurlencode($token);
+    $safeName = htmlspecialchars($fullName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $safeUrl = htmlspecialchars($setupUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+    return sendEmail(
+        $email,
+        $fullName,
+        'Set Up Your LedgerFlow Account',
+        "<p>Hello {$safeName},</p>
+         <p>An account has been created for you in LedgerFlow. Use the button below to choose your password.</p>
+         <p><a href=\"{$safeUrl}\" style=\"display:inline-block;padding:12px 20px;background:#b0004b;color:#fff;text-decoration:none;border-radius:6px;\">Set up your password</a></p>
+         <p>This one-time link expires in 24 hours. If you weren't expecting this invitation, you can ignore this email.</p>"
+    );
+}
+
 switch ($action) {
 
     case 'list':
         $pdo = getDbConnection();
         $stmt = $pdo->query(
-            "SELECT id, full_name, email, role, is_active, failed_attempts,
+            "SELECT id, full_name, email, role, is_active, password_setup_required, failed_attempts,
                     locked_until, suspension_level, created_at
              FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC"
         );
@@ -61,18 +113,17 @@ switch ($action) {
     case 'create':
         $fullName = trim($_POST['full_name'] ?? '');
         $email = trim($_POST['email'] ?? '');
-        $password = $_POST['password'] ?? '';
         $role = $_POST['role'] ?? 'staff';
 
-        if ($fullName === '' || $email === '' || $password === '') {
+        if ($fullName === '' || $email === '') {
             http_response_code(422);
-            echo json_encode(['error' => 'Full name, email, and password are required.']);
+            echo json_encode(['error' => 'Full name and email are required.']);
             break;
         }
 
-        if (strlen($password) < 8) {
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             http_response_code(422);
-            echo json_encode(['error' => 'Password must be at least 8 characters.']);
+            echo json_encode(['error' => 'Enter a valid email address.']);
             break;
         }
 
@@ -104,13 +155,14 @@ switch ($action) {
                 break;
             }
 
-            // Case 2: Account was soft-deleted -> Restore & reactivate existing user record
-            $hash = password_hash($password, PASSWORD_DEFAULT);
+            // Case 2: Account was soft-deleted -> Restore and require a new password setup.
+            $hash = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
             $pdo->beginTransaction();
             $restoreStmt = $pdo->prepare(
                 "UPDATE users 
                  SET full_name = :full_name, 
                      password_hash = :hash, 
+                     password_setup_required = 1,
                      role = :role, 
                      is_active = 1, 
                      failed_attempts = 0,
@@ -135,17 +187,24 @@ switch ($action) {
                 (int) $existingUser['id'],
                 json_encode(['email' => $email, 'role' => $role], JSON_THROW_ON_ERROR)
             );
+            $setupToken = createSetupInvitation($pdo, (int) $existingUser['id']);
             $pdo->commit();
 
-            echo json_encode(['success' => true, 'message' => 'Former employee account restored and reactivated successfully.']);
+            $emailSent = sendSetupInvitation($email, $fullName, $setupToken);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Former employee account restored and reactivated successfully.',
+                'warning' => $emailSent ? null : 'The account was restored, but the setup email could not be sent. Use Resend setup invite in the user list after checking email configuration.',
+            ]);
             break;
         }
 
-        // Case 3: Completely new email -> Insert new user record
-        $hash = password_hash($password, PASSWORD_DEFAULT);
+        // Case 3: Completely new email -> create the account and require password setup.
+        $hash = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
         $pdo->beginTransaction();
         $insertStmt = $pdo->prepare(
-            "INSERT INTO users (full_name, email, password_hash, role) VALUES (:full_name, :email, :hash, :role)"
+            "INSERT INTO users (full_name, email, password_hash, password_setup_required, role)
+             VALUES (:full_name, :email, :hash, 1, :role)"
         );
         $insertStmt->execute([
             ':full_name' => $fullName,
@@ -162,9 +221,70 @@ switch ($action) {
             $newUserId,
             json_encode(['email' => $email, 'role' => $role], JSON_THROW_ON_ERROR)
         );
+        $setupToken = createSetupInvitation($pdo, $newUserId);
         $pdo->commit();
 
-        echo json_encode(['success' => true, 'message' => 'User created successfully.']);
+        $emailSent = sendSetupInvitation($email, $fullName, $setupToken);
+        echo json_encode([
+            'success' => true,
+            'message' => 'User created successfully.',
+            'warning' => $emailSent ? null : 'The user was created, but the setup email could not be sent. Use Resend setup invite in the user list after checking email configuration.',
+        ]);
+        break;
+
+    case 'resend-setup-invitation':
+        $userId = (int) ($_POST['user_id'] ?? 0);
+        if ($userId < 1) {
+            http_response_code(422);
+            echo json_encode(['error' => 'User ID is required.']);
+            break;
+        }
+
+        $pdo = getDbConnection();
+        $targetStmt = $pdo->prepare(
+            'SELECT id, full_name, email, role, is_active, password_setup_required
+             FROM users WHERE id = :id AND deleted_at IS NULL'
+        );
+        $targetStmt->execute([':id' => $userId]);
+        $targetUser = $targetStmt->fetch();
+        if (!$targetUser) {
+            http_response_code(404);
+            echo json_encode(['error' => 'User not found.']);
+            break;
+        }
+
+        if (!canManageTarget(
+            ['id' => $_SESSION['user_id'] ?? 0, 'role' => $_SESSION['role'] ?? ''],
+            $targetUser
+        )) {
+            http_response_code(403);
+            echo json_encode(['error' => 'You do not have permission to manage this account.']);
+            break;
+        }
+
+        if ((int) $targetUser['password_setup_required'] !== 1) {
+            http_response_code(409);
+            echo json_encode(['error' => 'This user has already set up a password.']);
+            break;
+        }
+
+        if ((int) $targetUser['is_active'] !== 1) {
+            http_response_code(409);
+            echo json_encode(['error' => 'Activate this account before resending its setup link.']);
+            break;
+        }
+
+        $pdo->beginTransaction();
+        $setupToken = createSetupInvitation($pdo, $userId);
+        $pdo->commit();
+
+        if (!sendSetupInvitation($targetUser['email'], $targetUser['full_name'], $setupToken)) {
+            http_response_code(502);
+            echo json_encode(['error' => 'The setup email could not be sent. Check the email configuration and try again.']);
+            break;
+        }
+
+        echo json_encode(['success' => true, 'message' => 'A new setup link was sent. Any older setup link is now invalid.']);
         break;
 
     case 'toggle-status':
@@ -450,7 +570,7 @@ switch ($action) {
 
         // 1. Fetch soft-deleted target user
         $targetStmt = $pdo->prepare(
-            "SELECT id, email, role, suspension_level
+            "SELECT id, full_name, email, role, suspension_level
              FROM users WHERE id = :id AND deleted_at IS NOT NULL"
         );
         $targetStmt->execute([':id' => $userId]);
@@ -479,14 +599,16 @@ switch ($action) {
 
         // 3. Restore user
         $pdo->beginTransaction();
+        $hash = password_hash(bin2hex(random_bytes(32)), PASSWORD_DEFAULT);
         $restoreStmt = $pdo->prepare(
             "UPDATE users
-             SET deleted_at = NULL, is_active = 1, failed_attempts = 0,
+             SET deleted_at = NULL, is_active = 1, password_hash = :hash,
+                 password_setup_required = 1, failed_attempts = 0,
                  locked_until = NULL, suspension_level = 0,
                  active_session_id = NULL, active_session_last_seen = NULL
              WHERE id = :id"
         );
-        $restoreStmt->execute([':id' => $userId]);
+        $restoreStmt->execute([':hash' => $hash, ':id' => $userId]);
         logAudit(
             $pdo,
             (int) ($_SESSION['user_id'] ?? 0),
@@ -495,9 +617,15 @@ switch ($action) {
             $userId,
             json_encode(['email' => $targetUser['email'], 'role' => $targetUser['role']], JSON_THROW_ON_ERROR)
         );
+        $setupToken = createSetupInvitation($pdo, $userId);
         $pdo->commit();
 
-        echo json_encode(['success' => true, 'message' => 'User account restored successfully.']);
+        $emailSent = sendSetupInvitation($targetUser['email'], $targetUser['full_name'], $setupToken);
+        echo json_encode([
+            'success' => true,
+            'message' => 'User account restored successfully.',
+            'warning' => $emailSent ? null : 'The account was restored, but the setup email could not be sent. Use Resend setup invite in the user list after checking email configuration.',
+        ]);
         break;
 
     default:

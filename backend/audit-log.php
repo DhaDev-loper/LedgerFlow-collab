@@ -140,8 +140,7 @@ $userName = $_SESSION['full_name'] ?? 'User';
             <a href="cashflow.php" class="sub-nav-item"><i class="bi bi-cash-stack"></i><span>Cash Flow</span></a>
         </div>
     </div>
-    <a href="user-management.php" class="bottom-nav-item"><i class="bi bi-people"></i><span>Users</span></a>
-    <a href="audit-log.php" class="bottom-nav-item active"><i class="bi bi-shield-check"></i><span>Audit</span></a>
+    <a href="user-management.php" class="bottom-nav-item active"><i class="bi bi-people"></i><span>Users</span></a>
     <a href="reports.php" class="bottom-nav-item"><i class="bi bi-bar-chart"></i><span>Reports</span></a>
     <a href="settings.php" class="bottom-nav-item"><i class="bi bi-gear"></i><span>Settings</span></a>
     <div class="bottom-nav-divider"></div>

@@ -6,10 +6,25 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/report_helper.php';
+require_once __DIR__ . '/../config/cash_flow_statement.php';
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 switch ($action) {
+
+    case 'cash-flow-statement':
+        $dateFrom = (string) ($_GET['date_from'] ?? date('Y-m-01'));
+        $dateTo = (string) ($_GET['date_to'] ?? date('Y-m-d'));
+
+        try {
+            $data = getCashFlowStatementData(getDbConnection(), $dateFrom, $dateTo);
+            $data['html'] = renderCashFlowStatementHtml($data);
+            echo json_encode(['success' => true] + $data, JSON_THROW_ON_ERROR);
+        } catch (InvalidArgumentException $exception) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $exception->getMessage()]);
+        }
+        break;
 
     case 'income-statement':
         $dateFrom = $_GET['date_from'] ?? date('Y-m-01'); // default: 1st of this month
