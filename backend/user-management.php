@@ -84,7 +84,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                     <div>
                         <h1 class="h4 mb-1">User Management</h1>
-                        <p class="small mb-0" style="color: var(--dark-text-muted);">Manage staff accounts and security permissions.</p>
+                        <p class="small mb-0" style="color: var(--dark-text-muted);">Manage user accounts and security permissions.</p>
                     </div>
                     
                     <!-- Grouped Action Buttons -->
@@ -115,7 +115,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
                         </div>
                         <div>
                             <div class="fw-semibold text-white small">Role-Based Access Control</div>
-                            <div class="small" style="color: var(--dark-text-muted); font-size: 0.8rem;">Owners and Admins can create staff, update access levels, and toggle account availability.</div>
+                            <div class="small" style="color: var(--dark-text-muted); font-size: 0.8rem;">CEOs and CFOs can create accounts, update access levels, and toggle account availability.</div>
                         </div>
                     </div>
                     <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
@@ -130,16 +130,16 @@ $currentUserRole = $_SESSION['role'] ?? '';
                             All <span class="badge rounded-pill bg-secondary ms-1" id="cntAll">0</span>
                         </button>
                         <button class="btn btn-sm role-filter-btn" onclick="setRoleFilter('owner')">
-                            Owners <span class="badge rounded-pill bg-danger-subtle text-danger ms-1" id="cntOwner">0</span>
+                            CEOs <span class="badge rounded-pill bg-danger-subtle text-danger ms-1" id="cntOwner">0</span>
                         </button>
                         <button class="btn btn-sm role-filter-btn" onclick="setRoleFilter('admin')">
-                            Admins <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="cntAdmin">0</span>
+                            CFOs <span class="badge rounded-pill bg-primary-subtle text-primary ms-1" id="cntAdmin">0</span>
                         </button>
                         <button class="btn btn-sm role-filter-btn" onclick="setRoleFilter('accountant')">
-                            Accountants <span class="badge rounded-pill bg-info-subtle text-info ms-1" id="cntAccountant">0</span>
+                            Senior Accountants <span class="badge rounded-pill bg-info-subtle text-info ms-1" id="cntAccountant">0</span>
                         </button>
                         <button class="btn btn-sm role-filter-btn" onclick="setRoleFilter('staff')">
-                            Staff <span class="badge rounded-pill bg-secondary-subtle text-secondary ms-1" id="cntStaff">0</span>
+                            Accounts Executives <span class="badge rounded-pill bg-secondary-subtle text-secondary ms-1" id="cntStaff">0</span>
                         </button>
                     </div>
                    
@@ -272,9 +272,9 @@ $currentUserRole = $_SESSION['role'] ?? '';
                         <div class="mb-3" id="roleContainer">
                             <label class="form-label small">Role</label>
                             <select class="form-select form-control-dark" id="role" name="role">
-                                <option value="staff">Staff</option>
-                                <option value="accountant">Accountant</option>
-                                <option value="admin">Admin</option>
+                                <option value="staff">Accounts Executive</option>
+                                <option value="accountant">Senior Accountant</option>
+                                <option value="admin">CFO</option>
                             </select>
                         </div>
 
@@ -321,7 +321,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
                     </div>
                     <div>
                         <h5 class="modal-title h6 mb-0 text-white font-weight-bold" id="archiveModalLabel">Archived User Accounts</h5>
-                        <small class="text-muted" style="font-size: 0.75rem;">View and restore soft-deleted staff accounts.</small>
+                        <small class="text-muted" style="font-size: 0.75rem;">View and restore archived user accounts.</small>
                     </div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>

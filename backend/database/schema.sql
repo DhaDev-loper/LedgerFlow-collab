@@ -13,12 +13,15 @@ CREATE TABLE users (
     is_active       TINYINT(1)          NOT NULL DEFAULT 1,
     failed_attempts TINYINT UNSIGNED    NOT NULL DEFAULT 0,
     locked_until    DATETIME            NULL,
+    reset_token_hash VARCHAR(64)         NULL,
+    reset_expires_at DATETIME            NULL,
     suspension_level TINYINT UNSIGNED   NOT NULL DEFAULT 0,
     active_session_id VARCHAR(128)      NULL,
     active_session_last_seen DATETIME   NULL,
     deleted_at      DATETIME            NULL,
     created_at      TIMESTAMP           NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_users_email (email)
+    UNIQUE KEY uq_users_email (email),
+    UNIQUE KEY uq_users_reset_token_hash (reset_token_hash)
 ) ENGINE=InnoDB;
 
 CREATE TABLE user_setup_invitations (

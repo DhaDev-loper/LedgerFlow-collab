@@ -918,6 +918,21 @@ h1, h2, h3, h4, .brand-font {
     opacity: 0.85;
 }
 
+#entryModal #templateDropdownList .dropdown-item,
+#entryModal #templateDropdownList .dropdown-item:hover,
+#entryModal #templateDropdownList .dropdown-item:focus,
+#entryModal #templateDropdownList .dropdown-item.active,
+#entryModal #templateDropdownList .dropdown-item[aria-selected="true"] {
+    color: #f8fafc !important;
+}
+
+#entryModal #templateDropdownList .dropdown-item:hover,
+#entryModal #templateDropdownList .dropdown-item:focus,
+#entryModal #templateDropdownList .dropdown-item.active,
+#entryModal #templateDropdownList .dropdown-item[aria-selected="true"] {
+    background-color: #26344d !important;
+}
+
 #entryModal .journal-line-section {
     margin-top: 1.25rem;
     padding: 1rem;

@@ -6,7 +6,15 @@ A double-entry bookkeeping and cash flow management system for a water refilling
 - PHP (vanilla, no framework)
 - MySQL
 - Vanilla HTML/CSS/JS + Bootstrap 5
-- PHPMailer (via Composer) for email/OTP
+- PHPMailer (via Composer) for email delivery
+
+## User Role Titles
+
+User accounts retain the internal role values `owner`, `admin`, `accountant`,
+and `staff` for database compatibility and authorization checks. The interface
+displays them as CEO, CFO, Senior Accountant, and Accounts Executive,
+respectively. These are display-title changes only; they do not change
+permissions or require a role-data migration.
 
 ## Setup Instructions
 
@@ -62,6 +70,8 @@ a one-time invitation link.
 Run `backend/database/migrations/20261016_add_client_ad_budget_liability_account.sql`
 once to add the current liability account used by the client ad-budget journal
 templates. The migration skips the insert if the account already exists.
+Run `backend/database/migrations/20261018_add_self_service_password_recovery.sql`
+once to enable secure, single-use account recovery links that expire after 15 minutes.
 
 Successful logins and journal, account, client, and user-management changes are
 recorded in `audit`. Audit details intentionally exclude credentials and
@@ -87,18 +97,20 @@ activity, with a one-minute warning beforehand.
 
 Non-owner accounts are suspended after five failed login attempts. Successive
 suspensions last 5 minutes, 15 minutes, and 60 minutes; the next cycle locks
-the account by deactivating it. Only the owner can reactivate a locked-out
-account, which resets its suspension level.
+the account by deactivating it. Users can recover access through a secure link
+sent to their registered email. Recovery resets the password, failed-login
+counter, and suspension level. Administrator-disabled and deleted accounts
+cannot be reactivated through self-service recovery.
 
 ### 4. Configure environment variables
 1. Copy `.env.example` to a new file named `.env`
 2. Fill in your own values:
    - Database credentials (usually `root` / no password by default on both Laragon and XAMPP)
    - Gmail SMTP credentials — **you'll need your own Gmail App Password** (see below)
-   - `APP_URL` — the absolute URL of the project root, used to build password setup links
+   - `APP_URL` — the absolute URL of the project root, used to build password setup and recovery links
    - `OCR_SPACE_API_KEY` — the server-side API key used for receipt OCR; uploaded receipt images are sent to OCR.space for text extraction
 
-### 5. Create your Gmail App Password (for OTP/password reset emails)
+### 5. Create your Gmail App Password (for recovery/setup emails)
 1. Enable 2-Step Verification on your Google Account
 2. Go to https://myaccount.google.com/apppasswords
 3. Generate an app password, paste it into `.env` as `MAIL_PASSWORD`

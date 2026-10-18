@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/admin_guard.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/audit_helper.php';
+require_once __DIR__ . '/../config/role_labels.php';
 
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
@@ -105,7 +106,10 @@ switch ($action) {
                     locked_until, suspension_level, created_at
              FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC"
         );
-        $users = $stmt->fetchAll();
+        $users = array_map(static function (array $user): array {
+            $user['role_title'] = roleDisplayName((string) $user['role']);
+            return $user;
+        }, $stmt->fetchAll());
 
         echo json_encode(['success' => true, 'users' => $users]);
         break;
@@ -552,7 +556,10 @@ switch ($action) {
                     created_at, deleted_at
              FROM users WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC"
         );
-        $archivedUsers = $stmt->fetchAll();
+        $archivedUsers = array_map(static function (array $user): array {
+            $user['role_title'] = roleDisplayName((string) $user['role']);
+            return $user;
+        }, $stmt->fetchAll());
 
         echo json_encode(['success' => true, 'users' => $archivedUsers]);
         break;

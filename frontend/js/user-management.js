@@ -13,6 +13,7 @@ const passwordGroup = document.getElementById('passwordGroup');
 let rawUsersList = [];
 let activeRoleFilter = 'all';
 let userIdPendingDelete = null;
+const roleSortOrder = { owner: 0, admin: 1, accountant: 2, staff: 3 };
 
 // ---------- Load and render users ----------
 async function loadUsers() {
@@ -96,7 +97,18 @@ function applyUserFilters() {
         );
     }
 
-    renderTableRows(filtered, tbody);
+    const organizedUsers = [...filtered].sort((a, b) => {
+        const roleA = (a.role || 'staff').toLowerCase();
+        const roleB = (b.role || 'staff').toLowerCase();
+        const roleOrderDifference = (roleSortOrder[roleA] ?? Number.MAX_SAFE_INTEGER)
+            - (roleSortOrder[roleB] ?? Number.MAX_SAFE_INTEGER);
+
+        return roleOrderDifference || (a.full_name || '').localeCompare(b.full_name || '', undefined, {
+            sensitivity: 'base',
+        });
+    });
+
+    renderTableRows(organizedUsers, tbody);
 }
 
 // ---------- Render Table ----------
@@ -116,7 +128,7 @@ function renderTableRows(users, tbody) {
         const isSuspended = suspensionEnds && suspensionEnds > new Date();
         const isOwner = typeof CURRENT_USER_ROLE !== 'undefined' && CURRENT_USER_ROLE === 'owner';
         const statusLabel = isLockedOut
-            ? 'Locked out — owner activation required'
+            ? 'Locked out — CEO activation required'
             : setupPending
                 ? 'Setup pending'
                 : isSuspended
@@ -148,7 +160,7 @@ function renderTableRows(users, tbody) {
                     </div>
                 </td>
                 <td><span style="color: var(--dark-text-muted);">${escapeHtml(user.email)}</span></td>
-                <td><span class="role-badge role-${roleLower}">${capitalize(user.role)}</span></td>
+                <td><span class="role-badge role-${roleLower}">${escapeHtml(user.role_title || capitalize(user.role))}</span></td>
                 <td>
                     <span class="badge-${setupPending || user.is_active != 1 || isSuspended ? 'out' : 'in'}">
                         ${escapeHtml(statusLabel)}
@@ -210,17 +222,17 @@ function renderRoleField(isOwner, currentRole = 'staff') {
     if (isOwner) {
         roleContainer.innerHTML = `
             <label class="form-label small">Role</label>
-            <input type="text" class="form-control form-control-dark" value="Owner" disabled>
+            <input type="text" class="form-control form-control-dark" value="CEO" disabled>
             <input type="hidden" name="role" value="owner">
-            <div class="form-text" style="color: var(--dark-text-muted);">Owner role cannot be changed.</div>
+            <div class="form-text" style="color: var(--dark-text-muted);">CEO role cannot be changed.</div>
         `;
     } else {
         roleContainer.innerHTML = `
             <label class="form-label small">Role</label>
             <select class="form-select form-control-dark" id="role" name="role">
-                <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Staff</option>
-                <option value="accountant" ${currentRole === 'accountant' ? 'selected' : ''}>Accountant</option>
-                <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>Admin</option>
+                <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Accounts Executive</option>
+                <option value="accountant" ${currentRole === 'accountant' ? 'selected' : ''}>Senior Accountant</option>
+                <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>CFO</option>
             </select>
         `;
     }
@@ -400,13 +412,13 @@ async function loadArchivedUsers() {
                 <td class="fw-semibold text-white">${escapeHtml(user.full_name)}</td>
                 <td class="text-muted">${escapeHtml(user.email)}</td>
                 <td>
-                    <span class="badge bg-secondary bg-opacity-25 text-light px-2 py-1 text-capitalize">${escapeHtml(user.role)}</span>
+                    <span class="badge bg-secondary bg-opacity-25 text-light px-2 py-1">${escapeHtml(user.role_title || capitalize(user.role))}</span>
                     ${Number(user.suspension_level) >= 4 ? '<span class="badge bg-danger bg-opacity-25 text-danger ms-1">Locked out</span>' : ''}
                 </td>
                 <td class="text-muted small">${user.deleted_at ? new Date(user.deleted_at).toLocaleDateString() : 'N/A'}</td>
                 <td class="text-end">
                     ${Number(user.suspension_level) >= 4 && CURRENT_USER_ROLE !== 'owner'
-                        ? '<span class="small text-muted">Owner only</span>'
+                        ? '<span class="small text-muted">CEO only</span>'
                         : `<button type="button" onclick="restoreUser(${user.id})" class="btn btn-sm btn-success bg-opacity-25 text-success border-0 px-3 rounded-pill">Restore</button>`}
                 </td>
             </tr>

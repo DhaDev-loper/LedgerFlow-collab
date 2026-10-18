@@ -1,6 +1,21 @@
 const inviteToken = new URLSearchParams(window.location.search).get('invite');
+const recoveryToken = new URLSearchParams(window.location.search).get('token');
 const submitButton = document.getElementById('submitBtn');
 const errorMessage = document.getElementById('errorMsg');
+
+document.querySelectorAll('.password-toggle-btn').forEach(toggleButton => {
+    toggleButton.addEventListener('click', () => {
+        const passwordInput = document.getElementById(toggleButton.getAttribute('aria-controls'));
+        const showIcon = toggleButton.querySelector('.password-toggle-icon-show');
+        const hideIcon = toggleButton.querySelector('.password-toggle-icon-hide');
+        const showingPassword = passwordInput.type === 'password';
+
+        passwordInput.type = showingPassword ? 'text' : 'password';
+        showIcon.classList.toggle('d-none', showingPassword);
+        hideIcon.classList.toggle('d-none', !showingPassword);
+        toggleButton.setAttribute('aria-label', showingPassword ? 'Hide password' : 'Show password');
+    });
+});
 
 if (inviteToken) {
     document.getElementById('passwordPageTitle').textContent = 'Set Up Your Password';
@@ -27,6 +42,25 @@ if (inviteToken) {
             errorMessage.textContent = err.message || 'Could not validate the setup link.';
             errorMessage.classList.remove('d-none');
         });
+} else if (recoveryToken) {
+    submitButton.disabled = true;
+
+    fetch(`../backend/auth/verify_reset.php?token=${encodeURIComponent(recoveryToken)}`)
+        .then(async response => {
+            const data = await response.json();
+            if (!response.ok || !data.valid) {
+                throw new Error(data.error || 'This recovery link is invalid or has expired.');
+            }
+            submitButton.disabled = false;
+        })
+        .catch(err => {
+            errorMessage.textContent = err.message || 'Could not validate the recovery link.';
+            errorMessage.classList.remove('d-none');
+        });
+} else {
+    submitButton.disabled = true;
+    errorMessage.textContent = 'This password link is invalid or has expired.';
+    errorMessage.classList.remove('d-none');
 }
 
 document.getElementById('resetForm').addEventListener('submit', async (e) => {
@@ -56,28 +90,31 @@ document.getElementById('resetForm').addEventListener('submit', async (e) => {
     btn.textContent = inviteToken ? 'Setting password...' : 'Resetting...';
 
     try {
-        const requestData = {
+        const requestData = new URLSearchParams({
             action: inviteToken ? 'accept-setup-invitation' : 'reset-password',
             new_password: newPassword,
-        };
+        });
+        const endpoint = inviteToken
+            ? '../backend/routes/auth.php'
+            : '../backend/auth/verify_reset.php';
         if (inviteToken) {
-            requestData.token = inviteToken;
+            requestData.set('token', inviteToken);
+        } else if (recoveryToken) {
+            requestData.delete('action');
+            requestData.set('token', recoveryToken);
         }
 
-        const response = await fetch('../backend/routes/auth.php', {
+        const response = await fetch(endpoint, {
             method: 'POST',
-            body: new URLSearchParams(requestData),
+            body: requestData,
         });
 
         const data = await response.json();
 
-        if (data.success) {
-            // Clean up — this reset flow is complete, don't leave the
-            // email sitting around in sessionStorage.
-            sessionStorage.removeItem('reset_email');
+        if (response.ok && data.success) {
             alert(inviteToken
                 ? 'Password set successfully! You can now log in.'
-                : 'Password reset successfully! Please log in with your new password.');
+                : 'Password reset successfully. Your account is unlocked and you can now sign in.');
             window.location.href = 'login.html';
         } else {
             errorMsg.textContent = data.error || 'Something went wrong. Please try again.';

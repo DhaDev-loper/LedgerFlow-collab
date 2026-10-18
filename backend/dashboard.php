@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/auth_guard.php';
+require_once __DIR__ . '/config/role_labels.php';
 
 $userRole = $_SESSION['role'];
 $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
@@ -563,7 +564,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                 </div>
                 <h5 class="fw-bold text-light mb-1">Welcome back!</h5>
                 <p class="small text-secondary mb-0">Logged in as <span class="fw-semibold text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span></p>
-                <span class="badge mt-2" style="background: rgba(255, 255, 255, 0.08); color: var(--dark-text-muted); font-weight: 500;">Role: <?= htmlspecialchars(ucfirst($userRole), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="badge mt-2" style="background: rgba(255, 255, 255, 0.08); color: var(--dark-text-muted); font-weight: 500;">Role: <?= htmlspecialchars(roleDisplayName($userRole), ENT_QUOTES, 'UTF-8') ?></span>
             </div>
 
         </div>

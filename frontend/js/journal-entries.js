@@ -337,7 +337,11 @@ function resetEntryFields() {
     if (!entryForm) return;
 
     entryForm.reset();
-    document.getElementById('templateSelect').value = '';
+    const templateSearchInput = document.getElementById('templateSearchInput');
+    const selectedTemplateId = document.getElementById('selectedTemplateId');
+    if (templateSearchInput) templateSearchInput.value = '';
+    if (selectedTemplateId) selectedTemplateId.value = '';
+    closeTemplateDropdown();
     setAutoLock(false);
 
     const debitContainer = document.getElementById('debitLinesContainer');
@@ -1309,7 +1313,15 @@ function setEntryMode(mode) {
     document.getElementById('modeManualBtn').classList.toggle('primary', mode === 'manual');
     document.getElementById('modeAutoBtn').classList.toggle('primary', mode === 'auto');
     document.getElementById('autoModeSection').classList.toggle('d-none', mode === 'manual');
+    setTemplateAccountLock(mode === 'auto' && Boolean(document.getElementById('selectedTemplateId')?.value));
     updateClientFieldVisibility();
+}
+
+function setTemplateAccountLock(locked) {
+    document.querySelectorAll('#debitLinesContainer .line-account, #creditLinesContainer .line-account')
+        .forEach(select => {
+            select.disabled = locked;
+        });
 }
 
 function updateClientFieldVisibility(template = null) {
@@ -1317,7 +1329,7 @@ function updateClientFieldVisibility(template = null) {
     const clientSelect = document.getElementById('clientIdSelect');
     if (!clientField || !clientSelect) return;
 
-    const selectedTemplateIndex = document.getElementById('templateSelect')?.value;
+    const selectedTemplateIndex = document.getElementById('selectedTemplateId')?.value;
     const activeTemplate = template || (
         selectedTemplateIndex !== '' && selectedTemplateIndex !== undefined
             ? ENTRY_TEMPLATES[Number(selectedTemplateIndex)]
@@ -1339,22 +1351,119 @@ document.getElementById('modeManualBtn')?.addEventListener('click', () => setEnt
 document.getElementById('modeAutoBtn')?.addEventListener('click', () => setEntryMode('auto'));
 
 function loadTemplateDropdown() {
-    const select = document.getElementById('templateSelect');
-    if (!select) return;
+    const searchInput = document.getElementById('templateSearchInput');
+    if (!searchInput) return;
 
-    select.innerHTML = '<option value="">-- Select a transaction type --</option>' +
-        ENTRY_TEMPLATES.map((t, i) => `<option value="${i}">${t.label}</option>`).join('');
+    const dropdownToggle = document.getElementById('toggleTemplateDropdown');
+    searchInput.addEventListener('focus', () => renderTemplateResults());
+    searchInput.addEventListener('input', () => {
+        const selectedTemplateId = document.getElementById('selectedTemplateId');
+        if (selectedTemplateId.value !== '') {
+            selectedTemplateId.value = '';
+            setTemplateAccountLock(false);
+            setAutoLock(false);
+            updateClientFieldVisibility();
+        }
+        renderTemplateResults(searchInput.value);
+    });
+    dropdownToggle.addEventListener('click', () => {
+        const dropdown = document.getElementById('templateDropdownList');
+        if (dropdown.style.display === 'none') {
+            searchInput.focus();
+            renderTemplateResults();
+        } else {
+            closeTemplateDropdown();
+        }
+    });
+    searchInput.addEventListener('keydown', event => {
+        const dropdown = document.getElementById('templateDropdownList');
+        const options = Array.from(dropdown.querySelectorAll('[role="option"]'));
+        const activeIndex = options.findIndex(option => option.getAttribute('aria-selected') === 'true');
+
+        if (event.key === 'ArrowDown' && options.length > 0) {
+            event.preventDefault();
+            setActiveTemplateOption(options, activeIndex < options.length - 1 ? activeIndex + 1 : 0);
+        } else if (event.key === 'ArrowUp' && options.length > 0) {
+            event.preventDefault();
+            setActiveTemplateOption(options, activeIndex > 0 ? activeIndex - 1 : options.length - 1);
+        } else if (event.key === 'Enter' && activeIndex >= 0) {
+            event.preventDefault();
+            selectTemplate(Number(options[activeIndex].dataset.templateIndex));
+        } else if (event.key === 'Escape') {
+            closeTemplateDropdown();
+        }
+    });
+
+    document.getElementById('templateDropdownList').addEventListener('click', event => {
+        const option = event.target.closest('[data-template-index]');
+        if (option) {
+            selectTemplate(Number(option.dataset.templateIndex));
+        }
+    });
+
+    document.addEventListener('click', event => {
+        if (!document.getElementById('templateCombobox').contains(event.target)) {
+            closeTemplateDropdown();
+        }
+    });
 }
 
-document.getElementById('templateSelect')?.addEventListener('change', (e) => {
-    const index = e.target.value;
-    if (index === '') {
-        resetEntryFields();
-        updateClientFieldVisibility();
-        return;
+function renderTemplateResults(query = '') {
+    const dropdown = document.getElementById('templateDropdownList');
+    const searchInput = document.getElementById('templateSearchInput');
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    const results = ENTRY_TEMPLATES
+        .map((template, index) => ({ template, index }))
+        .filter(({ template }) => template.label.toLocaleLowerCase().includes(normalizedQuery));
+
+    dropdown.replaceChildren();
+    if (results.length === 0) {
+        const emptyResult = document.createElement('span');
+        emptyResult.className = 'dropdown-item-text text-white-50';
+        emptyResult.textContent = 'No matching templates';
+        dropdown.appendChild(emptyResult);
+    } else {
+        results.forEach(({ template, index }) => {
+            const option = document.createElement('button');
+            option.type = 'button';
+            option.className = 'dropdown-item text-light';
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', 'false');
+            option.dataset.templateIndex = String(index);
+            option.textContent = template.label;
+            dropdown.appendChild(option);
+        });
     }
 
+    dropdown.style.display = 'block';
+    dropdown.classList.add('show');
+    searchInput.setAttribute('aria-expanded', 'true');
+    document.getElementById('toggleTemplateDropdown').setAttribute('aria-expanded', 'true');
+}
+
+function setActiveTemplateOption(options, activeIndex) {
+    options.forEach((option, index) => {
+        const active = index === activeIndex;
+        option.setAttribute('aria-selected', active ? 'true' : 'false');
+        option.classList.toggle('active', active);
+    });
+    options[activeIndex]?.scrollIntoView({ block: 'nearest' });
+}
+
+function closeTemplateDropdown() {
+    const dropdown = document.getElementById('templateDropdownList');
+    const searchInput = document.getElementById('templateSearchInput');
+    if (!dropdown || !searchInput) return;
+
+    dropdown.style.display = 'none';
+    dropdown.classList.remove('show');
+    searchInput.setAttribute('aria-expanded', 'false');
+    document.getElementById('toggleTemplateDropdown')?.setAttribute('aria-expanded', 'false');
+}
+
+function selectTemplate(index) {
     const template = ENTRY_TEMPLATES[index];
+    if (!template) return;
 
     const findTemplateAccount = name => name.toLowerCase() === 'cash'
         ? allAccountsForLines.find(account => Number(account.is_cash_account) === 1)
@@ -1365,6 +1474,17 @@ document.getElementById('templateSelect')?.addEventListener('change', (e) => {
     if (!debitAccount || !creditAccount) {
         alert(`One of the accounts for this template ("${template.debitAccount}" or "${template.creditAccount}") wasn't found in your Chart of Accounts.`);
         return;
+    }
+
+    document.getElementById('selectedTemplateId').value = String(index);
+    document.getElementById('templateSearchInput').value = template.label;
+    closeTemplateDropdown();
+
+    const typeOption = Array.from(document.getElementById('transactionTypeId').options)
+        .find(opt => opt.textContent.trim() === template.transactionType);
+    if (typeOption) {
+        document.getElementById('transactionTypeId').value = typeOption.value;
+        document.getElementById('transactionTypeId').dispatchEvent(new Event('change'));
     }
 
     document.getElementById('debitLinesContainer').innerHTML = '';
@@ -1379,23 +1499,16 @@ document.getElementById('templateSelect')?.addEventListener('change', (e) => {
     debitRow.querySelector('.line-account').value = debitAccount.id;
     creditRow.querySelector('.line-account').value = creditAccount.id;
 
-    debitRow.querySelector('.line-account').disabled = true;
-    creditRow.querySelector('.line-account').disabled = true;
+    setTemplateAccountLock(currentMode === 'auto');
+    setAutoLock(currentMode === 'auto');
     updateJournalLineControls('debit');
     updateJournalLineControls('credit');
-
-    const typeOption = Array.from(document.getElementById('transactionTypeId').options)
-        .find(opt => opt.textContent === template.transactionType);
-    if (typeOption) {
-        document.getElementById('transactionTypeId').value = typeOption.value;
-        document.getElementById('transactionTypeId').dispatchEvent(new Event('change'));
-    }
 
     document.getElementById('description').value = template.description;
     updateClientFieldVisibility(template);
 
     recalculateLineTotals();
-});
+}
 
 const autoLockedFields = [
     document.getElementById('transactionTypeId'),
@@ -1423,17 +1536,8 @@ document.getElementById('modeManualBtn')?.addEventListener('click', () => {
 });
 
 document.getElementById('modeAutoBtn')?.addEventListener('click', () => {
-    if (document.getElementById('templateSelect')?.value) {
+    if (document.getElementById('selectedTemplateId')?.value) {
         setAutoLock(true);
-    }
-});
-
-document.getElementById('templateSelect')?.addEventListener('change', (event) => {
-    const hasTemplate = Boolean(event.target.value);
-    if (hasTemplate) {
-        setAutoLock(true);
-    } else {
-        setAutoLock(false);
     }
 });
 

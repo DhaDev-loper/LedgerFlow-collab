@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/config/auth_guard.php';
+require_once __DIR__ . '/config/role_labels.php';
 
 $userRole = $_SESSION['role'];
 $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
@@ -268,10 +269,23 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
                     <!-- AUTO MODE TEMPLATES -->
                     <div id="autoModeSection" class="mb-3 d-none">
-                        <label class="form-label small">Transaction Template</label>
-                        <select class="form-select form-control-dark bg-dark text-light border-secondary" id="templateSelect">
-                            <option value="">-- Select a transaction type --</option>
-                        </select>
+                        <label for="templateSearchInput" class="form-label small">Transaction Template</label>
+                        <div class="position-relative" id="templateCombobox">
+                            <div class="input-group">
+                                <input type="text" id="templateSearchInput"
+                                       class="form-control bg-dark text-light border-secondary"
+                                       placeholder="-- Click to browse or type to search templates --"
+                                       autocomplete="off" role="combobox" aria-autocomplete="list"
+                                       aria-expanded="false" aria-controls="templateDropdownList">
+                                <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
+                                        id="toggleTemplateDropdown" aria-label="Browse templates"
+                                        aria-controls="templateDropdownList" aria-expanded="false"></button>
+                            </div>
+                            <input type="hidden" id="selectedTemplateId" name="template_id" value="">
+                            <div id="templateDropdownList"
+                                 class="dropdown-menu w-100 bg-dark border-secondary shadow-lg mt-1"
+                                 role="listbox" style="max-height: 220px; overflow-y: auto; display: none; z-index: 1050;"></div>
+                        </div>
                         <div class="form-text" style="color: var(--dark-text-muted);">
                             Pick what happened — the correct accounts fill in automatically.
                         </div>
@@ -442,7 +456,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     </div>
 </div>
 
-<!-- Request Deletion Modal (For Admin / Accountant) -->
+<!-- Request Deletion Modal (For CFO / Senior Accountant) -->
 <div class="modal fade" id="requestDeletionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content modal-dark">
@@ -454,7 +468,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                 <input type="hidden" id="deleteJournalId" name="journal_id">
                 <div class="modal-body">
                     <p class="small text-secondary mb-3">
-                        This entry cannot be deleted directly. Submitting this request will send it to the <strong>Owner</strong> for approval.
+                        This entry cannot be deleted directly. Submitting this request will send it to the <strong><?= htmlspecialchars(roleDisplayName('owner'), ENT_QUOTES, 'UTF-8') ?></strong> for approval.
                     </p>
                     <div class="mb-3">
                         <label for="deleteReason" class="form-label small fw-semibold text-light">Reason for Deletion <span class="text-danger">*</span></label>
@@ -591,7 +605,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     </div>
 </div>
 
-<!-- Pending Approvals Modal (For Owner Review) -->
+<!-- Pending Approvals Modal (For CEO Review) -->
 <?php if ($userRole === 'owner'): ?>
 <div class="modal fade" id="pendingApprovalsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
@@ -633,7 +647,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
     window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
 </script>
-<script src="../frontend/js/journal-entries.js"></script>
+<script src="../frontend/js/journal-entries.js?v=20261018-template-combobox"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="../frontend/js/session-timeout.js"></script>
 </body>
