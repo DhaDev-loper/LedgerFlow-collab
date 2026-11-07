@@ -12,10 +12,10 @@ $currentUserRole = $_SESSION['role'] ?? '';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Management — WRS Accounting</title>
+    <title>User Management — KoboSocial</title>
     <script src="../frontend/js/theme.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
         .avatar-initials {
@@ -79,6 +79,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
     <div class="app-shell">
         <div class="main-content">
             <div class="content-area">
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
                 <!-- Header Row -->
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -173,72 +174,6 @@ $currentUserRole = $_SESSION['role'] ?? '';
             </div>
         </div>
     </div>
-
-    <nav class="bottom-nav">
-            <a href="dashboard.php" class="bottom-nav-item">
-                <i class="bi bi-speedometer2"></i>
-                <span>Dashboard</span>
-            </a>
-            <a href="transaction.php" class="bottom-nav-item">
-                <i class="bi bi-arrow-left-right"></i>
-                <span>Transact</span>
-            </a>
-            <a href="accounts.php" class="bottom-nav-item">
-                <i class="bi bi-wallet2"></i>
-                <span>Accounts</span>
-            </a>
-            <a href="clients.php" class="bottom-nav-item">
-                <i class="bi bi-people-fill"></i>
-                <span>Clients</span>
-            </a>
-            <a href="accounts.php?openScanner=1" class="bottom-nav-scan-btn" title="Scan / Import Receipt">
-                <div class="scan-btn-icon">
-                    <i class="bi bi-qr-code-scan"></i>
-                </div>
-                <span>Scan</span>
-            </a>
-            <!-- Journal Expandable Nav Item -->
-            <div class="bottom-nav-expandable" id="journalExpandable">
-                <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
-                    <i class="bi bi-journal-text"></i>
-                    <span>Journal</span>
-                </button>
-
-                <div class="expandable-content">
-                    <a href="journal-entries.php" class="sub-nav-item">
-                        <i class="bi bi-journal-check"></i>
-                        <span>Entries</span>
-                    </a>
-                    <a href="general-ledger.php" class="sub-nav-item">
-                        <i class="bi bi-book"></i>
-                        <span>Ledger</span>
-                    </a>
-                    <a href="cashflow.php" class="sub-nav-item">
-                        <i class="bi bi-cash-stack"></i>
-                        <span>Cash Flow</span>
-                    </a>
-                </div>
-            </div>
-            <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <a href="user-management.php" class="bottom-nav-item active" aria-current="page">
-                <i class="bi bi-people"></i>
-                <span>Users</span>
-            </a>
-            <?php endif; ?>
-            <a href="reports.php" class="bottom-nav-item">
-                <i class="bi bi-bar-chart"></i>
-                <span>Reports</span>
-            </a>
-            <a href="settings.php" class="bottom-nav-item">
-                <i class="bi bi-gear"></i>
-                <span>Settings</span>
-            </a>
-            <div class="bottom-nav-divider"></div>
-            <a href="#" class="bottom-nav-item" id="logoutBtn">
-                <i class="bi bi-box-arrow-right"></i>
-                <span>Logout</span>
-            </a>
-        </nav>
 
 
     <!-- Add / Edit User Modal -->

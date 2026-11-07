@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/audit_helper.php';
 require_once __DIR__ . '/../config/accounting_helper.php';
+require_once __DIR__ . '/../config/accounting_periods.php';
 require_once __DIR__ . '/../services/OCRService.php';
 
 function getReceiptImageUrl(string $imagePath): string
@@ -15,6 +16,64 @@ function getReceiptImageUrl(string $imagePath): string
     $relativePath = implode('/', array_map('rawurlencode', explode('/', ltrim($imagePath, '/'))));
 
     return $projectBasePath . '/' . $relativePath;
+}
+
+function saveClientLogoUpload(): ?string
+{
+    $upload = $_FILES['logo'] ?? null;
+    if (!$upload || (int) ($upload['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        return null;
+    }
+    if ((int) ($upload['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        throw new DomainException('The logo upload failed. Choose an image no larger than 2 MB.');
+    }
+    if ((int) ($upload['size'] ?? 0) <= 0 || (int) $upload['size'] > 2 * 1024 * 1024) {
+        throw new DomainException('Client logos must be 2 MB or smaller.');
+    }
+    if (!is_uploaded_file((string) ($upload['tmp_name'] ?? ''))) {
+        throw new DomainException('Choose a valid logo image to upload.');
+    }
+
+    $mime = (new finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
+    $extensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+    ];
+    $image = @getimagesize($upload['tmp_name']);
+    $imageMimes = [
+        IMAGETYPE_JPEG => 'image/jpeg',
+        IMAGETYPE_PNG => 'image/png',
+        IMAGETYPE_WEBP => 'image/webp',
+    ];
+    if (!isset($extensions[$mime]) || !$image || ($imageMimes[$image[2]] ?? null) !== $mime) {
+        throw new DomainException('Choose a valid JPG, PNG, or WebP image.');
+    }
+
+    $projectRoot = dirname(__DIR__, 2);
+    $uploadDirectory = $projectRoot . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'clients';
+    if (!is_dir($uploadDirectory) && !mkdir($uploadDirectory, 0755, true) && !is_dir($uploadDirectory)) {
+        throw new RuntimeException('The client logo folder could not be created.');
+    }
+
+    $fileName = bin2hex(random_bytes(16)) . '.' . $extensions[$mime];
+    if (!move_uploaded_file($upload['tmp_name'], $uploadDirectory . DIRECTORY_SEPARATOR . $fileName)) {
+        throw new RuntimeException('The client logo could not be saved.');
+    }
+
+    return 'uploads/clients/' . $fileName;
+}
+
+function deleteClientLogoFile(?string $logoPath): void
+{
+    if (!$logoPath || !preg_match('~^uploads/clients/[a-f0-9]{32}\.(?:jpg|png|webp)$~i', $logoPath)) {
+        return;
+    }
+    $path = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR
+        . str_replace('/', DIRECTORY_SEPARATOR, $logoPath);
+    if (is_file($path)) {
+        unlink($path);
+    }
 }
 
 // Check if this is an incoming mobile upload or scan request
@@ -39,7 +98,7 @@ switch ($action) {
         $accountName = trim($_GET['account_name'] ?? '');
         $statusFilter= trim($_GET['status'] ?? 'active');
 
-        $sql = "SELECT DISTINCT tj.id, tj.description, tj.transaction_date, tj.reference_no, 
+        $sql = "SELECT DISTINCT tj.id, tj.description, tj.transaction_date, tj.reference_no,
                        tj.total_amount, tj.due_date, tj.status, tj.is_edited, tj.edited_at, tt.name AS type_name,
                        u.full_name AS created_by_name, c.name AS client_name
                 FROM transaction_journals tj
@@ -146,6 +205,10 @@ switch ($action) {
             "SELECT id, name, company_name, party_type, status FROM clients
              ORDER BY name"
         );
+        $projectsStmt = $pdo->query(
+            "SELECT id, project_name, client_id FROM projects
+             WHERE status = 'active' ORDER BY project_name"
+        );
 
         echo json_encode([
             'success'    => true,
@@ -156,6 +219,7 @@ switch ($action) {
             'receivable_accounts' => $receivableAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
             'payable_accounts' => $payableAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
             'clients' => $clientsStmt->fetchAll(PDO::FETCH_ASSOC),
+            'projects' => $projectsStmt->fetchAll(PDO::FETCH_ASSOC),
         ]);
         break;
 
@@ -296,8 +360,16 @@ switch ($action) {
             $dueDate           = !empty($_POST['due_date']) ? $_POST['due_date'] : null;
             $categoryId        = (int) ($_POST['category_id'] ?? 0);
             $documentType      = trim($_POST['document_type'] ?? '');
+            $projectName       = trim($_POST['project_name'] ?? '');
 
             $clientId = !empty($_POST['client_id']) && (int)$_POST['client_id'] > 0 ? (int)$_POST['client_id'] : null;
+            $projectClientId = !empty($_POST['project_client_id']) && (int) $_POST['project_client_id'] > 0
+                ? (int) $_POST['project_client_id']
+                : $clientId;
+
+            if (strlen($projectName) > 255) {
+                throw new DomainException('Project names must be 255 characters or fewer.');
+            }
 
             $debitLines  = json_decode($_POST['debit_lines'] ?? '[]', true);
             $creditLines = json_decode($_POST['credit_lines'] ?? '[]', true);
@@ -499,6 +571,49 @@ switch ($action) {
             }
 
             $pdo->beginTransaction();
+            assertAccountingDateOpen($pdo, $transactionDate, true);
+
+            $projectId = null;
+            if ($projectName !== '') {
+                if ($projectClientId === null) {
+                    throw new DomainException('Select a customer before assigning a project.');
+                }
+
+                $projectClientStmt = $pdo->prepare(
+                    "SELECT id, party_type, status FROM clients WHERE id = :id FOR UPDATE"
+                );
+                $projectClientStmt->execute([':id' => $projectClientId]);
+                $projectClient = $projectClientStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$projectClient
+                    || !in_array($projectClient['party_type'], ['customer', 'both'], true)
+                    || $projectClient['status'] !== 'active') {
+                    throw new DomainException('Select an active customer for the project.');
+                }
+
+                $projectUpsert = $pdo->prepare(
+                    "INSERT INTO projects (project_name, client_id)
+                     VALUES (:project_name, :client_id)
+                     ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)"
+                );
+                $projectUpsert->execute([
+                    ':project_name' => $projectName,
+                    ':client_id' => $projectClientId,
+                ]);
+                $projectId = (int) $pdo->lastInsertId();
+
+                $projectStmt = $pdo->prepare(
+                    'SELECT client_id, status FROM projects WHERE id = :id FOR UPDATE'
+                );
+                $projectStmt->execute([':id' => $projectId]);
+                $project = $projectStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$project || (int) $project['client_id'] !== $projectClientId) {
+                    throw new DomainException('That project name is already assigned to another client.');
+                }
+                if ($project['status'] !== 'active') {
+                    throw new DomainException('That project is archived and cannot receive new transactions.');
+                }
+            }
+
             $allocationPlans = [];
             if ($hasReceivableEntries || $hasPayableEntries) {
                 $partyStmt = $pdo->prepare(
@@ -545,8 +660,8 @@ switch ($action) {
 
             $journalStmt = $pdo->prepare(
                 "INSERT INTO transaction_journals 
-                    (transaction_type_id, description, transaction_date, reference_no, due_date, total_amount, created_by, client_id, status)
-                VALUES (:type_id, :description, :date, :reference, :due_date, :total, :created_by, :client_id, 'posted')"
+                    (transaction_type_id, description, transaction_date, reference_no, due_date, total_amount, created_by, client_id, project_id, status)
+                VALUES (:type_id, :description, :date, :reference, :due_date, :total, :created_by, :client_id, :project_id, 'posted')"
             );
             
             $journalStmt->execute([
@@ -558,6 +673,7 @@ switch ($action) {
                 ':total'      => $totalDebits,
                 ':created_by' => $createdBy,
                 ':client_id'  => $clientId,
+                ':project_id' => $projectId,
             ]);
 
             $journalId = (int) $pdo->lastInsertId();
@@ -623,6 +739,7 @@ switch ($action) {
                     'transaction_type_id' => $transactionTypeId,
                     'total_amount' => $totalDebits,
                     'client_id' => $clientId,
+                    'project_id' => $projectId,
                     'reference_no' => $referenceNo,
                     'document_type' => $documentType !== '' ? $documentType : null,
                     'settlement_allocations' => $allocationPlans,
@@ -689,24 +806,26 @@ switch ($action) {
 
         $pdo = getDbConnection();
 
-        $checkStmt = $pdo->prepare("SELECT id, status FROM transaction_journals WHERE id = :id");
-        $checkStmt->execute([':id' => $journalId]);
-        $journal = $checkStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$journal) {
-            http_response_code(404);
-            echo json_encode(['error' => 'Journal entry not found.']);
-            break;
-        }
-
-        if ($journal['status'] === 'deletion_pending') {
-            http_response_code(422);
-            echo json_encode(['error' => 'Cannot edit an entry while a deletion request is pending review.']);
-            break;
-        }
-
         try {
             $pdo->beginTransaction();
+            $checkStmt = $pdo->prepare(
+                'SELECT id, status, transaction_date FROM transaction_journals WHERE id = :id FOR UPDATE'
+            );
+            $checkStmt->execute([':id' => $journalId]);
+            $journal = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$journal) {
+                $pdo->rollBack();
+                http_response_code(404);
+                echo json_encode(['error' => 'Journal entry not found.']);
+                break;
+            }
+            if ($journal['status'] === 'deletion_pending') {
+                $pdo->rollBack();
+                http_response_code(422);
+                echo json_encode(['error' => 'Cannot edit an entry while a deletion request is pending review.']);
+                break;
+            }
+            assertAccountingDateOpen($pdo, (string) $journal['transaction_date'], true);
 
             $updateStmt = $pdo->prepare(
                 "UPDATE transaction_journals
@@ -748,7 +867,14 @@ switch ($action) {
             echo json_encode(['success' => true, 'message' => 'Journal entry updated successfully.']);
 
         } catch (Throwable $e) {
-            $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            if ($e instanceof DomainException) {
+                http_response_code(422);
+                echo json_encode(['error' => $e->getMessage()]);
+                break;
+            }
             http_response_code(500);
             echo json_encode(['error' => 'Something went wrong while updating the entry: ' . $e->getMessage()]);
         }
@@ -845,6 +971,7 @@ switch ($action) {
                 echo json_encode(['success' => false, 'error' => 'Entry is invalid or already has a pending deletion request.']);
                 exit;
             }
+            assertAccountingDateOpen($pdo, (string) $journal['transaction_date'], true);
 
             $linesStmt = $pdo->prepare("SELECT * FROM transactions WHERE transaction_journal_id = :id");
             $linesStmt->execute([':id' => $journalId]);
@@ -868,6 +995,10 @@ switch ($action) {
 
             $pdo->commit();
             echo json_encode(['success' => true, 'message' => 'Deletion request submitted for Owner review.']);
+        } catch (DomainException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             http_response_code(500);
@@ -918,7 +1049,13 @@ switch ($action) {
         try {
             $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("SELECT * FROM deletion_requests WHERE id = :id AND status = 'pending' FOR UPDATE");
+            $stmt = $pdo->prepare(
+                "SELECT dr.*, tj.transaction_date
+                 FROM deletion_requests dr
+                 JOIN transaction_journals tj ON tj.id = dr.transaction_journal_id
+                 WHERE dr.id = :id AND dr.status = 'pending'
+                 FOR UPDATE"
+            );
             $stmt->execute([':id' => $requestId]);
             $req = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -930,6 +1067,7 @@ switch ($action) {
             }
 
             $journalId = (int)$req['transaction_journal_id'];
+            assertAccountingDateOpen($pdo, (string) $req['transaction_date'], true);
             ensurePartyDocumentCanBeVoided($pdo, $journalId);
 
             // Reverse balances
@@ -1004,7 +1142,13 @@ switch ($action) {
         try {
             $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("SELECT transaction_journal_id FROM deletion_requests WHERE id = :id AND status = 'pending' FOR UPDATE");
+            $stmt = $pdo->prepare(
+                "SELECT dr.transaction_journal_id, tj.transaction_date
+                 FROM deletion_requests dr
+                 JOIN transaction_journals tj ON tj.id = dr.transaction_journal_id
+                 WHERE dr.id = :id AND dr.status = 'pending'
+                 FOR UPDATE"
+            );
             $stmt->execute([':id' => $requestId]);
             $req = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -1015,6 +1159,7 @@ switch ($action) {
                 exit;
             }
 
+            assertAccountingDateOpen($pdo, (string) $req['transaction_date'], true);
             $restStmt = $pdo->prepare("UPDATE transaction_journals SET status = 'posted' WHERE id = :id");
             $restStmt->execute([':id' => $req['transaction_journal_id']]);
 
@@ -1027,6 +1172,10 @@ switch ($action) {
 
             $pdo->commit();
             echo json_encode(['success' => true, 'message' => 'Deletion request rejected. Entry restored to posted status.']);
+        } catch (DomainException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             http_response_code(500);
@@ -1055,7 +1204,9 @@ switch ($action) {
         try {
             $pdo->beginTransaction();
 
-            $stmt = $pdo->prepare("SELECT id, status FROM transaction_journals WHERE id = :id FOR UPDATE");
+            $stmt = $pdo->prepare(
+                'SELECT id, status, transaction_date FROM transaction_journals WHERE id = :id FOR UPDATE'
+            );
             $stmt->execute([':id' => $journalId]);
             $journal = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -1073,6 +1224,7 @@ switch ($action) {
                 exit;
             }
 
+            assertAccountingDateOpen($pdo, (string) $journal['transaction_date'], true);
             ensurePartyDocumentCanBeVoided($pdo, $journalId);
 
             $linesStmt = $pdo->prepare("SELECT account_id, amount, entry_type FROM transactions WHERE transaction_journal_id = :id");
@@ -1140,16 +1292,13 @@ switch ($action) {
     case 'recent':
         $limit = min(max((int) ($_GET['limit'] ?? 8), 1), 100);
         $offset = max((int) ($_GET['offset'] ?? 0), 0);
+        $search = trim((string) ($_GET['search'] ?? ''));
+        $dateFrom = trim((string) ($_GET['date_from'] ?? ''));
+        $dateTo = trim((string) ($_GET['date_to'] ?? ''));
+        $typeId = (int) ($_GET['transaction_type_id'] ?? 0);
         $pdo = getDbConnection();
-        $total = (int) $pdo->query(
-            "SELECT COUNT(*) FROM transaction_journals WHERE status != 'voided'"
-        )->fetchColumn();
 
-        $stmt = $pdo->prepare(
-            "SELECT tj.id, tj.description, tj.transaction_date, tj.total_amount, 
-                    tt.name AS type_name, c.category_name,
-                    client.name AS client_name
-             FROM transaction_journals tj
+        $joins = " FROM transaction_journals tj
              JOIN transaction_types tt ON tt.id = tj.transaction_type_id
              LEFT JOIN (
                  SELECT jc.transaction_journal_id,
@@ -1158,11 +1307,54 @@ switch ($action) {
                  JOIN categories cat ON cat.id = jc.category_id
                  GROUP BY jc.transaction_journal_id
              ) c ON c.transaction_journal_id = tj.id
-             LEFT JOIN clients client ON client.id = tj.client_id
-             WHERE tj.status != 'voided'
+             LEFT JOIN clients client ON client.id = tj.client_id";
+        $where = ["tj.status != 'voided'"];
+        $params = [];
+
+        if ($search !== '') {
+            $where[] = '(tj.description LIKE :search_description
+                OR tj.reference_no LIKE :search_reference
+                OR tt.name LIKE :search_type
+                OR client.name LIKE :search_client
+                OR client.company_name LIKE :search_company
+                OR c.category_name LIKE :search_category)';
+            $searchTerm = '%' . $search . '%';
+            $params[':search_description'] = $searchTerm;
+            $params[':search_reference'] = $searchTerm;
+            $params[':search_type'] = $searchTerm;
+            $params[':search_client'] = $searchTerm;
+            $params[':search_company'] = $searchTerm;
+            $params[':search_category'] = $searchTerm;
+        }
+        if ($dateFrom !== '') {
+            $where[] = 'tj.transaction_date >= :date_from';
+            $params[':date_from'] = $dateFrom;
+        }
+        if ($dateTo !== '') {
+            $where[] = 'tj.transaction_date <= :date_to';
+            $params[':date_to'] = $dateTo;
+        }
+        if ($typeId > 0) {
+            $where[] = 'tj.transaction_type_id = :type_id';
+            $params[':type_id'] = $typeId;
+        }
+        $whereSql = ' WHERE ' . implode(' AND ', $where);
+
+        $totalStmt = $pdo->prepare('SELECT COUNT(DISTINCT tj.id)' . $joins . $whereSql);
+        $totalStmt->execute($params);
+        $total = (int) $totalStmt->fetchColumn();
+
+        $stmt = $pdo->prepare(
+            "SELECT tj.id, tj.description, tj.transaction_date, tj.reference_no, tj.total_amount,
+                    tt.name AS type_name, c.category_name,
+                    client.name AS client_name
+            " . $joins . $whereSql . "
              ORDER BY tj.transaction_date DESC, tj.id DESC
              LIMIT :limit OFFSET :offset"
         );
+        foreach ($params as $name => $value) {
+            $stmt->bindValue($name, $value);
+        }
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
@@ -1723,6 +1915,18 @@ switch ($action) {
             else $totalOutflow = (float) $row['total'];
         }
 
+        if (($_GET['summary_only'] ?? '') === '1') {
+            echo json_encode([
+                'success' => true,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'total_inflow' => $totalInflow,
+                'total_outflow' => $totalOutflow,
+                'net_cash_flow' => $totalInflow - $totalOutflow,
+            ]);
+            break;
+        }
+
         $dailyStmt = $pdo->prepare(
             "SELECT tj.transaction_date, tt.name AS type_name, SUM(t.amount) AS total
              FROM transaction_journals tj
@@ -2065,7 +2269,11 @@ switch ($action) {
         // Fetch all clients for the management table
     case 'list-clients':
         $pdo = getDbConnection();
-        $stmt = $pdo->query("SELECT * FROM clients ORDER BY created_at DESC");
+        $stmt = $pdo->prepare(
+            'SELECT id, name, company_name, party_type, email, phone, logo, status, created_at
+             FROM clients ORDER BY created_at DESC'
+        );
+        $stmt->execute();
         $clients = $stmt->fetchAll(PDO::FETCH_ASSOC);
         echo json_encode(['success' => true, 'clients' => $clients]);
         break;
@@ -2080,7 +2288,7 @@ switch ($action) {
 
         $pdo = getDbConnection();
         $clientStmt = $pdo->prepare(
-            "SELECT id, name, company_name, party_type, email, phone, status
+            "SELECT id, name, company_name, party_type, email, phone, logo, status
              FROM clients WHERE id = :id"
         );
         $clientStmt->execute([':id' => $clientId]);
@@ -2243,34 +2451,60 @@ switch ($action) {
             break;
         }
 
-        $pdo->beginTransaction();
-        $stmt = $pdo->prepare(
-            "INSERT INTO clients (name, company_name, party_type, email, phone, status, created_at)
-             VALUES (:name, :company, :party_type, :email, :phone, :status, NOW())"
-        );
-        $stmt->execute([
-            ':name' => $name,
-            ':company' => $company,
-            ':party_type' => $partyType,
-            ':email' => $email,
-            ':phone' => $phone,
-            ':status' => $status,
-        ]);
+        try {
+            $logoPath = saveClientLogoUpload();
+        } catch (DomainException $exception) {
+            http_response_code(422);
+            echo json_encode(['success' => false, 'error' => $exception->getMessage()]);
+            break;
+        } catch (Throwable $exception) {
+            error_log('Client logo upload failed: ' . $exception->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'The client logo could not be saved.']);
+            break;
+        }
 
-        $clientId = (int) $pdo->lastInsertId();
-        logAudit(
-            $pdo,
-            $userId,
-            'CREATE_CLIENT',
-            'client',
-            $clientId,
-            json_encode([
-                'name' => $name,
-                'company_name' => $company,
-                'party_type' => $partyType,
-            ], JSON_THROW_ON_ERROR)
-        );
-        $pdo->commit();
+        try {
+            $pdo->beginTransaction();
+            $stmt = $pdo->prepare(
+                "INSERT INTO clients (name, company_name, party_type, email, phone, logo, status, created_at)
+                 VALUES (:name, :company, :party_type, :email, :phone, :logo, :status, NOW())"
+            );
+            $stmt->execute([
+                ':name' => $name,
+                ':company' => $company !== '' ? $company : null,
+                ':party_type' => $partyType,
+                ':email' => $email !== '' ? $email : null,
+                ':phone' => $phone !== '' ? $phone : null,
+                ':logo' => $logoPath,
+                ':status' => $status,
+            ]);
+
+            $clientId = (int) $pdo->lastInsertId();
+            logAudit(
+                $pdo,
+                $userId,
+                'CREATE_CLIENT',
+                'client',
+                $clientId,
+                json_encode([
+                    'name' => $name,
+                    'company_name' => $company,
+                    'party_type' => $partyType,
+                    'has_logo' => $logoPath !== null,
+                ], JSON_THROW_ON_ERROR)
+            );
+            $pdo->commit();
+        } catch (Throwable $exception) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            deleteClientLogoFile($logoPath);
+            error_log('Client creation failed: ' . $exception->getMessage());
+            http_response_code(500);
+            echo json_encode(['success' => false, 'error' => 'Failed to create client. Please try again.']);
+            break;
+        }
 
         echo json_encode(['success' => true, 'message' => 'Client created successfully.']);
         break;
@@ -2303,14 +2537,16 @@ switch ($action) {
         }
 
         $pdo = getDbConnection();
-        $checkStmt = $pdo->prepare('SELECT id FROM clients WHERE id = :id');
+        $checkStmt = $pdo->prepare('SELECT id, logo FROM clients WHERE id = :id');
         $checkStmt->execute([':id' => $clientId]);
-        if (!$checkStmt->fetchColumn()) {
+        $existingClient = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$existingClient) {
             http_response_code(404);
             echo json_encode(['success' => false, 'error' => 'Client not found.']);
             break;
         }
 
+        $logoPath = null;
         try {
             $pdo->beginTransaction();
             $activityStmt = $pdo->prepare(
@@ -2337,10 +2573,18 @@ switch ($action) {
                 ]);
                 break;
             }
+            try {
+                $logoPath = saveClientLogoUpload();
+            } catch (DomainException $exception) {
+                $pdo->rollBack();
+                http_response_code(422);
+                echo json_encode(['success' => false, 'error' => $exception->getMessage()]);
+                break;
+            }
             $updateStmt = $pdo->prepare(
                 'UPDATE clients
                  SET name = :name, company_name = :company, party_type = :party_type, email = :email,
-                     phone = :phone, status = :status
+                     phone = :phone, logo = COALESCE(:logo, logo), status = :status
                  WHERE id = :id'
             );
             $updateStmt->execute([
@@ -2349,6 +2593,7 @@ switch ($action) {
                 ':party_type' => $partyType,
                 ':email' => $email !== '' ? $email : null,
                 ':phone' => $phone !== '' ? $phone : null,
+                ':logo' => $logoPath,
                 ':status' => $status,
                 ':id' => $clientId,
             ]);
@@ -2365,6 +2610,7 @@ switch ($action) {
                     'email' => $email,
                     'phone' => $phone,
                     'status' => $status,
+                    'has_logo' => $logoPath !== null || $existingClient['logo'] !== null,
                 ], JSON_THROW_ON_ERROR)
             );
             $pdo->commit();
@@ -2372,10 +2618,15 @@ switch ($action) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+            deleteClientLogoFile($logoPath);
             error_log('Client update failed: ' . $e->getMessage());
             http_response_code(500);
             echo json_encode(['success' => false, 'error' => 'Failed to update client. Please try again.']);
             break;
+        }
+
+        if ($logoPath !== null) {
+            deleteClientLogoFile($existingClient['logo'] ?? null);
         }
 
         echo json_encode(['success' => true, 'message' => 'Client updated successfully.']);

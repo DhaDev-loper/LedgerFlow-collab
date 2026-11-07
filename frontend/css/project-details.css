@@ -1,0 +1,404 @@
+.project-report-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.project-report-toolbar .quick-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.project-statement {
+    max-width: 1120px;
+    margin: 0 auto;
+    color: var(--dark-text, #f3f4f6);
+}
+
+.statement-heading,
+.project-identity,
+.project-profit-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+
+.statement-heading {
+    padding: 1.2rem 0;
+    border-bottom: 1px solid var(--dark-border, #374151);
+}
+
+.statement-brand {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.statement-kicker,
+.statement-generated,
+.project-meta,
+.statement-section-heading > span,
+.statement-footnote,
+.summary-label {
+    color: var(--dark-text-muted, #9ca3af);
+    font-size: 0.82rem;
+}
+
+.statement-kicker {
+    margin-top: 0.3rem;
+    letter-spacing: 0.08em;
+}
+
+.statement-generated {
+    display: grid;
+    text-align: right;
+}
+
+.project-identity {
+    align-items: center;
+    padding: 1.6rem 0 1.2rem;
+}
+
+.project-identity h1 {
+    margin: 0 0 0.35rem;
+    font-size: 1.55rem;
+    font-weight: 700;
+}
+
+.project-identity p {
+    color: var(--dark-text-muted, #9ca3af);
+}
+
+.project-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    text-align: right;
+}
+
+.project-status {
+    display: inline-block;
+    padding: 0.22rem 0.55rem;
+    border: 1px solid var(--dark-border, #374151);
+    border-radius: 4px;
+    color: #a7f3d0;
+    text-transform: capitalize;
+}
+
+.project-status.archived {
+    color: #fcd34d;
+}
+
+.statement-section {
+    margin-top: 1.25rem;
+}
+
+.statement-section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1px solid var(--dark-border, #374151);
+}
+
+.statement-section-heading h2 {
+    margin: 0;
+    padding: 0.55rem 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.project-financial-table {
+    margin: 0;
+    color: inherit;
+    --bs-table-bg: transparent;
+    --bs-table-color: inherit;
+    --bs-table-border-color: var(--dark-border, #374151);
+}
+
+.project-financial-table th,
+.project-financial-table td {
+    padding: 0.7rem 0.5rem;
+    color: inherit;
+}
+
+.project-financial-table thead th {
+    color: var(--dark-text-muted, #9ca3af);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.project-financial-table tfoot th {
+    border-top: 1px solid var(--dark-border, #374151);
+    font-weight: 700;
+}
+
+.project-profit-summary {
+    align-items: center;
+    margin-top: 1.7rem;
+    padding: 1rem 1.2rem;
+    border-left: 3px solid #22c55e;
+    background: rgba(34, 197, 94, 0.09);
+}
+
+.project-profit-summary.loss {
+    border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.09);
+}
+
+.project-profit-summary > div {
+    display: grid;
+    gap: 0.25rem;
+}
+
+.project-profit-summary strong {
+    font-size: 1.35rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.project-profit-summary.loss strong {
+    color: #f87171;
+}
+
+.project-profit-summary:not(.loss) strong {
+    color: #4ade80;
+}
+
+.summary-margin {
+    text-align: right;
+}
+
+.statement-footnote {
+    margin-top: 0.8rem;
+}
+
+@media (max-width: 600px) {
+    .project-report-toolbar,
+    .project-identity {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .project-report-toolbar > div {
+        justify-content: flex-end;
+    }
+
+    .project-meta {
+        justify-content: space-between;
+        text-align: left;
+    }
+
+    .statement-heading {
+        align-items: flex-start;
+    }
+}
+
+@media print {
+    body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+
+    .modal-content,
+    .card,
+    .container,
+    .project-statement,
+    .app-shell,
+    .main-content,
+    .content-area {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: none !important;
+        box-shadow: none !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .btn,
+    .navbar,
+    .sidebar,
+    .global-mega-nav,
+    .project-report-toolbar {
+        display: none !important;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        border-bottom: 1px solid #000 !important;
+        color: #000 !important;
+    }
+
+    .statement-heading,
+    .statement-section-heading,
+    .project-financial-table tfoot th {
+        border-color: #000 !important;
+    }
+
+    .statement-generated,
+    .statement-kicker,
+    .project-identity p,
+    .project-meta,
+    .statement-section-heading > span,
+    .statement-footnote,
+    .summary-label {
+        color: #333 !important;
+    }
+
+    .project-profit-summary,
+    .project-profit-summary.loss {
+        border: 1px solid #000 !important;
+        background: #fff !important;
+    }
+
+    .project-profit-summary strong,
+    .project-profit-summary.loss strong,
+    .project-status {
+        color: #000 !important;
+    }
+}
+
+.project-statement {
+    position: relative;
+    color: #1e293b;
+}
+
+.project-report-meta {
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(100px, 1fr));
+    gap: 12px 18px;
+    margin: -10px 0 18px;
+    padding: 10px 8px;
+    border-bottom: 1px solid #cbd5e1;
+    background: #f8fafc;
+}
+
+.project-report-meta > div {
+    display: grid;
+    align-content: start;
+    gap: 3px;
+    min-width: 0;
+}
+
+.project-report-meta > div > span {
+    color: #64748b;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.project-report-meta strong {
+    color: #0f172a;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+}
+
+.project-report-meta .project-meta-main strong {
+    font-size: 13px;
+}
+
+.project-status {
+    justify-self: start;
+    padding: 2px 7px;
+    border: 1px solid #86efac;
+    border-radius: 999px;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.project-status.archived {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.project-margin-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 10px;
+    padding: 8px;
+    border-bottom: 1px solid #cbd5e1;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.project-margin-summary strong {
+    color: #16803c;
+    text-align: right;
+}
+
+.project-statement.is-loss .project-margin-summary strong {
+    color: #b42318;
+}
+
+.project-statement.is-profit .project-net-amount {
+    color: #16803c;
+}
+
+.project-statement.is-loss .project-net-amount {
+    color: #b42318;
+}
+
+@media (max-width: 700px) {
+    .project-report-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media print {
+    body * {
+        visibility: hidden !important;
+    }
+
+    .project-statement,
+    .project-statement * {
+        visibility: visible !important;
+    }
+
+    .project-statement {
+        position: absolute !important;
+        inset: 0 auto auto 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        color: #1e293b !important;
+        box-shadow: none !important;
+    }
+
+    .project-report-toolbar {
+        display: none !important;
+    }
+
+    .project-report-meta,
+    .project-report-meta strong,
+    .project-report-meta > div > span,
+    .project-margin-summary,
+    .project-margin-summary strong,
+    .project-status {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .project-status,
+    .project-status.archived {
+        color: #0f172a !important;
+    }
+
+    .project-statement.is-profit .project-net-amount {
+        color: #16803c !important;
+    }
+
+    .project-statement.is-loss .project-net-amount {
+        color: #b42318 !important;
+    }
+}

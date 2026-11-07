@@ -152,25 +152,4 @@ firstOfMonth.setDate(1);
 document.getElementById('cfDateFrom').value = firstOfMonth.toISOString().split('T')[0];
 document.getElementById('cfDateTo').value = today;
 
-//-- journal entries navigation expandble
-document.addEventListener('DOMContentLoaded', () => {
-    const journalExpandable = document.getElementById('journalExpandable');
-    const journalTrigger = document.getElementById('journalTrigger');
-
-    journalTrigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Toggle active state to trigger expand animation
-        journalExpandable.classList.toggle('active');
-    });
-
-    // Optional: Close expansion when clicking outside the nav
-    document.addEventListener('click', (e) => {
-        if (!journalExpandable.contains(e.target)) {
-            journalExpandable.classList.remove('active');
-        }
-    });
-});
-
 loadCashflowReport();

@@ -35,7 +35,7 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-// ---------- Business Profile tab ----------
+// ---------- Printed document details tab ----------
 async function loadBusinessTab() {
     const container = document.getElementById('settingsContent');
     container.innerHTML = `<p class="text-center py-4" style="color: var(--dark-text-muted);">Loading...</p>`;
@@ -55,21 +55,24 @@ async function loadBusinessTab() {
         container.innerHTML = `
             <div class="panel settings-card">
                 <div class="panel-body">
+                    <div class="alert alert-info py-2 small" role="note">
+                        The business name appears on PDF report headers and journal-entry receipts. Address and contact number appear on journal-entry receipts. These details do not change the app name or on-screen logo.
+                    </div>
                     <form id="businessForm">
                         <div class="mb-3">
-                            <label class="form-label small">Business Name</label>
+                            <label class="form-label small">Name on Reports and Receipts</label>
                             <input type="text" class="form-control form-control-dark" id="businessName" value="${escapeHtml(s.business_name)}" ${disabledAttr} required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">Address</label>
+                            <label class="form-label small">Address on Receipts</label>
                             <input type="text" class="form-control form-control-dark" id="businessAddress" value="${escapeHtml(s.address || '')}" ${disabledAttr}>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label small">Contact Number</label>
+                            <label class="form-label small">Contact Number on Receipts</label>
                             <input type="text" class="form-control form-control-dark" id="businessContact" value="${escapeHtml(s.contact_number || '')}" ${disabledAttr}>
                         </div>
                         <div id="businessError" class="alert alert-danger py-2 px-3 small d-none"></div>
-                        ${CAN_EDIT_BUSINESS ? '<button type="submit" class="quick-action-btn primary">Save Changes</button>' : '<p class="small" style="color: var(--dark-text-muted);">Only admins can edit business info.</p>'}
+                        ${CAN_EDIT_BUSINESS ? '<button type="submit" class="quick-action-btn primary">Save Changes</button>' : '<p class="small" style="color: var(--dark-text-muted);">Only admins can edit printed document details.</p>'}
                     </form>
                 </div>
             </div>
@@ -93,7 +96,7 @@ async function loadBusinessTab() {
                 const result = await res.json();
 
                 if (result.success) {
-                    alert('Business settings saved.');
+                    alert('Printed document details saved.');
                 } else {
                     errorBox.textContent = result.error || 'Something went wrong.';
                     errorBox.classList.remove('d-none');
@@ -376,27 +379,6 @@ function loadAppearanceTab() {
         loadAppearanceTab();
     });
 }
-
-//-- journal entries navigation expandble
-document.addEventListener('DOMContentLoaded', () => {
-    const journalExpandable = document.getElementById('journalExpandable');
-    const journalTrigger = document.getElementById('journalTrigger');
-
-    journalTrigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Toggle active state to trigger expand animation
-        journalExpandable.classList.toggle('active');
-    });
-
-    // Optional: Close expansion when clicking outside the nav
-    document.addEventListener('click', (e) => {
-        if (!journalExpandable.contains(e.target)) {
-            journalExpandable.classList.remove('active');
-        }
-    });
-});
 
 // ---------- Logout ----------
 document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {

@@ -50,7 +50,7 @@
                         </div>
                         <div class="col-md-4">
                             <label for="paymentAmount" class="form-label small">Amount (₱)</label>
-                            <input type="number" class="form-control form-control-dark" id="paymentAmount" min="0.01" step="0.01" required>
+                            <input type="text" inputmode="decimal" data-currency-input class="form-control form-control-dark" id="paymentAmount" min="0.01" step="0.01" required>
                         </div>
                         <div class="col-md-4">
                             <label for="paymentDate" class="form-label small">Date</label>

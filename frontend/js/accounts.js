@@ -637,6 +637,7 @@ function openVerificationForm(imagePath, extracted, imageUrl = imagePath) {
     document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
     document.getElementById('scannedRef').value = extracted.reference_no || '';
     document.getElementById('scannedAmount').value = extracted.amount || '0.00';
+    window.formatCurrencyInput?.(document.getElementById('scannedAmount'));
 
     populateScanAccounts();
 
@@ -677,7 +678,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
     const vendor = document.getElementById('scannedVendor').value.trim();
     const date = document.getElementById('scannedDate').value;
     const ref = document.getElementById('scannedRef').value.trim();
-    const amount = parseFloat(document.getElementById('scannedAmount').value);
+    const amount = window.parseCurrencyValue(document.getElementById('scannedAmount').value);
     const debitAcc = document.getElementById('scannedDebitAccount').value;
     const creditAcc = document.getElementById('scannedCreditAccount').value;
 

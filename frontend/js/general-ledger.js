@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 const API_URL = 'routes/journal.php';
+let ledgerRequestId = 0;
 
 function escapeHtml(str) {
     const div = document.createElement('div');
@@ -77,6 +78,7 @@ async function loadLedger() {
 
     if (!accountId) return;
 
+    const requestId = ++ledgerRequestId;
     container.innerHTML = `<p class="text-center py-5" style="color: var(--dark-text-muted);">Loading...</p>`;
 
     const dateFrom = document.getElementById('ledgerDateFrom').value;
@@ -89,6 +91,7 @@ async function loadLedger() {
 
         const response = await fetch(`${API_URL}?${params.toString()}`);
         const data = await response.json();
+        if (requestId !== ledgerRequestId) return;
 
         if (!data.success) {
             container.innerHTML = `<p class="text-center py-5 text-danger">${escapeHtml(data.error || 'Failed to load ledger.')}</p>`;
@@ -146,16 +149,15 @@ async function loadLedger() {
         `;
 
     } catch (err) {
+        if (requestId !== ledgerRequestId) return;
         console.error('Failed to load ledger:', err);
         container.innerHTML = `<p class="text-center py-5 text-danger">Could not reach the server.</p>`;
     }
 }
 
-// Button listener to manual reload/filter
-document.getElementById('loadLedgerBtn')?.addEventListener('click', loadLedger);
-
-// Auto reload when changing account dropdown
 document.getElementById('ledgerAccountId')?.addEventListener('change', loadLedger);
+document.getElementById('ledgerDateFrom')?.addEventListener('change', loadLedger);
+document.getElementById('ledgerDateTo')?.addEventListener('change', loadLedger);
 
 document.getElementById('logoutBtn')?.addEventListener('click', async (e) => {
     e.preventDefault();

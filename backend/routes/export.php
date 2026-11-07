@@ -20,9 +20,12 @@ $action = $_GET['action'] ?? '';
 $isPreview = isset($_GET['preview']) && $_GET['preview'] === '1';
 $pdo = getDbConnection();
 
-// Fetch business name once, default to 'Kobosocial' if missing
-$bizStmt = $pdo->query("SELECT business_name FROM business_settings WHERE id = 1");
-$businessName = $bizStmt->fetch()['business_name'] ?? 'Kobosocial';
+// Fetch the fixed organization's document details once.
+$bizStmt = $pdo->query("SELECT business_name, address, contact_number FROM business_settings WHERE id = 1");
+$businessSettings = $bizStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+$businessName = $businessSettings['business_name'] ?? 'Kobosocial';
+$businessAddress = trim((string) ($businessSettings['address'] ?? ''));
+$businessContact = trim((string) ($businessSettings['contact_number'] ?? ''));
 
 /**
  * Shared CSS for PDF Reports
@@ -539,6 +542,13 @@ switch ($action) {
     $lines = $lineStmt->fetchAll(PDO::FETCH_ASSOC);
 
     $safeBusinessName = htmlspecialchars($businessName ?? 'WRS', ENT_QUOTES, 'UTF-8');
+    $receiptContactDetails = array_filter([
+        $businessAddress,
+        $businessContact,
+    ], static fn(string $detail): bool => $detail !== '');
+    $receiptContactHtml = $receiptContactDetails
+        ? "<div class='brand-sub'>" . htmlspecialchars(implode(' · ', $receiptContactDetails), ENT_QUOTES, 'UTF-8') . "</div>"
+        : '';
     $fmt = fn($n) => '&#8369;' . number_format((float)$n, 2);
 
     $rowsHtml = '';
@@ -566,6 +576,7 @@ switch ($action) {
                 <td style='vertical-align: top;'>
                     <div class='brand-title'>{$safeBusinessName}</div>
                     <div class='brand-sub'>Transaction Voucher / Receipt</div>
+                    {$receiptContactHtml}
                 </td>
                 <td style='vertical-align: top;'>
                     <div class='report-title'>Entry #" . str_pad((string)$journal['id'], 5, '0', STR_PAD_LEFT) . "</div>

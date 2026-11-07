@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const journalTrigger = document.getElementById('journalTrigger');
     let page = 1;
     let total = 0;
+    let searchTimeout;
+    let auditRequestId = 0;
 
     journalTrigger?.addEventListener('click', (event) => {
         event.preventDefault();
@@ -138,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadAuditLogs() {
+        const requestId = ++auditRequestId;
         tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4">Loading...</td></tr>';
         const query = new URLSearchParams({
             page: String(page),
@@ -155,6 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'same-origin',
             });
             const result = await response.json();
+            if (requestId !== auditRequestId) return;
             if (!response.ok || !result.success) {
                 throw new Error(result.error || 'Unable to load audit logs.');
             }
@@ -182,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
             previousButton.disabled = page <= 1;
             nextButton.disabled = page >= pageCount;
         } catch (error) {
+            if (requestId !== auditRequestId) return;
             tableBody.replaceChildren();
             const row = document.createElement('tr');
             const cell = document.createElement('td');
@@ -202,8 +207,22 @@ document.addEventListener('DOMContentLoaded', () => {
         page = 1;
         loadAuditLogs();
     });
+    document.getElementById('auditSearch').addEventListener('input', () => {
+        window.clearTimeout(searchTimeout);
+        searchTimeout = window.setTimeout(() => {
+            page = 1;
+            loadAuditLogs();
+        }, 300);
+    });
+    ['auditAction', 'auditEntity', 'auditDateFrom', 'auditDateTo'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+            page = 1;
+            loadAuditLogs();
+        });
+    });
     clearButton.addEventListener('click', () => {
         window.setTimeout(() => {
+            window.clearTimeout(searchTimeout);
             page = 1;
             loadAuditLogs();
         });

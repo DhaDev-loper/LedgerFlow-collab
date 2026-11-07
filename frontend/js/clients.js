@@ -18,6 +18,8 @@ window.viewClient = async function (clientId) {
     if (makePaymentButton) makePaymentButton.disabled = true;
     document.getElementById('clientHistoryBody').innerHTML =
         '<tr><td colspan="4" class="text-center py-4 client-detail-muted">Loading transaction history...</td></tr>';
+    document.getElementById('clientProjectsBody').innerHTML =
+        '<tr><td colspan="6" class="text-center py-4 client-detail-muted">Loading client projects...</td></tr>';
     clientDetailModal.show();
 
     try {
@@ -59,12 +61,53 @@ window.viewClient = async function (clientId) {
                 : 'Total Unsettled Balance (A/R)';
         }
         renderClientHistory(data.history || []);
+        loadClientProjects(clientId);
     } catch (error) {
         document.getElementById('clientDetailName').textContent = 'Client Details';
         document.getElementById('clientHistoryBody').innerHTML =
             `<tr><td colspan="4" class="text-center py-3 text-danger">${escapeClientHtml(error.message)}</td></tr>`;
     }
 };
+
+async function loadClientProjects(clientId) {
+    const tbody = document.getElementById('clientProjectsBody');
+    try {
+        const response = await fetch(
+            `reports/project_pnl.php?action=client-projects&client_id=${encodeURIComponent(clientId)}`
+        );
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Could not load client projects.');
+        }
+        if (Number(window.currentClientDetailId) !== Number(clientId)) return;
+        if (!data.projects.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 client-detail-muted">No projects are linked to this client.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.projects.map(project => {
+            const isActive = project.status === 'active';
+            const profitClass = Number(project.net_profit) < 0 ? 'is-project-loss' : 'is-project-profit';
+            return `
+                <tr>
+                    <td class="client-project-name">${escapeClientHtml(project.project_name)}</td>
+                    <td><span class="client-project-status ${isActive ? 'is-active' : 'is-completed'}">${isActive ? 'Active' : 'Completed'}</span></td>
+                    <td class="text-end text-nowrap">${formatPaymentCurrency(project.total_revenue)}</td>
+                    <td class="text-end text-nowrap">${formatPaymentCurrency(project.total_expense)}</td>
+                    <td class="text-end text-nowrap ${profitClass}">${formatPaymentCurrency(project.net_profit)}</td>
+                    <td class="text-end text-nowrap">
+                        <a class="quick-action-btn primary client-project-report-btn" href="project-details.php?project_id=${Number(project.id)}">
+                            View P&amp;L Statement
+                        </a>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        if (Number(window.currentClientDetailId) !== Number(clientId)) return;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">${escapeClientHtml(error.message || 'Could not load client projects.')}</td></tr>`;
+    }
+}
 
 function renderClientHistory(history) {
     const tbody = document.getElementById('clientHistoryBody');

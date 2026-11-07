@@ -7,6 +7,7 @@ const gridColor = dashboardThemeStyles.getPropertyValue('--dark-border').trim();
 const tickColor = dashboardThemeStyles.getPropertyValue('--dark-text-muted').trim();
 const chartSurface = dashboardThemeStyles.getPropertyValue('--dark-surface').trim();
 const chartText = dashboardThemeStyles.getPropertyValue('--dark-text').trim();
+let dashboardCashFlowRequestId = 0;
 
 
 async function loadCashflowChart() {
@@ -97,6 +98,82 @@ async function loadCashflowChart() {
         console.error('Failed to load cashflow chart:', err);
     }
 }
+
+function getDashboardDateInputValue(date) {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 10);
+}
+
+async function loadDashboardCashFlowKpis() {
+    const periodFilter = document.getElementById('periodFilter');
+    const periodDays = Number(periodFilter?.value);
+    if (![1, 7, 30, 365].includes(periodDays)) return;
+
+    const endDate = new Date();
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - periodDays + 1);
+    const dateFrom = getDashboardDateInputValue(startDate);
+    const dateTo = getDashboardDateInputValue(endDate);
+    const periodLabel = periodFilter.selectedOptions[0]?.textContent.trim() || 'Selected period';
+    const requestId = ++dashboardCashFlowRequestId;
+
+    try {
+        const params = new URLSearchParams({
+            action: 'cashflow-report',
+            date_from: dateFrom,
+            date_to: dateTo,
+            summary_only: '1',
+        });
+        const response = await fetch(`routes/journal.php?${params.toString()}`);
+        const data = await response.json();
+        if (requestId !== dashboardCashFlowRequestId) return;
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || 'Could not load cash flow totals.');
+        }
+
+        document.getElementById('dashboardCashInflow').textContent = formatMoney(data.total_inflow);
+        document.getElementById('dashboardCashOutflow').textContent = formatMoney(data.total_outflow);
+        const netCashFlow = Number(data.net_cash_flow) || 0;
+        const netElement = document.getElementById('dashboardNetCashFlow');
+        netElement.textContent = `${netCashFlow < 0 ? '-' : ''}${formatMoney(netCashFlow)}`;
+        netElement.classList.toggle('positive', netCashFlow >= 0);
+        netElement.classList.toggle('negative', netCashFlow < 0);
+
+        ['dashboardCashInflowPeriod', 'dashboardCashOutflowPeriod', 'dashboardNetCashFlowPeriod']
+            .forEach(id => {
+                document.getElementById(id).textContent = periodLabel;
+            });
+    } catch (error) {
+        if (requestId !== dashboardCashFlowRequestId) return;
+        console.error('Failed to load dashboard cash flow KPIs:', error);
+        ['dashboardCashInflow', 'dashboardCashOutflow', 'dashboardNetCashFlow']
+            .forEach(id => {
+                document.getElementById(id).textContent = 'Unavailable';
+            });
+    }
+}
+
+document.getElementById('toggleDashboardKpiView')?.addEventListener('click', event => {
+    const button = event.currentTarget;
+    const showCashFlow = button.dataset.view !== 'cash-flow';
+    const arApView = document.getElementById('receivablesPayablesKpiView');
+    const cashFlowView = document.getElementById('cashFlowKpiView');
+    const activeView = showCashFlow ? cashFlowView : arApView;
+    const inactiveView = showCashFlow ? arApView : cashFlowView;
+
+    inactiveView.classList.add('d-none');
+    inactiveView.classList.remove('dashboard-kpi-view-enter');
+    inactiveView.setAttribute('aria-hidden', 'true');
+    inactiveView.inert = true;
+
+    activeView.classList.remove('d-none');
+    activeView.classList.add('dashboard-kpi-view-enter');
+    activeView.setAttribute('aria-hidden', 'false');
+    activeView.inert = false;
+    button.dataset.view = showCashFlow ? 'cash-flow' : 'receivables-payables';
+    button.setAttribute('aria-pressed', String(showCashFlow));
+    button.textContent = showCashFlow ? 'Show Receivables & Payables' : 'Show Cash Flow KPIs';
+});
 
 // =====================================================================
 // Shared helpers — defined ONCE, used everywhere in this file
@@ -251,6 +328,29 @@ document.getElementById('dueNotificationsModal')?.addEventListener('show.bs.moda
 
 let recentTransactionsPage = 1;
 let recentTransactionsRowsPerPage = 10;
+let recentTransactionsRequestId = 0;
+let recentTransactionsSearchTimeout;
+
+function applyRecentTransactionFilters() {
+    recentTransactionsPage = 1;
+    loadRecentTransactions();
+}
+
+document.getElementById('transactionSearch')?.addEventListener('input', () => {
+    window.clearTimeout(recentTransactionsSearchTimeout);
+    recentTransactionsSearchTimeout = window.setTimeout(applyRecentTransactionFilters, 300);
+});
+['transactionTypeFilter', 'transactionDateFrom', 'transactionDateTo'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', applyRecentTransactionFilters);
+});
+document.getElementById('clearTransactionFilters')?.addEventListener('click', () => {
+    ['transactionSearch', 'transactionTypeFilter', 'transactionDateFrom', 'transactionDateTo'].forEach(id => {
+        const control = document.getElementById(id);
+        if (control) control.value = '';
+    });
+    window.clearTimeout(recentTransactionsSearchTimeout);
+    applyRecentTransactionFilters();
+});
 
 document.getElementById('dashboardRecentRowsPerPage')?.addEventListener('change', event => {
     const selectedPageSize = Number(event.target.value);
@@ -314,19 +414,40 @@ async function loadRecentTransactions() {
     const tbody = document.getElementById('recentTransactionsBody');
     if (!tbody) return;
 
+    const requestId = ++recentTransactionsRequestId;
     try {
         const offset = (recentTransactionsPage - 1) * recentTransactionsRowsPerPage;
-        const response = await fetch(
-            `routes/journal.php?action=recent&limit=${recentTransactionsRowsPerPage}&offset=${offset}`
-        );
+        const params = new URLSearchParams({
+            action: 'recent',
+            limit: String(recentTransactionsRowsPerPage),
+            offset: String(offset),
+        });
+        const search = document.getElementById('transactionSearch')?.value.trim() || '';
+        const typeId = document.getElementById('transactionTypeFilter')?.value || '';
+        const dateFrom = document.getElementById('transactionDateFrom')?.value || '';
+        const dateTo = document.getElementById('transactionDateTo')?.value || '';
+        if (search) params.set('search', search);
+        if (typeId) params.set('transaction_type_id', typeId);
+        if (dateFrom) params.set('date_from', dateFrom);
+        if (dateTo) params.set('date_to', dateTo);
+
+        const response = await fetch(`routes/journal.php?${params.toString()}`);
         const data = await response.json();
+        if (requestId !== recentTransactionsRequestId) return;
 
         if (!response.ok || !data.success || !Array.isArray(data.transactions)) {
             throw new Error(data.error || 'Failed to load recent transactions.');
         }
 
         if (data.transactions.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3" style="color: var(--dark-text-muted);">No transactions yet.</td></tr>`;
+            const hasFilters = Boolean(
+                document.getElementById('transactionSearch')?.value.trim()
+                || document.getElementById('transactionTypeFilter')?.value
+                || document.getElementById('transactionDateFrom')?.value
+                || document.getElementById('transactionDateTo')?.value
+            );
+            const emptyMessage = hasFilters ? 'No transactions match these filters.' : 'No transactions yet.';
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3" style="color: var(--dark-text-muted);">${emptyMessage}</td></tr>`;
         } else {
             tbody.innerHTML = data.transactions.map(tx => {
                 const isInflow = tx.type_name === 'Cash Inflow';
@@ -356,6 +477,7 @@ async function loadRecentTransactions() {
         renderRecentTransactionsPagination(Number(data.total) || 0);
 
     } catch (err) {
+        if (requestId !== recentTransactionsRequestId) return;
         console.error('Failed to load recent transactions:', err);
         tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3 text-danger">Could not load transactions.</td></tr>`;
         renderRecentTransactionsPagination(0);
@@ -448,6 +570,12 @@ async function loadQuickTransactionAccounts() {
         quickTransactionAccounts = data.accounts;
         quickTransactionReferenceData = data;
 
+        const transactionTypeFilter = document.getElementById('transactionTypeFilter');
+        if (transactionTypeFilter) {
+            transactionTypeFilter.replaceChildren(new Option('All types', ''));
+            data.types.forEach(type => transactionTypeFilter.add(new Option(type.name, String(type.id))));
+        }
+
         const assetAccounts = data.cash_accounts || [];
         const revenueAccounts = data.accounts.filter(a => a.type_name === 'Revenue');
         const expenseAccounts = data.accounts.filter(a => a.type_name === 'Expense');
@@ -493,6 +621,36 @@ async function loadQuickTransactionAccounts() {
             payableSelect.replaceChildren(new Option('-- Select Accounts Payable --', ''));
             (data.payable_accounts || []).forEach(account => payableSelect.add(new Option(account.name, account.id)));
         }
+
+        const customers = (data.clients || []).filter(client =>
+            client.status === 'active' && (client.party_type === 'customer' || client.party_type === 'both')
+        );
+        document.querySelectorAll('.project-client-select').forEach(select => {
+            select.replaceChildren(new Option('-- Select customer --', ''));
+            customers.forEach(customer => {
+                const label = customer.company_name ? `${customer.name} (${customer.company_name})` : customer.name;
+                select.add(new Option(label, String(customer.id)));
+            });
+        });
+        const projectList = document.getElementById('activeProjectNames');
+        if (projectList) {
+            projectList.replaceChildren(...(data.projects || []).map(project => new Option(project.project_name, project.project_name)));
+        }
+        document.querySelectorAll('.project-name-input').forEach(input => {
+            const clientSelect = document.getElementById(input.id.replace('Name', 'Client'));
+            if (!clientSelect) return;
+            const syncProjectClient = () => {
+                const name = input.value.trim().toLocaleLowerCase();
+                const match = (data.projects || []).find(project => project.project_name.toLocaleLowerCase() === name);
+                if (match) clientSelect.value = String(match.client_id);
+                clientSelect.required = name !== '';
+            };
+            input.addEventListener('input', syncProjectClient);
+            clientSelect.addEventListener('change', syncProjectClient);
+            input.closest('form')?.addEventListener('reset', () => {
+                clientSelect.required = false;
+            });
+        });
 
     } catch (err) {
         console.error('Failed to load quick transaction accounts:', err);
@@ -540,6 +698,8 @@ document.getElementById('vendorBillForm')?.addEventListener('submit', async even
                 transaction_date: document.getElementById('vendorBillDate').value,
                 due_date: document.getElementById('vendorBillDueDate').value,
                 client_id: String(vendorId),
+                project_name: document.getElementById('vendorBillProjectName').value.trim(),
+                project_client_id: document.getElementById('vendorBillProjectClient').value,
                 description: document.getElementById('vendorBillDescription').value.trim(),
                 reference_no: document.getElementById('vendorBillReference').value.trim(),
                 debit_lines: JSON.stringify([{ account_id: debitAccountId, amount }]),
@@ -585,6 +745,8 @@ document.getElementById('quickSaleForm')?.addEventListener('submit', async (e) =
                 transaction_type_id: window.CASH_INFLOW_TYPE_ID,
                 description: description,
                 transaction_date: new Date().toISOString().split('T')[0],
+                project_name: document.getElementById('saleProjectName').value.trim(),
+                project_client_id: document.getElementById('saleProjectClient').value,
                 debit_lines: JSON.stringify([{ account_id: toAccount, amount: amount }]),
                 credit_lines: JSON.stringify([{ account_id: fromAccount, amount: amount }]),
             }),
@@ -598,6 +760,7 @@ document.getElementById('quickSaleForm')?.addEventListener('submit', async (e) =
             loadDashboardSummary();
             loadDashboardAccounts();
             loadCashflowChart();
+            loadDashboardCashFlowKpis();
         } else {
             errorBox.textContent = data.error || 'Something went wrong.';
             errorBox.classList.remove('d-none');
@@ -628,6 +791,8 @@ document.getElementById('quickExpenseForm')?.addEventListener('submit', async (e
                 transaction_type_id: window.CASH_OUTFLOW_TYPE_ID,
                 description: description,
                 transaction_date: new Date().toISOString().split('T')[0],
+                project_name: document.getElementById('expenseProjectName').value.trim(),
+                project_client_id: document.getElementById('expenseProjectClient').value,
                 debit_lines: JSON.stringify([{ account_id: toAccount, amount: amount }]),
                 credit_lines: JSON.stringify([{ account_id: fromAccount, amount: amount }]),
             }),
@@ -641,6 +806,7 @@ document.getElementById('quickExpenseForm')?.addEventListener('submit', async (e
             loadDashboardSummary();
             loadDashboardAccounts();
             loadCashflowChart();
+            loadDashboardCashFlowKpis();
         } else {
             errorBox.textContent = data.error || 'Something went wrong.';
             errorBox.classList.remove('d-none');
@@ -688,29 +854,131 @@ function fillAgingCard(prefix, info) {
     overdueBar.style.width = overduePercent + '%';
 }
 
+let arApDetailsSourceCard = null;
+let arApDetailsClosing = false;
+
 document.querySelectorAll('.ar-ap-summary-card').forEach(card => {
-    card.addEventListener('click', () => loadArApDetails(card.dataset.arApType));
+    card.addEventListener('click', () => loadArApDetails(card.dataset.arApType, card));
     card.addEventListener('keydown', event => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
-        loadArApDetails(card.dataset.arApType);
+        loadArApDetails(card.dataset.arApType, card);
     });
 });
 
-async function loadArApDetails(type) {
+function animateArApDetailsDialog(dialog, sourceCard, reverse = false) {
+    if (
+        typeof dialog.animate !== 'function'
+        || !sourceCard?.isConnected
+        || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
+        return null;
+    }
+
+    const source = sourceCard.getBoundingClientRect();
+    const target = dialog.getBoundingClientRect();
+    if (!source.width || !source.height || !target.width || !target.height) return null;
+
+    const translateX = source.left - target.left;
+    const translateY = source.top - target.top;
+    const scaleX = source.width / target.width;
+    const scaleY = source.height / target.height;
+    const collapsedTransform = `translate(${translateX}px, ${translateY}px) scale(${scaleX}, ${scaleY})`;
+
+    return dialog.animate(
+        reverse
+            ? [
+                { transform: 'translate(0px, 0px) scale(1, 1)', opacity: 1 },
+                { transform: collapsedTransform, opacity: 0.55 },
+            ]
+            : [
+                { transform: collapsedTransform, opacity: 0.55 },
+                { transform: 'translate(0px, 0px) scale(1, 1)', opacity: 1 },
+            ],
+        {
+            duration: 620,
+            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        }
+    );
+}
+
+function finishArApDetailsClose() {
+    const modalElement = document.getElementById('arApDetailsModal');
+    modalElement.classList.remove('ar-ap-custom-open');
+    modalElement.classList.remove('show');
+    modalElement.setAttribute('aria-hidden', 'true');
+    modalElement.removeAttribute('aria-modal');
+    modalElement.style.display = 'none';
+    document.body.classList.remove('modal-open');
+    arApDetailsSourceCard?.focus();
+    arApDetailsSourceCard = null;
+    arApDetailsClosing = false;
+}
+
+function closeArApDetails() {
+    if (arApDetailsClosing) return;
+    arApDetailsClosing = true;
+
+    const modalElement = document.getElementById('arApDetailsModal');
+    const dialog = modalElement.querySelector('.ar-ap-expand-dialog');
+    const sourceCard = arApDetailsSourceCard;
+    const dialogAnimation = animateArApDetailsDialog(dialog, sourceCard, true);
+    const backdropAnimation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? null
+        : modalElement.animate(
+            [{ opacity: 1 }, { opacity: 0 }],
+            { duration: 360, easing: 'ease-in' }
+        );
+
+    if (!dialogAnimation) {
+        backdropAnimation?.cancel();
+        finishArApDetailsClose();
+        return;
+    }
+
+    dialogAnimation.addEventListener('finish', () => {
+        dialogAnimation.cancel();
+        backdropAnimation?.cancel();
+        finishArApDetailsClose();
+    }, { once: true });
+}
+
+async function loadArApDetails(type, sourceCard) {
     if (!['ar', 'ap'].includes(type)) return;
 
     const modalElement = document.getElementById('arApDetailsModal');
-    const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    const dialog = modalElement.querySelector('.ar-ap-expand-dialog');
     const title = document.getElementById('arApDetailsTitle');
     const total = document.getElementById('arApDetailsTotal');
     const tbody = document.getElementById('arApDetailsBody');
     const isReceivable = type === 'ar';
 
+    arApDetailsSourceCard = sourceCard;
+    arApDetailsClosing = false;
+    modalElement.dataset.arApType = type;
     title.textContent = isReceivable ? 'Outstanding Accounts Receivable' : 'Outstanding Accounts Payable';
     total.textContent = 'Loading outstanding items...';
     tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4">Loading...</td></tr>';
-    modal.show();
+
+    modalElement.classList.add('ar-ap-custom-open');
+    modalElement.classList.add('show');
+    modalElement.style.display = 'block';
+    modalElement.setAttribute('aria-hidden', 'false');
+    modalElement.setAttribute('aria-modal', 'true');
+    document.body.classList.add('modal-open');
+    modalElement.querySelector('.ar-ap-details-close').focus({ preventScroll: true });
+
+    requestAnimationFrame(() => {
+        const backdropAnimation = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+            ? null
+            : modalElement.animate(
+                [{ opacity: 0 }, { opacity: 1 }],
+                { duration: 240, easing: 'ease-out' }
+            );
+        const dialogAnimation = animateArApDetailsDialog(dialog, arApDetailsSourceCard);
+        dialogAnimation?.addEventListener('finish', () => dialogAnimation.cancel(), { once: true });
+        backdropAnimation?.addEventListener('finish', () => backdropAnimation.cancel(), { once: true });
+    });
 
     try {
         const response = await fetch(`routes/journal.php?action=receivables-payables-items&type=${type}`);
@@ -755,38 +1023,33 @@ async function loadArApDetails(type) {
     }
 }
 
+const arApDetailsModal = document.getElementById('arApDetailsModal');
+arApDetailsModal?.addEventListener('click', event => {
+    if (
+        event.target === arApDetailsModal
+        || event.target.closest('.ar-ap-details-close')
+    ) {
+        event.preventDefault();
+        closeArApDetails();
+    }
+});
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && arApDetailsModal?.classList.contains('ar-ap-custom-open')) {
+        event.preventDefault();
+        closeArApDetails();
+    }
+});
+
 function escapeDashboardHtml(value) {
     const element = document.createElement('span');
     element.textContent = String(value ?? '');
     return element.innerHTML;
 }
 
-//-- journal entries navigation expandble
-document.addEventListener('DOMContentLoaded', () => {
-    const journalExpandable = document.getElementById('journalExpandable');
-    const journalTrigger = document.getElementById('journalTrigger');
-
-    journalTrigger.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        // Toggle active state to trigger expand animation
-        journalExpandable.classList.toggle('active');
-    });
-
-    // Optional: Close expansion when clicking outside the nav
-    document.addEventListener('click', (e) => {
-        if (!journalExpandable.contains(e.target)) {
-            journalExpandable.classList.remove('active');
-        }
-    });
-});
-
-
-
-
 document.getElementById('periodFilter')?.addEventListener('change', () => {
     loadCashflowChart();
+    loadDashboardCashFlowKpis();
 });
 
 
@@ -969,6 +1232,7 @@ function openVerificationForm(imagePath, extracted, imageUrl = imagePath) {
     document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
     document.getElementById('scannedRef').value = extracted.reference_no || '';
     document.getElementById('scannedAmount').value = extracted.amount || '0.00';
+    window.formatCurrencyInput?.(document.getElementById('scannedAmount'));
 
     populateScanAccounts();
 
@@ -1009,7 +1273,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
     const vendor = document.getElementById('scannedVendor').value.trim();
     const date = document.getElementById('scannedDate').value;
     const ref = document.getElementById('scannedRef').value.trim();
-    const amount = parseFloat(document.getElementById('scannedAmount').value);
+    const amount = window.parseCurrencyValue(document.getElementById('scannedAmount').value);
     const debitAcc = document.getElementById('scannedDebitAccount').value;
     const creditAcc = document.getElementById('scannedCreditAccount').value;
 
@@ -1137,6 +1401,7 @@ loadQuickTransactionAccounts();
 loadRecentTransactions();
 loadDashboardSummary();
 loadCashflowChart();
+loadDashboardCashFlowKpis();
 loadDashboardAccounts();
 loadReceivablesPayables() // for A/R and A/P in the dashboard and journal entry page
 loadDueNotifications();

@@ -13,10 +13,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Journal Entries — WRS Accounting</title>
+<title>Journal Entries — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -26,43 +26,34 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <div class="app-shell">
     <div class="main-content">
         <div class="content-area">
-            <!-- Global Top Navigation Bar -->
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
-                <!-- Top-Left: Logo -->
-                <div class="d-flex align-items-center">
-                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
-                </div>
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
-                <!-- Top-Right: User Profile -->
-                <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-            </div>
             <!-- PAGE HEADER -->
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                 <div>
                     <h1 class="h4 mb-1">Journal Entries</h1>
                     <p class="small mb-0" style="color: var(--dark-text-muted);">Every recorded transaction, balanced by debit and credit.</p>
                 </div>
-                <?php if ($userRole === 'owner'): ?>
-                    <button class="quick-action-btn position-relative" id="pendingApprovalsBtn" data-bs-toggle="modal" data-bs-target="#pendingApprovalsModal">
-                        <i class="bi bi-bell-fill me-1"></i> Pending Approvals
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="pendingRequestsBadge">0</span>
+                <div class="d-flex align-items-center gap-2 ms-auto">
+                    <?php if ($userRole === 'owner'): ?>
+                        <button class="quick-action-btn position-relative" id="pendingApprovalsBtn" data-bs-toggle="modal" data-bs-target="#pendingApprovalsModal">
+                            <i class="bi bi-bell-fill me-1"></i> Pending Approvals
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none" id="pendingRequestsBadge">0</span>
+                        </button>
+                    <?php endif; ?>
+                    <?php if ($canCreate): ?>
+                    <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#entryModal" id="newEntryBtn">
+                        <i class="bi bi-plus-lg me-1"></i> New Entry
                     </button>
-                <?php endif; ?>
-                <?php if ($canCreate): ?>
-                <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#entryModal" id="newEntryBtn">
-                    <i class="bi bi-plus-lg me-1"></i> New Entry
-                </button>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </div>
             </div>
 
             <!-- FILTERS PANEL -->
             <div class="panel mb-4">
                 <div class="panel-body compact">
                     <div class="row g-2 align-items-end">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label class="form-label small mb-1">Search</label>
                             <input type="text" class="filter-input-search w-100" id="filterSearch" placeholder="Search description, ref #, or creator..." title="Search by description, reference number, or creator name">
                         </div>
@@ -88,8 +79,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                 <option value="all">All</option>
                             </select>
                         </div>
-                        <div class="col-md-2 text-end">
-                            <button type="button" class="btn quick-action-btn w-100" id="clearFiltersBtn">
+                        <div class="col-md-1">
+                            <button type="button" class="btn quick-action-btn w-100 px-1 text-nowrap" id="clearFiltersBtn">
                                 Clear
                             </button>
                         </div>
@@ -179,77 +170,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 </div>
 
 <!-- BOTTOM NAV -->
-<nav class="bottom-nav">
-    <!-- LEFT SIDE (4 items) -->
-    <a href="dashboard.php" class="bottom-nav-item">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-    </a>
-    <a href="transaction.php" class="bottom-nav-item">
-        <i class="bi bi-arrow-left-right"></i>
-        <span>Transact</span>
-    </a>
-    <a href="accounts.php" class="bottom-nav-item">
-        <i class="bi bi-wallet2"></i>
-        <span>Accounts</span>
-    </a>
-    <a href="clients.php" class="bottom-nav-item">
-        <i class="bi bi-people-fill"></i>
-        <span>Clients</span>
-    </a>
 
-    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
-    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
-        <div class="scan-btn-icon">
-            <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <span>Scan</span>
-    </button>
-    
-    <!-- RIGHT SIDE (4 items balanced) -->
-    <div class="bottom-nav-expandable active" id="journalExpandable">
-        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
-            <i class="bi bi-journal-text"></i>
-            <span>Journal</span>
-        </button>
-
-        <div class="expandable-content active">
-            <a href="journal-entries.php" class="sub-nav-item active">
-                <i class="bi bi-journal-check"></i>
-                <span>Entries</span>
-            </a>
-            <a href="general-ledger.php" class="sub-nav-item">
-                <i class="bi bi-book"></i>
-                <span>Ledger</span>
-            </a>
-            <a href="cashflow.php" class="sub-nav-item">
-                <i class="bi bi-cash-stack"></i>
-                <span>Cash Flow</span>
-            </a>
-        </div>
-    </div>
-     <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <a href="user-management.php" class="bottom-nav-item ">
-                <i class="bi bi-people"></i>
-                <span>Users</span>
-            </a>
-     <?php endif; ?>
-    <a href="reports.php" class="bottom-nav-item">
-        <i class="bi bi-bar-chart"></i>
-        <span>Reports</span>
-    </a>
-
-    <a href="settings.php" class="bottom-nav-item">
-        <i class="bi bi-gear"></i>
-        <span>Settings</span>
-    </a>
-
-    <div class="bottom-nav-divider"></div>
-    <a href="#" class="bottom-nav-item" id="logoutBtn">
-        <i class="bi bi-box-arrow-right"></i>
-        <span>Logout</span>
-    </a>
-</nav>
 
 <?php if ($canCreate): ?>
 <!-- NEW ENTRY MODAL -->
@@ -258,9 +179,12 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
         <div class="modal-content modal-dark journal-entry-modal">
             <div class="modal-header">
                 <h5 class="modal-title">New Journal Entry</h5>
-                <div class="btn-group me-5" role="group">
-                    <button type="button" class="quick-action-btn primary" id="modeManualBtn">Manual</button>
-                    <button type="button" class="quick-action-btn" id="modeAutoBtn">Auto</button>
+                <div class="journal-mode-toggle">
+                    <input type="checkbox" id="entryModeToggle" role="switch" aria-label="Auto journal entry mode" aria-checked="false">
+                    <label for="entryModeToggle">
+                        <span class="journal-mode-manual">Manual</span>
+                        <span class="journal-mode-auto">Auto</span>
+                    </label>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -268,7 +192,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                 <div class="modal-body">
 
                     <!-- AUTO MODE TEMPLATES -->
-                    <div id="autoModeSection" class="mb-3 d-none">
+                    <div id="autoModeSection" class="journal-auto-section mb-3 is-collapsed" aria-hidden="true" inert>
                         <label for="templateSearchInput" class="form-label small">Transaction Template</label>
                         <div class="position-relative" id="templateCombobox">
                             <div class="input-group">
@@ -302,11 +226,18 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                             <label class="form-label small">Date</label>
                             <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="transactionDate" name="transaction_date" required>
                         </div>
-                        <div class="col-md-4 d-none" id="clientFieldContainer">
-                            <label class="form-label small">Customer / Vendor (required for A/R or A/P)</label>
+                        <div class="col-md-4" id="clientFieldContainer">
+                            <label class="form-label small">Customer / Vendor</label>
                             <select class="form-select form-control-dark bg-dark text-light border-secondary" id="clientIdSelect" name="client_id">
                                 <option value="">-- Optional unless entering an invoice or bill --</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="projectName" class="form-label small">Project (optional)</label>
+                            <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="projectName" name="project_name" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
                         </div>
                     </div>
 
@@ -331,25 +262,30 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                             <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="dueDate" name="due_date">
                         </div>
                     </div>
-
-                    <div class="journal-line-section journal-line-section-debit">
+                    <div class="journal-line-section journal-line-section-debit" id="debitLinesSection">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
                                 <label class="form-label mb-1 fw-semibold">Debit lines</label>
                                 <div class="journal-line-caption">Accounts receiving value <span>(maximum 10)</span></div>
                             </div>
-                            <button type="button" class="table-action-btn" id="addDebitLineBtn">+ Add Debit Line</button>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="table-action-btn d-none" id="toggleDebitLinesBtn" aria-expanded="false" aria-controls="debitLinesContainer">Edit debit lines</button>
+                                <button type="button" class="table-action-btn" id="addDebitLineBtn">+ Add Debit Line</button>
+                            </div>
                         </div>
                         <div id="debitLinesContainer"></div>
                     </div>
 
-                    <div class="journal-line-section journal-line-section-credit">
+                    <div class="journal-line-section journal-line-section-credit" id="creditLinesSection">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
                                 <label class="form-label mb-1 fw-semibold">Credit lines</label>
                                 <div class="journal-line-caption">Accounts giving value <span>(maximum 10)</span></div>
                             </div>
-                            <button type="button" class="table-action-btn" id="addCreditLineBtn">+ Add Credit Line</button>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" class="table-action-btn d-none" id="toggleCreditLinesBtn" aria-expanded="false" aria-controls="creditLinesContainer">Edit credit lines</button>
+                                <button type="button" class="table-action-btn" id="addCreditLineBtn">+ Add Credit Line</button>
+                            </div>
                         </div>
                         <div id="creditLinesContainer"></div>
                     </div>
@@ -571,7 +507,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small mb-1">Total Amount (₱) <span class="text-danger">*</span></label>
-                                        <input type="number" step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
+                                        <input type="text" inputmode="decimal" data-currency-input step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
                                     </div>
                                 </div>
 
@@ -642,6 +578,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <?php endif; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="../frontend/js/currency-inputs.js"></script>
 <script>
     window.API_URL    = '../backend/routes/journal.php'; // Ensure correct path to your backend endpoint
     window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
@@ -649,6 +586,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 </script>
 <script src="../frontend/js/journal-entries.js?v=20261018-template-combobox"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<datalist id="activeProjectNames"></datalist>
 <script src="../frontend/js/session-timeout.js"></script>
 </body>
 </html>

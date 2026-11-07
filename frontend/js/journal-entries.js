@@ -47,6 +47,22 @@ async function loadReferenceData() {
                 data.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
         }
 
+        const projectList = document.getElementById('activeProjectNames');
+        if (projectList) {
+            projectList.replaceChildren(...(data.projects || []).map(project => new Option(project.project_name, project.project_name)));
+        }
+        const projectNameInput = document.getElementById('projectName');
+        const projectClientSelect = document.getElementById('clientIdSelect');
+        projectNameInput?.addEventListener('input', () => {
+            const name = projectNameInput.value.trim().toLocaleLowerCase();
+            const project = (data.projects || []).find(item => item.project_name.toLocaleLowerCase() === name);
+            if (project && projectClientSelect) projectClientSelect.value = String(project.client_id);
+            if (projectClientSelect) projectClientSelect.required = name !== '';
+        });
+        entryForm?.addEventListener('reset', () => {
+            if (projectClientSelect) projectClientSelect.required = false;
+        });
+
         const transDate = document.getElementById('transactionDate');
         if (transDate) transDate.value = getLocalDateInputValue();
 
@@ -279,13 +295,13 @@ async function loadJournalEntries() {
 
     try {
         const response = await fetch(`${API_URL}?${params.toString()}`);
-        const data = await response.json();
+        const data = await parseJournalApiResponse(response);
 
-        if (!data.success) {
+        if (!response.ok || !data.success) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" class="text-center py-4 text-danger">
-                        Failed to load entries.
+                        ${escapeHtml(data.error || `Failed to load entries (HTTP ${response.status}).`)}
                     </td>
                 </tr>
             `;
@@ -302,14 +318,25 @@ async function loadJournalEntries() {
 
     } catch (error) {
         console.error('Failed to load journal entries:', error);
+        const message = error instanceof TypeError
+            ? 'Could not reach the server.'
+            : error.message;
 
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="text-center py-4 text-danger">
-                    Could not reach the server.
+                    ${escapeHtml(message)}
                 </td>
             </tr>
         `;
+    }
+}
+
+async function parseJournalApiResponse(response) {
+    try {
+        return await response.json();
+    } catch {
+        throw new Error(`The server returned an invalid response (HTTP ${response.status}). Check the PHP/server logs.`);
     }
 }
 
@@ -337,6 +364,8 @@ function resetEntryFields() {
     if (!entryForm) return;
 
     entryForm.reset();
+    journalLineEditing.debit = false;
+    journalLineEditing.credit = false;
     const templateSearchInput = document.getElementById('templateSearchInput');
     const selectedTemplateId = document.getElementById('selectedTemplateId');
     if (templateSearchInput) templateSearchInput.value = '';
@@ -386,7 +415,7 @@ if (CAN_CREATE) {
             const accSelect = row.querySelector('.line-account');
             const amtInput = row.querySelector('.line-amount');
             if (accSelect && amtInput) {
-                const amountCents = parseJournalAmountCents(amtInput.value);
+                const amountCents = getJournalAmountCents(amtInput);
                 debitLines.push({
                     account_id: accSelect.value,
                     amount: Number.isFinite(amountCents) ? (amountCents / 100).toFixed(2) : '',
@@ -401,7 +430,7 @@ if (CAN_CREATE) {
             const accSelect = row.querySelector('.line-account');
             const amtInput = row.querySelector('.line-amount');
             if (accSelect && amtInput) {
-                const amountCents = parseJournalAmountCents(amtInput.value);
+                const amountCents = getJournalAmountCents(amtInput);
                 creditLines.push({
                     account_id: accSelect.value,
                     amount: Number.isFinite(amountCents) ? (amountCents / 100).toFixed(2) : '',
@@ -449,9 +478,9 @@ if (CAN_CREATE) {
             }
 
             const response = await fetch(API_URL, { method: 'POST', body: formData });
-            const data = await response.json();
+            const data = await parseJournalApiResponse(response);
 
-            if (data.success) {
+            if (response.ok && data.success) {
                 entryModal.hide();
                 entryForm.reset();
                 document.getElementById('transactionDate').value = getLocalDateInputValue();
@@ -461,12 +490,14 @@ if (CAN_CREATE) {
                 loadJournalEntries();
                 loadSummaryTotals();
             } else {
-                formError.textContent = data.error || 'Something went wrong.';
+                formError.textContent = data.error || `Something went wrong (HTTP ${response.status}).`;
                 formError.classList.remove('d-none');
             }
         } catch (err) {
             console.error('Save entry failed:', err);
-            formError.textContent = 'Could not reach the server.';
+            formError.textContent = err instanceof TypeError
+                ? 'Could not reach the server.'
+                : err.message;
             formError.classList.remove('d-none');
         } finally {
             saveBtn.disabled = false;
@@ -588,9 +619,18 @@ function parseJournalAmountCents(value) {
     return Math.round(amount * 100);
 }
 
+function getJournalAmountCents(input) {
+    const toggle = input.closest('[data-line-id]')?.querySelector('.amount-format-toggle');
+    const exactCents = Number(toggle?.dataset.fullCents);
+    if (toggle?.dataset.compact === 'true' && Number.isSafeInteger(exactCents)) {
+        return exactCents;
+    }
+    return parseJournalAmountCents(input.value);
+}
+
 function formatJournalAmount(cents) {
     return (cents / 100).toLocaleString(undefined, {
-        minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
 }
@@ -732,7 +772,11 @@ function createAccountLineRow(side) {
     accountSelect.style.flex = '2';
     accountSelect.required = true;
     populateJournalAccountSelect(accountSelect, side, '');
+    const accountLabel = document.createElement('span');
+    accountLabel.className = 'line-account-label';
+    accountLabel.textContent = 'Select account';
     accountSelect.addEventListener('change', () => {
+        updateJournalLineAccountLabel(row);
         refreshAccountLineOptions();
         refreshAccountRuleWarning();
     });
@@ -741,11 +785,20 @@ function createAccountLineRow(side) {
     amountInput.type = 'text';
     amountInput.inputMode = 'decimal';
     amountInput.className = 'form-control form-control-dark line-amount';
-    amountInput.style.flex = '1';
+    amountInput.dataset.currencyInput = '';
     amountInput.placeholder = '0.00';
     amountInput.required = true;
+    window.initializeCurrencyInputs?.(amountInput);
     amountInput.setAttribute('aria-label', `${side} amount; suffixes k, m, and b are supported`);
     amountInput.addEventListener('wheel', event => event.preventDefault(), { passive: false });
+
+    const amountGroup = document.createElement('div');
+    amountGroup.className = 'input-group currency-input-group';
+    const currencySymbol = document.createElement('span');
+    currencySymbol.className = 'input-group-text';
+    currencySymbol.textContent = '₱';
+    currencySymbol.setAttribute('aria-hidden', 'true');
+    amountGroup.append(currencySymbol, amountInput);
 
     const amountToggle = document.createElement('button');
     amountToggle.type = 'button';
@@ -760,7 +813,8 @@ function createAccountLineRow(side) {
     removeButton.textContent = '✕';
     removeButton.setAttribute('aria-label', `Remove ${side} line`);
 
-    row.append(accountSelect, amountInput, amountToggle, removeButton);
+    row.append(accountLabel, accountSelect, amountGroup, amountToggle, removeButton);
+    updateJournalLineAccountLabel(row);
 
     removeButton.addEventListener('click', () => {
         const container = document.getElementById(`${side}LinesContainer`);
@@ -771,6 +825,7 @@ function createAccountLineRow(side) {
     });
 
     amountInput.addEventListener('input', () => {
+        delete amountToggle.dataset.fullCents;
         amountToggle.disabled = !Number.isFinite(parseJournalAmountCents(amountInput.value));
         recalculateLineTotals();
     });
@@ -778,7 +833,14 @@ function createAccountLineRow(side) {
         const cents = parseJournalAmountCents(amountInput.value);
         if (!Number.isFinite(cents)) return;
         const compact = amountToggle.dataset.compact !== 'true';
-        amountInput.value = compact ? formatCompactJournalAmount(cents) : formatJournalAmount(cents);
+        if (compact) {
+            amountToggle.dataset.fullCents = String(cents);
+            amountInput.value = formatCompactJournalAmount(cents);
+        } else {
+            const exactCents = Number(amountToggle.dataset.fullCents);
+            amountInput.value = formatJournalAmount(Number.isSafeInteger(exactCents) ? exactCents : cents);
+            delete amountToggle.dataset.fullCents;
+        }
         amountToggle.dataset.compact = String(compact);
         amountToggle.title = compact ? 'Show the full amount' : 'Show this amount in compact form';
         amountToggle.textContent = compact ? 'Full' : '1m';
@@ -794,11 +856,20 @@ function refreshAccountLineOptions() {
         .forEach(select => {
             const selectedAccountId = select.value;
             populateJournalAccountSelect(select, select.closest('[data-side]')?.dataset.side || 'debit', selectedAccountId);
+            updateJournalLineAccountLabel(select.closest('[data-line-id]'));
         });
     refreshAccountRuleWarning();
 }
 
 document.getElementById('transactionTypeId')?.addEventListener('change', refreshAccountLineOptions);
+
+function updateJournalLineAccountLabel(row) {
+    if (!row) return;
+    const select = row.querySelector('.line-account');
+    const label = row.querySelector('.line-account-label');
+    const account = allAccountsForLines.find(item => String(item.id) === select?.value);
+    label.textContent = account ? getJournalAccountOptionLabel(account) : 'Select account';
+}
 
 document.getElementById('addDebitLineBtn')?.addEventListener('click', () => {
     const container = document.getElementById('debitLinesContainer');
@@ -819,16 +890,16 @@ function recalculateLineTotals() {
     let totalCreditCents = 0;
 
     document.querySelectorAll('#debitLinesContainer .line-amount').forEach(input => {
-        const cents = parseJournalAmountCents(input.value);
+        const cents = getJournalAmountCents(input);
         if (Number.isFinite(cents)) totalDebitCents += cents;
     });
     document.querySelectorAll('#creditLinesContainer .line-amount').forEach(input => {
-        const cents = parseJournalAmountCents(input.value);
+        const cents = getJournalAmountCents(input);
         if (Number.isFinite(cents)) totalCreditCents += cents;
     });
 
-    document.getElementById('totalDebitsDisplay').textContent = (totalDebitCents / 100).toFixed(2);
-    document.getElementById('totalCreditsDisplay').textContent = (totalCreditCents / 100).toFixed(2);
+    document.getElementById('totalDebitsDisplay').textContent = formatJournalAmount(totalDebitCents);
+    document.getElementById('totalCreditsDisplay').textContent = formatJournalAmount(totalCreditCents);
 
     const statusEl = document.getElementById('balanceStatusDisplay');
     const isBalanced = totalDebitCents === totalCreditCents && totalDebitCents > 0;
@@ -1306,22 +1377,50 @@ const ENTRY_TEMPLATES = [
 ];
 
 let currentMode = 'manual';
+const journalLineEditing = { debit: false, credit: false };
 
 function setEntryMode(mode) {
+    if (mode === 'auto' && currentMode !== 'auto' && document.getElementById('selectedTemplateId')?.value) {
+        journalLineEditing.debit = false;
+        journalLineEditing.credit = false;
+    }
     currentMode = mode;
 
-    document.getElementById('modeManualBtn').classList.toggle('primary', mode === 'manual');
-    document.getElementById('modeAutoBtn').classList.toggle('primary', mode === 'auto');
-    document.getElementById('autoModeSection').classList.toggle('d-none', mode === 'manual');
-    setTemplateAccountLock(mode === 'auto' && Boolean(document.getElementById('selectedTemplateId')?.value));
+    const modeToggle = document.getElementById('entryModeToggle');
+    modeToggle.checked = mode === 'auto';
+    modeToggle.setAttribute('aria-checked', String(modeToggle.checked));
+    const autoModeSection = document.getElementById('autoModeSection');
+    const isManualMode = mode === 'manual';
+    autoModeSection.classList.toggle('is-collapsed', isManualMode);
+    autoModeSection.setAttribute('aria-hidden', String(isManualMode));
+    autoModeSection.inert = isManualMode;
+    updateJournalLinePresentation();
     updateClientFieldVisibility();
+    setAutoLock(mode === 'auto' && Boolean(document.getElementById('selectedTemplateId')?.value));
 }
 
-function setTemplateAccountLock(locked) {
-    document.querySelectorAll('#debitLinesContainer .line-account, #creditLinesContainer .line-account')
-        .forEach(select => {
-            select.disabled = locked;
+function updateJournalLinePresentation() {
+    const hasTemplate = Boolean(document.getElementById('selectedTemplateId')?.value);
+    const compactAuto = currentMode === 'auto' && hasTemplate;
+
+    ['debit', 'credit'].forEach(side => {
+        const section = document.getElementById(`${side}LinesSection`);
+        const container = document.getElementById(`${side}LinesContainer`);
+        const addButton = document.getElementById(`add${side === 'debit' ? 'Debit' : 'Credit'}LineBtn`);
+        const toggleButton = document.getElementById(`toggle${side === 'debit' ? 'Debit' : 'Credit'}LinesBtn`);
+        const isEditing = !compactAuto || journalLineEditing[side];
+
+        section.classList.toggle('journal-lines-compact', compactAuto && !isEditing);
+        addButton.classList.toggle('d-none', compactAuto && !isEditing);
+        toggleButton.classList.toggle('d-none', !compactAuto);
+        toggleButton.setAttribute('aria-expanded', String(compactAuto && isEditing));
+        toggleButton.textContent = isEditing ? `Hide ${side} editing` : `Edit ${side} lines`;
+
+        container.querySelectorAll('.line-account').forEach(select => {
+            select.disabled = compactAuto && !isEditing;
         });
+        container.querySelectorAll('[data-line-id]').forEach(updateJournalLineAccountLabel);
+    });
 }
 
 function updateClientFieldVisibility(template = null) {
@@ -1347,8 +1446,17 @@ function updateClientFieldVisibility(template = null) {
     if (!shouldShowClient) clientSelect.value = '';
 }
 
-document.getElementById('modeManualBtn')?.addEventListener('click', () => setEntryMode('manual'));
-document.getElementById('modeAutoBtn')?.addEventListener('click', () => setEntryMode('auto'));
+document.getElementById('entryModeToggle')?.addEventListener('change', event => {
+    setEntryMode(event.target.checked ? 'auto' : 'manual');
+});
+
+['debit', 'credit'].forEach(side => {
+    const toggleButton = document.getElementById(`toggle${side === 'debit' ? 'Debit' : 'Credit'}LinesBtn`);
+    toggleButton?.addEventListener('click', () => {
+        journalLineEditing[side] = !journalLineEditing[side];
+        updateJournalLinePresentation();
+    });
+});
 
 function loadTemplateDropdown() {
     const searchInput = document.getElementById('templateSearchInput');
@@ -1360,8 +1468,8 @@ function loadTemplateDropdown() {
         const selectedTemplateId = document.getElementById('selectedTemplateId');
         if (selectedTemplateId.value !== '') {
             selectedTemplateId.value = '';
-            setTemplateAccountLock(false);
             setAutoLock(false);
+            updateJournalLinePresentation();
             updateClientFieldVisibility();
         }
         renderTemplateResults(searchInput.value);
@@ -1499,7 +1607,11 @@ function selectTemplate(index) {
     debitRow.querySelector('.line-account').value = debitAccount.id;
     creditRow.querySelector('.line-account').value = creditAccount.id;
 
-    setTemplateAccountLock(currentMode === 'auto');
+    journalLineEditing.debit = false;
+    journalLineEditing.credit = false;
+    updateJournalLineAccountLabel(debitRow);
+    updateJournalLineAccountLabel(creditRow);
+    updateJournalLinePresentation();
     setAutoLock(currentMode === 'auto');
     updateJournalLineControls('debit');
     updateJournalLineControls('credit');
@@ -1530,16 +1642,6 @@ function setAutoLock(locked) {
         }
     });
 }
-
-document.getElementById('modeManualBtn')?.addEventListener('click', () => {
-    setAutoLock(false);
-});
-
-document.getElementById('modeAutoBtn')?.addEventListener('click', () => {
-    if (document.getElementById('selectedTemplateId')?.value) {
-        setAutoLock(true);
-    }
-});
 
 // ---------- Nav Expandable ----------
 document.addEventListener('DOMContentLoaded', () => {
@@ -1869,6 +1971,7 @@ function openVerificationForm(imagePath, extracted, imageUrl = imagePath) {
     document.getElementById('scannedDate').value = extracted.date || new Date().toISOString().split('T')[0];
     document.getElementById('scannedRef').value = extracted.reference_no || '';
     document.getElementById('scannedAmount').value = extracted.amount || '0.00';
+    window.formatCurrencyInput?.(document.getElementById('scannedAmount'));
 
     populateScanAccounts();
 
@@ -1943,7 +2046,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
     const vendor = document.getElementById('scannedVendor').value.trim();
     const date = document.getElementById('scannedDate').value;
     const ref = document.getElementById('scannedRef').value.trim();
-    const amount = parseFloat(document.getElementById('scannedAmount').value);
+    const amount = window.parseCurrencyValue(document.getElementById('scannedAmount').value);
     const debitAcc = document.getElementById('scannedDebitAccount').value;
     const creditAcc = document.getElementById('scannedCreditAccount').value;
 

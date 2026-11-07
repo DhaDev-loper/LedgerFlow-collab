@@ -1,0 +1,358 @@
+.income-statement-paper {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 42px 54px;
+    background: #fff;
+    color: #000;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+    font-family: "Times New Roman", "DejaVu Serif", serif;
+    font-size: 16px;
+    line-height: 1.45;
+}
+
+.income-statement-paper * {
+    box-sizing: border-box;
+}
+
+.income-statement-heading {
+    margin-bottom: 34px;
+    text-align: center;
+}
+
+.income-statement-company {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.income-statement-heading h1 {
+    margin: 0;
+    color: #000;
+    font-family: "Times New Roman", "DejaVu Serif", serif;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.income-statement-period {
+    margin: 4px 0 0;
+    color: #222;
+    font-size: 15px;
+    font-style: italic;
+}
+
+.income-statement-section {
+    margin: 0 0 30px;
+    break-inside: avoid;
+}
+
+.income-statement-section h2 {
+    margin: 0 0 9px;
+    color: #000;
+    font-family: "Times New Roman", "DejaVu Serif", serif;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.income-statement-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.income-statement-table td,
+.income-statement-table th {
+    padding: 5px 0;
+    border: 0;
+    background: #fff;
+    color: #000;
+    vertical-align: top;
+}
+
+.income-statement-table .statement-amount {
+    width: 190px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.income-statement-table tfoot th {
+    padding-top: 9px;
+    border-top: 1px solid #000;
+    font-weight: 700;
+}
+
+.income-statement-table tfoot .statement-amount {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.income-statement-table .statement-empty td:first-child {
+    color: #666;
+    font-style: italic;
+}
+
+.income-statement-net {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 9px;
+    padding: 11px 0 4px;
+    border-top: 1px solid #000;
+    color: #000;
+    font-weight: 700;
+}
+
+.income-statement-net .statement-amount {
+    min-width: 190px;
+    padding-bottom: 3px;
+    border-bottom: 3px double currentColor;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.income-statement-net.is-profit .statement-amount {
+    color: #16803c;
+}
+
+.income-statement-net.is-loss .statement-amount {
+    color: #b42318;
+}
+
+@media (max-width: 600px) {
+    .income-statement-paper {
+        padding: 28px 20px;
+    }
+
+    .income-statement-table .statement-amount,
+    .income-statement-net .statement-amount {
+        width: 145px;
+        min-width: 145px;
+    }
+}
+
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 18mm 16mm;
+    }
+
+    html,
+    body {
+        width: 100%;
+        min-height: 0;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    body * {
+        visibility: hidden !important;
+    }
+
+    #reportContent,
+    #reportContent * {
+        visibility: visible !important;
+    }
+
+    #reportContent {
+        position: absolute !important;
+        inset: 0 auto auto 0 !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    .income-statement-paper {
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        font-size: 12pt !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .income-statement-paper,
+    .income-statement-paper * {
+        color: #000 !important;
+    }
+
+    .income-statement-section {
+        break-inside: avoid;
+    }
+}
+
+.income-statement-paper {
+    max-width: 900px;
+    padding: 30px 35px;
+    color: #1e293b;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22);
+    font-family: "DejaVu Sans", Arial, sans-serif;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.statement-footer {
+    margin-top: 36px;
+    padding-top: 5px;
+    border-top: 1px solid #e2e8f0;
+    color: #94a3b8;
+    font-size: 8px;
+    text-align: center;
+}
+
+.statement-header-table {
+    width: 100%;
+    margin-bottom: 25px;
+    padding-bottom: 12px;
+    border-collapse: collapse;
+    border-bottom: 2px solid #0f172a;
+}
+
+.statement-header-table td {
+    width: 50%;
+    padding: 0;
+    vertical-align: top;
+}
+
+.statement-header-table td:last-child {
+    text-align: right;
+}
+
+.statement-brand-title {
+    color: #0f172a;
+    font-size: 22px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.statement-brand-sub {
+    margin-top: 2px;
+    color: #64748b;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.statement-report-title {
+    color: #2563eb;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.statement-report-meta {
+    margin-top: 4px;
+    color: #475569;
+    font-size: 10px;
+}
+
+.statement-section-header {
+    margin: 15px 0 8px;
+    padding: 6px 8px;
+    border-left: 4px solid #2563eb;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.statement-data-table {
+    width: 100%;
+    margin-bottom: 10px;
+    border-collapse: collapse;
+}
+
+.statement-data-table th {
+    padding: 6px 8px;
+    border-bottom: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.statement-data-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+}
+
+.statement-data-table tr:nth-child(even) td {
+    background: #fafafa;
+}
+
+.statement-data-table .text-right,
+.statement-grand-total-row .text-right {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.trial-balance-table th:first-child,
+.trial-balance-table td:first-child {
+    width: 36%;
+}
+
+.trial-balance-table th:nth-child(2),
+.trial-balance-table td:nth-child(2) {
+    width: 16%;
+}
+
+.trial-balance-table th:nth-child(3),
+.trial-balance-table th:nth-child(4),
+.trial-balance-table td:nth-child(3),
+.trial-balance-table td:nth-child(4) {
+    width: 24%;
+}
+
+.statement-data-table .statement-subtotal-row td {
+    border-top: 1px solid #94a3b8;
+    border-bottom: 1px solid #94a3b8;
+    background: #f8fafc;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.statement-empty {
+    color: #94a3b8 !important;
+}
+
+.statement-grand-total-table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+}
+
+.statement-grand-total-row td {
+    padding: 10px 8px;
+    border-top: 2px solid #2563eb;
+    border-bottom: 3px double #2563eb;
+    background: #eff6ff;
+    color: #0f172a;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+@media print {
+    .income-statement-paper {
+        max-width: none !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        font-family: "DejaVu Sans", Arial, sans-serif !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+    }
+
+    .statement-footer {
+        position: fixed;
+        bottom: -10px;
+        left: 0;
+        right: 0;
+    }
+}

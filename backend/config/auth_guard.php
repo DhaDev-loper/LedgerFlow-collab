@@ -4,7 +4,7 @@ session_start();
 require_once __DIR__ . '/database.php';
 // Prevent the browser from caching this page at all. Without this,
 // pressing the Back button after logout can show a stale cached
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Cache-Control: no-store, no-cache, mut-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: 0');
 
@@ -18,7 +18,6 @@ if (!isset($_SESSION['user_id'])) {
 
     $relative = ltrim(str_replace($backendDir, '', $scriptDir), DIRECTORY_SEPARATOR);
     $depth = $relative === '' ? 0 : substr_count($relative, DIRECTORY_SEPARATOR) + 1;
-
     $upSteps = str_repeat('../', $depth + 1);
 
     header('Location: ' . $upSteps . 'frontend/login.html');

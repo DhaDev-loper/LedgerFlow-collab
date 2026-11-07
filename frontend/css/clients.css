@@ -1,0 +1,314 @@
+.client-directory {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.client-directory-message {
+    margin: 0;
+    padding: 1.25rem;
+    color: var(--dark-text-muted, #9ca3af);
+    text-align: center;
+}
+
+.client-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.8rem;
+    border: 1px solid var(--dark-border, #374151);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.025);
+    color: var(--dark-text, #f3f4f6);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.client-card:hover,
+.client-card:focus-visible {
+    border-color: var(--accent-blue, #2e90fa);
+    background: rgba(46, 144, 250, 0.07);
+}
+
+.client-card:focus-visible {
+    outline: 2px solid var(--accent-blue, #2e90fa);
+    outline-offset: 2px;
+}
+
+.client-card-logo {
+    display: grid;
+    flex: 0 0 110px;
+    width: 110px;
+    height: 110px;
+    overflow: hidden;
+    place-items: center;
+    border-radius: 4px;
+    background: hsl(var(--client-logo-hue, 210) 38% 25%);
+    color: #fff;
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.client-card-logo img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.client-card-info {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.client-card-name {
+    margin: 0 0 0.55rem;
+    color: var(--dark-text, #f3f4f6);
+    font-size: 1.15rem;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.client-card-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    color: var(--dark-text-muted, #9ca3af);
+    font-size: 0.78rem;
+}
+
+.client-card-details span {
+    min-width: min(150px, 100%);
+    overflow-wrap: anywhere;
+}
+
+.client-card-details strong {
+    display: block;
+    margin-bottom: 0.1rem;
+    color: var(--dark-text-muted, #9ca3af);
+    font-size: 0.67rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.client-card-hint {
+    display: inline-block;
+    margin-top: 0.55rem;
+    color: var(--accent-blue, #2e90fa);
+    font-size: 0.73rem;
+}
+
+.client-card-actions {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.45rem;
+}
+
+.client-card-actions .quick-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 34px;
+    white-space: nowrap;
+}
+
+.client-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 74px;
+    padding: 0.24rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.client-status-badge.is-active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+}
+
+.client-status-badge.is-inactive {
+    background: rgba(156, 163, 175, 0.16);
+    color: #cbd5e1;
+}
+
+.client-card-actions .client-deactivate-btn {
+    border-color: rgba(248, 113, 113, 0.45);
+    color: #fca5a5;
+}
+
+.client-card-actions .client-deactivate-btn:hover {
+    background: rgba(239, 68, 68, 0.12);
+    color: #fecaca;
+}
+
+.client-card-actions .client-reactivate-btn {
+    border-color: rgba(74, 222, 128, 0.45);
+    color: #86efac;
+}
+
+.client-card-actions .client-reactivate-btn:hover {
+    background: rgba(34, 197, 94, 0.12);
+    color: #bbf7d0;
+}
+
+.client-logo-preview-box {
+    display: grid;
+    width: 110px;
+    height: 110px;
+    overflow: hidden;
+    place-items: center;
+    border: 1px solid var(--dark-border, #374151);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.client-logo-preview-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.client-logo-placeholder {
+    color: var(--dark-text-muted, #9ca3af);
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.client-detail-tabs {
+    border-bottom-color: var(--dark-border, #374151) !important;
+}
+
+.client-detail-tabs .nav-link {
+    border-color: transparent !important;
+    color: var(--dark-text-muted, #9ca3af) !important;
+}
+
+.client-detail-tabs .nav-link:hover,
+.client-detail-tabs .nav-link:focus-visible {
+    border-color: var(--dark-border, #374151) !important;
+    color: var(--dark-text, #f3f4f6) !important;
+}
+
+.client-detail-tabs .nav-link.active {
+    border-color: var(--dark-border, #374151) var(--dark-border, #374151) transparent !important;
+    background: #171a20 !important;
+    color: var(--dark-text, #f3f4f6) !important;
+}
+
+.client-detail-tab-content {
+    padding-top: 1rem;
+}
+
+.client-projects-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.8rem;
+}
+
+.client-projects-table-wrap {
+    border: 1px solid var(--dark-border, #374151);
+    border-radius: 5px;
+}
+
+.client-projects-table {
+    min-width: 760px;
+    color: var(--dark-text, #f3f4f6);
+    --bs-table-bg: transparent;
+    --bs-table-color: inherit;
+    --bs-table-border-color: var(--dark-border, #374151);
+}
+
+.client-projects-table th,
+.client-projects-table td {
+    padding: 0.7rem 0.65rem;
+    color: inherit;
+    vertical-align: middle;
+}
+
+.client-projects-table thead th {
+    color: var(--dark-text-muted, #9ca3af);
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.client-project-name {
+    min-width: 145px;
+    font-weight: 600;
+}
+
+.client-project-status {
+    display: inline-flex;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.client-project-status.is-active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+}
+
+.client-project-status.is-completed {
+    background: rgba(156, 163, 175, 0.16);
+    color: #cbd5e1;
+}
+
+.client-project-report-btn {
+    display: inline-flex;
+    justify-content: center;
+    min-width: 140px;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.72rem;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.client-projects-table .is-project-profit {
+    color: #4ade80;
+}
+
+.client-projects-table .is-project-loss {
+    color: #f87171;
+}
+
+@media (max-width: 640px) {
+    .client-card {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .client-card-logo {
+        align-self: flex-start;
+    }
+
+    .client-card-actions {
+        align-items: stretch;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        padding-top: 0.65rem;
+        border-top: 1px solid var(--dark-border, #374151);
+    }
+
+    .client-status-badge {
+        margin-right: auto;
+    }
+
+    .client-card-details span {
+        flex: 1 1 calc(50% - 1rem);
+    }
+}

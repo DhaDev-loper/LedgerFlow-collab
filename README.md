@@ -72,6 +72,13 @@ once to add the current liability account used by the client ad-budget journal
 templates. The migration skips the insert if the account already exists.
 Run `backend/database/migrations/20261018_add_self_service_password_recovery.sql`
 once to enable secure, single-use account recovery links that expire after 15 minutes.
+Run `backend/database/migrations/20261104_add_accounting_period_locks.sql` once
+to enable monthly/yearly period locks and links between new adjustment entries
+and their original closed-period entries.
+Run `backend/database/migrations/20261107_add_client_logo.sql` once to add client
+logo paths for the Clients Directory.
+Run `backend/database/migrations/20261107_add_projects_and_project_journals.sql`
+once to add active-by-default projects and project links on journal entries.
 
 Successful logins and journal, account, client, and user-management changes are
 recorded in `audit`. Audit details intentionally exclude credentials and
@@ -102,6 +109,23 @@ sent to their registered email. Recovery resets the password, failed-login
 counter, and suspension level. Administrator-disabled and deleted accounts
 cannot be reactivated through self-service recovery.
 
+### Accounting period locks
+
+Owners and admins can open **Period Locks** from User Management to close a
+month or year after reports are finalized. Closing requires a reason and is
+recorded in the audit log. Entries cannot be created in a closed period, and
+existing entries in it cannot be edited, sent for deletion, approved for
+deletion, rejected back to posted, or voided. Only the owner can reopen a
+period, and reopening also requires an audited reason.
+
+To correct a closed-period entry, create a new balanced journal entry dated in
+an open period and select its original entry in **Adjustment to closed-period
+entry**. The original remains unchanged and the adjustment link is shown in
+the entry list and details. The selector lists the latest 500 posted entries
+from closed periods. While any period is closed, new accounts must start with
+a zero opening balance; record an opening balance as a new entry in an open
+period so it cannot change finalized reports retroactively.
+
 ### 4. Configure environment variables
 1. Copy `.env.example` to a new file named `.env`
 2. Fill in your own values:
@@ -115,15 +139,23 @@ cannot be reactivated through self-service recovery.
 2. Go to https://myaccount.google.com/apppasswords
 3. Generate an app password, paste it into `.env` as `MAIL_PASSWORD`
 
-### 6. Seed the first admin account
-Visit in your browser:
+### 6. Create the first admin account
+The admin seed is command-line-only and has no default email or password. Set
+the initial administrator's name and email in PowerShell, then run:
 
-http://localhost/wrs-accounting-collab/backend/database/seeds/seed_admin.php
-(adjust the path/domain to match your local server setup)
+```powershell
+$env:ADMIN_SEED_NAME = "Initial Administrator"
+$env:ADMIN_SEED_EMAIL = "your-admin@example.com"
+php backend/database/seeds/seed_admin.php
+Remove-Item Env:ADMIN_SEED_NAME
+Remove-Item Env:ADMIN_SEED_EMAIL
+```
 
-Default seeded login:
-- Email: `admin@wrs.test`
-- Password: `password123`
+The account cannot sign in until its one-time setup invitation is used to
+choose a password. The invitation expires after 24 hours and is sent using the
+configured mail settings. If email delivery fails, the seed prints the setup
+link to the command line; use that link to set the password. Delete the
+printed link from any terminal logs or history where practical.
 
 ### Seed the official owner account
 Run `backend/database/seeds/seed_owner.php` from PowerShell after setting
@@ -136,6 +168,68 @@ owner, and does not overwrite an existing account.
 ### 7. Access the system
 
 http://localhost/wrs-accounting-collab/frontend/login.html
+
+### Automated off-site backups and restore tests (Windows)
+
+The backup scripts create a ZIP encrypted with AES-256 containing a
+transaction-consistent MySQL dump, the receipt uploads, and a verification
+manifest. They upload it to a private S3-compatible bucket and verify the
+remote object size. Temporary local archives and dump files are removed after
+the upload attempt.
+
+1. Install the AWS CLI and the MySQL/MariaDB client tools. Ensure `php.exe` is
+   on `PATH`; `mysqldump.exe` and `mysql.exe` should be on `PATH`, or in a
+   Laragon `bin\mysql\<version>\bin` directory.
+2. Create a private bucket with public access blocked. Configure an AWS CLI
+   profile for this Windows account using the provider's recommended
+   credentials; do not put access keys in `.env` or in scheduled-task
+   arguments. For AWS credentials, `aws configure --profile ledgerflow-backups`
+   starts the interactive profile setup; use your S3 provider's instructions
+   for custom endpoints. Limit the profile to the required bucket/prefix
+   operations.
+3. Configure the non-secret target settings in `.env`:
+   - `BACKUP_S3_BUCKET` — bucket name
+   - `BACKUP_S3_PREFIX` — object prefix (defaults to `ledgerflow`)
+   - `BACKUP_AWS_PROFILE` — optional AWS CLI profile name
+   - `BACKUP_S3_ENDPOINT_URL` — optional endpoint for non-AWS S3-compatible
+     providers
+   - `BACKUP_S3_SSE` — server-side encryption setting; defaults to `AES256`
+     (set blank only if the chosen provider does not support this option; the
+     archive itself is still AES-256 encrypted)
+4. Set `BACKUP_ARCHIVE_PASSWORD` as a Windows user environment variable for the
+   account that will run the scheduled tasks. Use a unique password with at
+   least 16 characters, store it securely, and retain it separately from the
+   bucket credentials. Sign out and back in after setting it so scheduled
+   tasks inherit it. Losing this password makes the backups unrestorable.
+5. To test configuration and create the first backup manually, run
+   `tools\backup-daily.ps1` from PowerShell in the repository. Check that the
+   command reports an uploaded and verified `s3://` object.
+6. Register daily backups and monthly restore tests for this Windows account:
+
+   ```powershell
+   .\tools\register-backup-tasks.ps1
+   .\tools\restore-test.ps1
+   ```
+
+   The scheduled tasks run only while the user is logged on by default. In
+   Task Scheduler, configure them to run while the user is logged off if
+   needed; Windows will ask for the account password. Keep the computer on
+   and ensure MySQL is available at the scheduled times.
+
+   The test downloads the newest archive, decrypts it, restores the database
+   into a randomly named temporary database, verifies its table list and
+   receipt-file hashes, then drops the temporary database. It never imports
+   into the live application database. The MySQL account used for the test
+   needs permission to create and drop databases; set the optional
+   `BACKUP_RESTORE_DB_USER` and `BACKUP_RESTORE_DB_PASS` to use a dedicated
+   account instead.
+
+Configure a bucket lifecycle rule to expire objects under the backup prefix
+after your chosen retention period (30 days is a reasonable starting point).
+If bucket versioning is enabled, configure expiration for noncurrent versions
+as well. Test restore from an object before relying on a new provider, bucket,
+or credentials. Restore tests need database space for a second copy of the
+database while they run.
 
 ## Project Structure
 

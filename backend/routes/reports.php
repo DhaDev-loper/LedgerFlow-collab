@@ -71,9 +71,15 @@ switch ($action) {
 
         $totalRevenue = array_sum(array_column($revenueLines, 'net_amount'));
         $totalExpense = array_sum(array_column($expenseLines, 'net_amount'));
+        $businessNameStmt = $pdo->prepare('SELECT business_name FROM business_settings WHERE id = :id');
+        $businessNameStmt->execute([':id' => 1]);
+        $businessName = trim((string) $businessNameStmt->fetchColumn());
 
         echo json_encode([
             'success' => true,
+            'business_name' => $businessName !== '' && $businessName !== 'My Business'
+                ? $businessName
+                : 'WRS Accounting / KoboSocial',
             'date_from' => $dateFrom,
             'date_to' => $dateTo,
             'revenue_lines' => $revenueLines,
@@ -123,9 +129,15 @@ switch ($action) {
         $retainedEarnings = array_sum(array_column($revenue, 'current_balance'))
             - array_sum(array_column($expenses, 'current_balance'));
         $totalEquity = $totalEquityRecorded + $retainedEarnings;
+        $businessNameStmt = getDbConnection()->prepare('SELECT business_name FROM business_settings WHERE id = :id');
+        $businessNameStmt->execute([':id' => 1]);
+        $businessName = trim((string) $businessNameStmt->fetchColumn());
 
         echo json_encode([
             'success' => true,
+            'business_name' => $businessName !== '' && $businessName !== 'My Business'
+                ? $businessName
+                : 'WRS Accounting / KoboSocial',
             'as_of' => $asOfDate,
             'assets' => $assets,
             'current_assets' => $currentAssets,
@@ -175,8 +187,15 @@ switch ($action) {
             $totalCreditColumn += $creditBalance;
         }
 
+        $businessNameStmt = getDbConnection()->prepare('SELECT business_name FROM business_settings WHERE id = :id');
+        $businessNameStmt->execute([':id' => 1]);
+        $businessName = trim((string) $businessNameStmt->fetchColumn());
+
         echo json_encode([
             'success' => true,
+            'business_name' => $businessName !== '' && $businessName !== 'My Business'
+                ? $businessName
+                : 'WRS Accounting / KoboSocial',
             'as_of' => $asOf,
             'lines' => $lines,
             'total_debit' => $totalDebitColumn,

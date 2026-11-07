@@ -15,7 +15,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <title>Transaction</title>
       <script src="../frontend/js/theme.js"></script>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-      <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+      <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -24,19 +24,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
            <div class ="main-content">
                   <div class="content-area">
-                         <!-- Global Top Navigation Bar -->
-                              <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
-                              <!-- Top-Left: Logo -->
-                              <div class="d-flex align-items-center">
-                                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
-                              </div>
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
-                              <!-- Top-Right: User Profile -->
-                              <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
-                              </div>
-                              </div>
                         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                               <div>
                                     <h1 class="h4 mb-1">Transactions</h1>
@@ -54,6 +43,34 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         
                         </div>
                         
+                              <div class="panel mb-3">
+                                    <div class="panel-body compact">
+                                          <div class="row g-2 align-items-end">
+                                                <div class="col-12 col-md-5">
+                                                      <label for="transactionSearch" class="form-label small mb-1">Search</label>
+                                                      <input type="search" class="form-control form-control-dark" id="transactionSearch" placeholder="Description, reference, client, category, or type">
+                                                </div>
+                                                <div class="col-6 col-md-2">
+                                                      <label for="transactionTypeFilter" class="form-label small mb-1">Type</label>
+                                                      <select class="form-select form-control-dark" id="transactionTypeFilter">
+                                                            <option value="">All types</option>
+                                                      </select>
+                                                </div>
+                                                <div class="col-6 col-md-2">
+                                                      <label for="transactionDateFrom" class="form-label small mb-1">From</label>
+                                                      <input type="date" class="filter-input w-100" id="transactionDateFrom">
+                                                </div>
+                                                <div class="col-6 col-md-2">
+                                                      <label for="transactionDateTo" class="form-label small mb-1">To</label>
+                                                      <input type="date" class="filter-input w-100" id="transactionDateTo">
+                                                </div>
+                                                <div class="col-6 col-md-1">
+                                                      <button type="button" class="quick-action-btn w-100" id="clearTransactionFilters" title="Clear filters" aria-label="Clear filters"><i class="bi bi-x-lg"></i></button>
+                                                </div>
+                                          </div>
+                                    </div>
+                              </div>
+
                               <div class="panel">
                               
                                     <div class="table-responsive">
@@ -100,77 +117,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
   </div>
 
-<nav class="bottom-nav">
-    <!-- LEFT SIDE (4 items) -->
-    <a href="dashboard.php" class="bottom-nav-item">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-    </a>
-    <a href="transaction.php" class="bottom-nav-item active">
-        <i class="bi bi-arrow-left-right"></i>
-        <span>Transact</span>
-    </a>
-    <a href="accounts.php" class="bottom-nav-item">
-        <i class="bi bi-wallet2"></i>
-        <span>Accounts</span>
-    </a>
-    <a href="clients.php" class="bottom-nav-item">
-        <i class="bi bi-people-fill"></i>
-        <span>Clients</span>
-    </a>
 
-    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
-    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
-        <div class="scan-btn-icon">
-            <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <span>Scan</span>
-    </button>
-    
-    <!-- RIGHT SIDE (4 items balanced) -->
-    <div class="bottom-nav-expandable " id="journalExpandable">
-        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
-            <i class="bi bi-journal-text"></i>
-            <span>Journal</span>
-        </button>
-
-        <div class="expandable-content active">
-            <a href="journal-entries.php" class="sub-nav-item">
-                <i class="bi bi-journal-check"></i>
-                <span>Entries</span>
-            </a>
-            <a href="general-ledger.php" class="sub-nav-item">
-                <i class="bi bi-book"></i>
-                <span>Ledger</span>
-            </a>
-            <a href="cashflow.php" class="sub-nav-item">
-                <i class="bi bi-cash-stack"></i>
-                <span>Cash Flow</span>
-            </a>
-        </div>
-    </div>
-     <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <a href="user-management.php" class="bottom-nav-item ">
-                <i class="bi bi-people"></i>
-                <span>Users</span>
-            </a>
-     <?php endif; ?>
-    <a href="reports.php" class="bottom-nav-item">
-        <i class="bi bi-bar-chart"></i>
-        <span>Reports</span>
-    </a>
-
-    <a href="settings.php" class="bottom-nav-item">
-        <i class="bi bi-gear"></i>
-        <span>Settings</span>
-    </a>
-
-    <div class="bottom-nav-divider"></div>
-    <a href="#" class="bottom-nav-item" id="logoutBtn">
-        <i class="bi bi-box-arrow-right"></i>
-        <span>Logout</span>
-    </a>
-</nav>
 
  <!-- Quick Sale Modal -->
             <div class="modal fade" id="quickSaleModal" tabindex="-1" aria-hidden="true">
@@ -185,7 +132,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
                                     <div class="mb-3">
                                           <label class="form-label small">Amount</label>
-                                          <input type="number" step="0.01" min="0.01" class="form-control form-control-dark" id="saleAmount" required>
+                                          <div class="input-group currency-input-group">
+                                                <span class="input-group-text" aria-hidden="true">₱</span>
+                                                <input type="text" inputmode="decimal" data-currency-input step="0.01" min="0.01" class="form-control form-control-dark" id="saleAmount" required>
+                                          </div>
                                     </div>
 
                                     <div class="mb-3">
@@ -202,6 +152,16 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     <div class="mb-3">
                                           <label class="form-label small">Description (optional)</label>
                                           <input type="text" class="form-control form-control-dark" id="saleDescription" placeholder="e.g. Walk-in sale">
+                                    </div>
+                                    <div class="row g-3">
+                                          <div class="col-md-6 mb-3">
+                                                <label for="saleProjectClient" class="form-label small">Project Client</label>
+                                                <select class="form-select form-control-dark project-client-select" id="saleProjectClient"><option value="">Select a customer</option></select>
+                                          </div>
+                                          <div class="col-md-6 mb-3">
+                                                <label for="saleProjectName" class="form-label small">Project (optional)</label>
+                                                <input type="text" class="form-control form-control-dark project-name-input" id="saleProjectName" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
+                                          </div>
                                     </div>
 
                                     <div id="quickSaleError" class="alert alert-danger py-2 px-3 small d-none"></div>
@@ -240,8 +200,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                       <select id="vendorBillPayable" class="form-select form-control-dark" required></select>
                                                 </div>
                                                 <div class="col-md-6">
-                                                      <label for="vendorBillAmount" class="form-label small">Amount (₱)</label>
-                                                      <input type="number" id="vendorBillAmount" class="form-control form-control-dark" min="0.01" step="0.01" required>
+                                                      <label for="vendorBillAmount" class="form-label small">Amount</label>
+                                                      <div class="input-group currency-input-group">
+                                                            <span class="input-group-text" aria-hidden="true">₱</span>
+                                                            <input type="text" inputmode="decimal" data-currency-input id="vendorBillAmount" class="form-control form-control-dark" min="0.01" step="0.01" required>
+                                                      </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                       <label for="vendorBillDate" class="form-label small">Bill Date</label>
@@ -258,6 +221,14 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                 <div class="col-12">
                                                       <label for="vendorBillDescription" class="form-label small">Description</label>
                                                       <input type="text" id="vendorBillDescription" class="form-control form-control-dark" maxlength="255" required>
+                                                </div>
+                                                <div class="col-md-6">
+                                                      <label for="vendorBillProjectClient" class="form-label small">Project Client</label>
+                                                      <select id="vendorBillProjectClient" class="form-select form-control-dark project-client-select"><option value="">Select a customer</option></select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                      <label for="vendorBillProjectName" class="form-label small">Project (optional)</label>
+                                                      <input type="text" id="vendorBillProjectName" class="form-control form-control-dark project-name-input" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
                                                 </div>
                                           </div>
                                     </div>
@@ -283,7 +254,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
                               <div class="mb-3">
                                     <label class="form-label small">Amount</label>
-                                    <input type="number" step="0.01" min="0.01" class="form-control form-control-dark" id="expenseAmount" required>
+                                    <div class="input-group currency-input-group">
+                                          <span class="input-group-text" aria-hidden="true">₱</span>
+                                          <input type="text" inputmode="decimal" data-currency-input step="0.01" min="0.01" class="form-control form-control-dark" id="expenseAmount" required>
+                                    </div>
                               </div>
 
                               <div class="mb-3">
@@ -300,6 +274,17 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                               <div class="mb-3">
                                     <label class="form-label small">Description (optional)</label>
                                     <input type="text" class="form-control form-control-dark" id="expenseDescription" placeholder="e.g. Electricity bill">
+                              </div>
+
+                              <div class="row g-3">
+                                    <div class="col-md-6 mb-3">
+                                          <label for="expenseProjectClient" class="form-label small">Project Client</label>
+                                          <select class="form-select form-control-dark project-client-select" id="expenseProjectClient"><option value="">Select a customer</option></select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                          <label for="expenseProjectName" class="form-label small">Project (optional)</label>
+                                          <input type="text" class="form-control form-control-dark project-name-input" id="expenseProjectName" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
+                                    </div>
                               </div>
 
                               <div id="quickExpenseError" class="alert alert-danger py-2 px-3 small d-none"></div>
@@ -398,7 +383,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small mb-1">Total Amount (₱) <span class="text-danger">*</span></label>
-                                        <input type="number" step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
+                                        <input type="text" inputmode="decimal" data-currency-input step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
                                     </div>
                                 </div>
 
@@ -435,8 +420,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       
 <?php if ($canCreate) { require __DIR__ . '/partials/payment-modal.php'; } ?>
 
+<datalist id="activeProjectNames"></datalist>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="../frontend/js/dashboard.js"></script>
+<script src="../frontend/js/currency-inputs.js"></script>
+<script src="../frontend/js/dashboard.js?v=transactions-autoload-fix-1"></script>
 <?php if ($canCreate): ?>
 <script src="../frontend/js/settlement.js"></script>
 <?php endif; ?>

@@ -127,10 +127,24 @@ CREATE TABLE clients (
     party_type      ENUM('customer','vendor','both') NOT NULL DEFAULT 'customer',
     email           VARCHAR(255) NULL,
     phone           VARCHAR(50)  NULL,
+    logo            VARCHAR(255) NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_clients_status (status),
     INDEX idx_clients_name (name)
+) ENGINE=InnoDB;
+
+CREATE TABLE projects (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    project_name    VARCHAR(255) NOT NULL,
+    client_id       INT UNSIGNED NOT NULL,
+    status          ENUM('active','archived') NOT NULL DEFAULT 'active',
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_projects_client
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT,
+    UNIQUE KEY uq_projects_name (project_name),
+    INDEX idx_projects_status_name (status, project_name),
+    INDEX idx_projects_client (client_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE transaction_journals (
@@ -140,10 +154,12 @@ CREATE TABLE transaction_journals (
     transaction_date    DATE            NOT NULL,
     reference_no        VARCHAR(50)     NULL,
     client_id           INT UNSIGNED    NULL,
+    project_id          INT UNSIGNED    NULL,
     due_date            DATE            NULL,
     total_amount        DECIMAL(14,2)   NOT NULL,
     status              ENUM('posted','deletion_pending','voided') NOT NULL DEFAULT 'posted',
     is_reconciled       TINYINT(1)      NOT NULL DEFAULT 0,
+    correction_of_journal_id BIGINT UNSIGNED NULL,
     is_edited           TINYINT(1)      NOT NULL DEFAULT 0,
     created_by          INT UNSIGNED    NOT NULL,
     created_at          TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -155,9 +171,33 @@ CREATE TABLE transaction_journals (
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_journals_client
         FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+    CONSTRAINT fk_journals_project
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_journals_correction
+        FOREIGN KEY (correction_of_journal_id) REFERENCES transaction_journals(id) ON DELETE RESTRICT,
     INDEX idx_journals_date (transaction_date),
     INDEX idx_journals_type (transaction_type_id),
-    INDEX idx_journals_client (client_id)
+    INDEX idx_journals_client (client_id),
+    INDEX idx_journals_project (project_id),
+    INDEX idx_journals_correction (correction_of_journal_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE accounting_periods (
+    period_type     ENUM('month','year') NOT NULL,
+    period_start    DATE NOT NULL,
+    period_end      DATE NOT NULL,
+    closed_by       INT UNSIGNED NOT NULL,
+    closed_at       DATETIME NOT NULL,
+    close_reason    TEXT NOT NULL,
+    reopened_by     INT UNSIGNED NULL,
+    reopened_at     DATETIME NULL,
+    reopen_reason   TEXT NULL,
+    PRIMARY KEY (period_type, period_start),
+    CONSTRAINT fk_accounting_periods_closed_by
+        FOREIGN KEY (closed_by) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_accounting_periods_reopened_by
+        FOREIGN KEY (reopened_by) REFERENCES users(id) ON DELETE RESTRICT,
+    INDEX idx_accounting_periods_status (closed_at, reopened_at, period_start)
 ) ENGINE=InnoDB;
 
 CREATE TABLE deletion_requests (

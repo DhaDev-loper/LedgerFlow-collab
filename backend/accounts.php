@@ -11,10 +11,10 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chart of Accounts — WRS Accounting</title>
+<title>Chart of Accounts — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -23,19 +23,8 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
     <div class="main-content">
         <div class="content-area">
-             <!-- Global Top Navigation Bar -->
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
-                <!-- Top-Left: Logo -->
-                <div class="d-flex align-items-center">
-                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
-                </div>
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
-                <!-- Top-Right: User Profile -->
-                <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-            </div>
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                 <div>
                     <h1 class="h4 mb-1">Chart of Accounts</h1>
@@ -95,77 +84,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
     </div>
 </div>
 
-<nav class="bottom-nav">
-    <!-- LEFT SIDE (4 items) -->
-    <a href="dashboard.php" class="bottom-nav-item">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-    </a>
-    <a href="transaction.php" class="bottom-nav-item">
-        <i class="bi bi-arrow-left-right"></i>
-        <span>Transact</span>
-    </a>
-    <a href="accounts.php" class="bottom-nav-item active">
-        <i class="bi bi-wallet2"></i>
-        <span>Accounts</span>
-    </a>
-    <a href="clients.php" class="bottom-nav-item">
-        <i class="bi bi-people-fill"></i>
-        <span>Clients</span>
-    </a>
 
-    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
-    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
-        <div class="scan-btn-icon">
-            <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <span>Scan</span>
-    </button>
-    
-    <!-- RIGHT SIDE (4 items balanced) -->
-    <div class="bottom-nav-expandable " id="journalExpandable">
-        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
-            <i class="bi bi-journal-text"></i>
-            <span>Journal</span>
-        </button>
-         
-        <div class="expandable-content active">
-            <a href="journal-entries.php" class="sub-nav-item">
-                <i class="bi bi-journal-check"></i>
-                <span>Entries</span>
-            </a>
-            <a href="general-ledger.php" class="sub-nav-item">
-                <i class="bi bi-book"></i>
-                <span>Ledger</span>
-            </a>
-            <a href="cashflow.php" class="sub-nav-item">
-                <i class="bi bi-cash-stack"></i>
-                <span>Cash Flow</span>
-            </a>
-        </div>
-    </div>
-     <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <a href="user-management.php" class="bottom-nav-item ">
-                <i class="bi bi-people"></i>
-                <span>Users</span>
-            </a>
-     <?php endif; ?>
-    <a href="reports.php" class="bottom-nav-item">
-        <i class="bi bi-bar-chart"></i>
-        <span>Reports</span>
-    </a>
-
-    <a href="settings.php" class="bottom-nav-item">
-        <i class="bi bi-gear"></i>
-        <span>Settings</span>
-    </a>
-
-    <div class="bottom-nav-divider"></div>
-    <a href="#" class="bottom-nav-item" id="logoutBtn">
-        <i class="bi bi-box-arrow-right"></i>
-        <span>Logout</span>
-    </a>
-</nav>
 
 <?php if ($canManage): ?>
 <!-- Add / Edit Account Modal -->
@@ -211,7 +130,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
                     <div class="mb-3" id="openingBalanceGroup">
                         <label class="form-label small">Opening Balance</label>
-                        <input type="number" step="0.01" class="form-control form-control-dark" id="openingBalance" name="opening_balance" value="0.00">
+                        <input type="text" inputmode="decimal" data-currency-input step="0.01" class="form-control form-control-dark" id="openingBalance" name="opening_balance" value="0.00">
                     </div>
 
                     <div class="mb-3">
@@ -316,7 +235,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small mb-1">Total Amount (₱) <span class="text-danger">*</span></label>
-                                        <input type="number" step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
+                                        <input type="text" inputmode="decimal" data-currency-input step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
                                     </div>
                                 </div>
 
@@ -364,6 +283,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
     const CAN_MANAGE  = <?= $canManage ? 'true' : 'false' ?>;
 </script>
 
+<script src="../frontend/js/currency-inputs.js"></script>
 <script src="../frontend/js/accounts.js"></script>
 <script>
     (() => {

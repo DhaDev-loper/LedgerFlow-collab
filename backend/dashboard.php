@@ -14,12 +14,12 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard — WRS Accounting</title>
+<title>Dashboard — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 
@@ -32,28 +32,10 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
     <!-- Main content -->
     <div class="main-content">
         <div class="content-area">
+            
+            <!-- Navbar -->
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
-            <!-- Global Top Navigation Bar -->
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
-                <!-- Top-Left: Logo -->
-                <div class="d-flex align-items-center">
-                    <img class="dashboard-brand-logo" src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
-                </div>
-
-                <!-- Top-Right: Notifications and User Profile -->
-                <div class="d-flex align-items-center gap-2">
-                    <button type="button" class="dashboard-notification-button" id="dueNotificationsButton"
-                            data-bs-toggle="modal" data-bs-target="#dueNotificationsModal"
-                            aria-label="Loading payment notifications" title="Payment due notifications">
-                        <i class="bi bi-bell" aria-hidden="true"></i>
-                        <span class="dashboard-notification-badge d-none" id="dueNotificationsCount" aria-live="polite"></span>
-                    </button>
-                    <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                        <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                        <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
-                    </div>
-                </div>
-            </div>
 
             <!-- Page Title & Quick Actions Row (Replaces the empty banner box) -->
             <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
@@ -67,47 +49,84 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                 </div>
             </div>
 
-            <!-- Receivables & Payables Summary -->
-            <div class="row g-3 mb-4">
-                <div class="col-md-6">
-                    <div class="panel ar-ap-summary-card" role="button" tabindex="0" data-ar-ap-type="ar"
-                         aria-label="View outstanding accounts receivable details">
-                         <div class="panel-header">
-                            <h2 class="h6 mb-0">Total Receivables</h2>
-                            <span class="small text-decoration-none" style="color: var(--accent-blue);">View Details</span>
-                        </div>
-                        <div class="panel-body compact">
-                            <div class="small mb-1" style="color: var(--dark-text-muted);">Total Unpaid Invoices</div>
-                            <div class="kpi-value money mb-2" id="arTotal">₱0.00</div>
-                            <div class="aging-progress">
-                                <div class="aging-progress-current" id="arCurrentBar" style="width: 50%;"></div>
-                                <div class="aging-progress-overdue" id="arOverdueBar" style="width: 50%;"></div>
+            <div class="d-flex justify-content-end mb-2">
+                <button type="button" class="quick-action-btn" id="toggleDashboardKpiView" aria-controls="dashboardKpiViews" aria-pressed="false">
+                    Show Cash Flow KPIs
+                </button>
+            </div>
+
+            <div id="dashboardKpiViews" class="dashboard-kpi-views mb-4">
+                <div class="row g-3 dashboard-kpi-view" id="receivablesPayablesKpiView">
+                    <div class="col-md-6">
+                        <div class="panel ar-ap-summary-card" role="button" tabindex="0" data-ar-ap-type="ar"
+                             aria-label="View outstanding accounts receivable details">
+                             <div class="panel-header">
+                                <h2 class="h6 mb-0">Total Receivables</h2>
+                                <span class="small text-decoration-none" style="color: var(--accent-blue);">View Details</span>
                             </div>
-                            <div class="d-flex gap-4 small">
-                                <div><span class="aging-legend-dot" style="background: var(--accent-blue);"></span>Current: <span class="money" id="arCurrentAmount">₱0.00</span></div>
-                                <div><span class="aging-legend-dot" style="background: #F87171;"></span>Overdue: <span class="money" id="arOverdueAmount">₱0.00</span></div>
+                            <div class="panel-body compact">
+                                <div class="small mb-1" style="color: var(--dark-text-muted);">Total Unpaid Invoices</div>
+                                <div class="kpi-value money mb-2" id="arTotal">₱0.00</div>
+                                <div class="aging-progress">
+                                    <div class="aging-progress-current" id="arCurrentBar" style="width: 50%;"></div>
+                                    <div class="aging-progress-overdue" id="arOverdueBar" style="width: 50%;"></div>
+                                </div>
+                                <div class="d-flex gap-4 small">
+                                    <div><span class="aging-legend-dot" style="background: var(--accent-blue);"></span>Current: <span class="money" id="arCurrentAmount">₱0.00</span></div>
+                                    <div><span class="aging-legend-dot" style="background: #F87171;"></span>Overdue: <span class="money" id="arOverdueAmount">₱0.00</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <div class="panel ar-ap-summary-card" role="button" tabindex="0" data-ar-ap-type="ap"
+                             aria-label="View outstanding accounts payable details">
+                          <div class="panel-header">
+                                <h2 class="h6 mb-0">Total Payables</h2>
+                                <span class="small text-decoration-none" style="color: var(--accent-blue);">View Details</span>
+                            </div>
+                            <div class="panel-body compact">
+                                <div class="small mb-1" style="color: var(--dark-text-muted);">Total Unpaid Bills</div>
+                                <div class="kpi-value money mb-2" id="apTotal">₱0.00</div>
+                                <div class="aging-progress">
+                                    <div class="aging-progress-current" id="apCurrentBar" style="width: 50%;"></div>
+                                    <div class="aging-progress-overdue" id="apOverdueBar" style="width: 50%;"></div>
+                                </div>
+                                <div class="d-flex gap-4 small">
+                                    <div><span class="aging-legend-dot" style="background: var(--accent-blue);"></span>Current: <span class="money" id="apCurrentAmount">₱0.00</span></div>
+                                    <div><span class="aging-legend-dot" style="background: #F87171;"></span>Overdue: <span class="money" id="apOverdueAmount">₱0.00</span></div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="col-md-6">
-                    <div class="panel ar-ap-summary-card" role="button" tabindex="0" data-ar-ap-type="ap"
-                         aria-label="View outstanding accounts payable details">
-                      <div class="panel-header">
-                            <h2 class="h6 mb-0">Total Payables</h2>
-                            <span class="small text-decoration-none" style="color: var(--accent-blue);">View Details</span>
-                        </div>
-                        <div class="panel-body compact">
-                            <div class="small mb-1" style="color: var(--dark-text-muted);">Total Unpaid Bills</div>
-                            <div class="kpi-value money mb-2" id="apTotal">₱0.00</div>
-                            <div class="aging-progress">
-                                <div class="aging-progress-current" id="apCurrentBar" style="width: 50%;"></div>
-                                <div class="aging-progress-overdue" id="apOverdueBar" style="width: 50%;"></div>
+                <div class="row g-3 dashboard-kpi-view d-none" id="cashFlowKpiView" aria-hidden="true" inert>
+                    <div class="col-md-4">
+                        <div class="panel dashboard-cash-kpi">
+                            <div class="panel-body compact">
+                                <div class="kpi-label">Total Inflow</div>
+                                <div class="kpi-value money positive" id="dashboardCashInflow">₱0.00</div>
+                                <div class="small dashboard-kpi-period" id="dashboardCashInflowPeriod"></div>
                             </div>
-                            <div class="d-flex gap-4 small">
-                                <div><span class="aging-legend-dot" style="background: var(--accent-blue);"></span>Current: <span class="money" id="apCurrentAmount">₱0.00</span></div>
-                                <div><span class="aging-legend-dot" style="background: #F87171;"></span>Overdue: <span class="money" id="apOverdueAmount">₱0.00</span></div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="panel dashboard-cash-kpi">
+                            <div class="panel-body compact">
+                                <div class="kpi-label">Total Outflow</div>
+                                <div class="kpi-value money negative" id="dashboardCashOutflow">₱0.00</div>
+                                <div class="small dashboard-kpi-period" id="dashboardCashOutflowPeriod"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="panel dashboard-cash-kpi">
+                            <div class="panel-body compact">
+                                <div class="kpi-label">Net Cash Flow</div>
+                                <div class="kpi-value money" id="dashboardNetCashFlow">₱0.00</div>
+                                <div class="small dashboard-kpi-period" id="dashboardNetCashFlowPeriod"></div>
                             </div>
                         </div>
                     </div>
@@ -122,13 +141,16 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
                     <div class="panel">
                         <div class="panel-header">
-                            <h2 class="h6 mb-0">Cash Flow</h2>
-                        <select class="form-select form-control-dark" id="periodFilter" style="width: auto; min-width: 140px;">
-                            <option value="1">Today</option>
-                            <option value="7">This Week</option>
-                            <option value="30" selected>This Month</option>
-                            <option value="365">This Year</option>
-                         </select>
+                            <div class="d-flex align-items-center gap-3">
+                                <h2 class="h6 mb-0">Cash Flow</h2>
+                                <a href="reports.php?report=cash-flow-analysis" class="small text-decoration-none" style="color: var(--accent-blue);">View Analysis</a>
+                            </div>
+                            <select class="form-select form-control-dark" id="periodFilter" style="width: auto; min-width: 140px;">
+                                <option value="1">Today</option>
+                                <option value="7">Last 7 Days</option>
+                                <option value="30" selected>Last 30 Days</option>
+                                <option value="365">Last 365 Days</option>
+                            </select>
                         </div>
                         <div class="panel-body">
                            <div class="cashflow-chart-container">
@@ -205,87 +227,17 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
     </div>
 </div>
 
-<nav class="bottom-nav">
-    <!-- LEFT SIDE (4 items) -->
-    <a href="dashboard.php" class="bottom-nav-item active">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-    </a>
-    <a href="transaction.php" class="bottom-nav-item">
-        <i class="bi bi-arrow-left-right"></i>
-        <span>Transact</span>
-    </a>
-    <a href="accounts.php" class="bottom-nav-item">
-        <i class="bi bi-wallet2"></i>
-        <span>Accounts</span>
-    </a>
-    <a href="clients.php" class="bottom-nav-item">
-        <i class="bi bi-people-fill"></i>
-        <span>Clients</span>
-    </a>
 
-    <!-- DEAD-CENTER FLOATING SCANNER BUTTON -->
-    <button type="button" class="bottom-nav-scan-btn" id="triggerScanModalBtn" data-bs-toggle="modal" data-bs-target="#receiptScannerModal" title="Scan / Import Receipt">
-        <div class="scan-btn-icon">
-            <i class="bi bi-qr-code-scan"></i>
-        </div>
-        <span>Scan</span>
-    </button>
-    
-    <!-- RIGHT SIDE (4 items balanced) -->
-    <div class="bottom-nav-expandable " id="journalExpandable">
-        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
-            <i class="bi bi-journal-text"></i>
-            <span>Journal</span>
-        </button>
 
-        <div class="expandable-content active">
-            <a href="journal-entries.php" class="sub-nav-item">
-                <i class="bi bi-journal-check"></i>
-                <span>Entries</span>
-            </a>
-            <a href="general-ledger.php" class="sub-nav-item">
-                <i class="bi bi-book"></i>
-                <span>Ledger</span>
-            </a>
-            <a href="cashflow.php" class="sub-nav-item">
-                <i class="bi bi-cash-stack"></i>
-                <span>Cash Flow</span>
-            </a>
-        </div>
-    </div>
-    <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <a href="user-management.php" class="bottom-nav-item ">
-                <i class="bi bi-people"></i>
-                <span>Users</span>
-            </a>
-     <?php endif; ?>
-    <a href="reports.php" class="bottom-nav-item">
-        <i class="bi bi-bar-chart"></i>
-        <span>Reports</span>
-    </a>
-
-    <a href="settings.php" class="bottom-nav-item">
-        <i class="bi bi-gear"></i>
-        <span>Settings</span>
-    </a>
-
-    <div class="bottom-nav-divider"></div>
-    <a href="#" class="bottom-nav-item" id="logoutBtn">
-        <i class="bi bi-box-arrow-right"></i>
-        <span>Logout</span>
-    </a>
-</nav>
-
-<div class="modal fade" id="arApDetailsModal" tabindex="-1" aria-labelledby="arApDetailsTitle" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+<div class="modal fade" id="arApDetailsModal" tabindex="-1" role="dialog" aria-labelledby="arApDetailsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable ar-ap-expand-dialog">
         <div class="modal-content modal-dark">
             <div class="modal-header">
                 <div>
                     <h5 class="modal-title" id="arApDetailsTitle">Outstanding Details</h5>
                     <p class="small mb-0" id="arApDetailsTotal" style="color: var(--dark-text-muted);"></p>
                 </div>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white ar-ap-details-close" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="table-responsive">
@@ -344,7 +296,10 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
                     <div class="mb-3">
                         <label class="form-label small">Amount</label>
-                        <input type="number" step="0.01" min="0.01" class="form-control form-control-dark" id="saleAmount" required>
+                        <div class="input-group currency-input-group">
+                            <span class="input-group-text" aria-hidden="true">₱</span>
+                            <input type="text" inputmode="decimal" data-currency-input step="0.01" min="0.01" class="form-control form-control-dark" id="saleAmount" required>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -387,7 +342,10 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
                     <div class="mb-3">
                         <label class="form-label small">Amount</label>
-                        <input type="number" step="0.01" min="0.01" class="form-control form-control-dark" id="expenseAmount" required>
+                        <div class="input-group currency-input-group">
+                            <span class="input-group-text" aria-hidden="true">₱</span>
+                                          <input type="text" inputmode="decimal" data-currency-input step="0.01" min="0.01" class="form-control form-control-dark" id="expenseAmount" required>
+                        </div>
                     </div>
 
                     <div class="mb-3">
@@ -503,7 +461,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label small mb-1">Total Amount (₱) <span class="text-danger">*</span></label>
-                                        <input type="number" step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
+                                        <input type="text" inputmode="decimal" data-currency-input step="0.01" class="form-control form-control-dark" id="scannedAmount" required>
                                     </div>
                                 </div>
 
@@ -538,7 +496,8 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="../frontend/js/dashboard.js"></script>
+<script src="../frontend/js/currency-inputs.js"></script>
+<script src="../frontend/js/dashboard.js?v=transactions-autoload-fix-1"></script>
 <script src="../frontend/js/session-timeout.js"></script>
 </body>
 

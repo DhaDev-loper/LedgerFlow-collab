@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/audit_helper.php';
+require_once __DIR__ . '/../config/accounting_periods.php';
 
 // A small reusable check for actions that modify data — not everyone
 // who can VIEW accounts should be able to CHANGE them. so only admin and accountant
@@ -62,6 +63,13 @@ switch ($action) {
         }
 
         $pdo = getDbConnection();
+        if ($openingBalance != 0.0 && hasClosedAccountingPeriods($pdo)) {
+            http_response_code(422);
+            echo json_encode([
+                'error' => 'An opening balance would change finalized reports. Create the account with a zero balance and record the balance as a new entry in an open period.',
+            ]);
+            break;
+        }
         $accountTypeStmt = $pdo->prepare("SELECT name FROM account_types WHERE id = :id");
         $accountTypeStmt->execute([':id' => $accountTypeId]);
         $accountTypeName = $accountTypeStmt->fetchColumn();

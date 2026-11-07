@@ -9,25 +9,17 @@ $userName = $_SESSION['full_name'] ?? 'User';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audit Log — WRS Accounting</title>
+    <title>Audit Log — KoboSocial</title>
     <script src="../frontend/js/theme.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
 <div class="app-shell">
     <div class="main-content">
         <div class="content-area">
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
-                <div class="d-flex align-items-center">
-                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
-                </div>
-                <div class="d-flex align-items-center gap-2 px-3 py-1 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-            </div>
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
             <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
                 <div>
@@ -50,6 +42,8 @@ $userName = $_SESSION['full_name'] ?? 'User';
                             <option value="LOGIN_SUCCESS">Signed in</option>
                             <option value="CREATE_JOURNAL_ENTRY">Recorded journal entry</option>
                             <option value="EDIT_JOURNAL_ENTRY">Edited journal entry</option>
+                            <option value="CLOSE_ACCOUNTING_PERIOD">Closed accounting period</option>
+                            <option value="REOPEN_ACCOUNTING_PERIOD">Reopened accounting period</option>
                             <option value="VOID_JOURNAL_ENTRY">Voided journal entry</option>
                             <option value="CREATE_ACCOUNT">Created account</option>
                             <option value="EDIT_ACCOUNT">Updated account</option>
@@ -82,9 +76,9 @@ $userName = $_SESSION['full_name'] ?? 'User';
                         <label for="auditDateTo" class="form-label small">To</label>
                         <input id="auditDateTo" class="form-control form-control-dark" type="date">
                     </div>
-                    <div class="col-12 col-lg-2 d-flex gap-2">
-                        <button class="quick-action-btn primary flex-grow-1" type="submit"><i class="bi bi-search me-1"></i> Filter</button>
+                    <div class="col-12 col-lg-2 d-flex align-items-center gap-2">
                         <button class="quick-action-btn" type="reset" id="clearAuditFilters" title="Clear filters" aria-label="Clear filters"><i class="bi bi-x-lg"></i></button>
+                        <span class="small" style="color: var(--dark-text-muted);">Updates automatically</span>
                     </div>
                 </form>
             </div>
@@ -127,25 +121,7 @@ $userName = $_SESSION['full_name'] ?? 'User';
     </div>
 </div>
 
-<nav class="bottom-nav">
-    <a href="dashboard.php" class="bottom-nav-item"><i class="bi bi-speedometer2"></i><span>Dashboard</span></a>
-    <a href="transaction.php" class="bottom-nav-item"><i class="bi bi-arrow-left-right"></i><span>Transact</span></a>
-    <a href="accounts.php" class="bottom-nav-item"><i class="bi bi-wallet2"></i><span>Accounts</span></a>
-    <a href="clients.php" class="bottom-nav-item"><i class="bi bi-people-fill"></i><span>Clients</span></a>
-    <div class="bottom-nav-expandable" id="journalExpandable">
-        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger"><i class="bi bi-journal-text"></i><span>Journal</span></button>
-        <div class="expandable-content">
-            <a href="journal-entries.php" class="sub-nav-item"><i class="bi bi-journal-check"></i><span>Entries</span></a>
-            <a href="general-ledger.php" class="sub-nav-item"><i class="bi bi-book"></i><span>Ledger</span></a>
-            <a href="cashflow.php" class="sub-nav-item"><i class="bi bi-cash-stack"></i><span>Cash Flow</span></a>
-        </div>
-    </div>
-    <a href="user-management.php" class="bottom-nav-item active"><i class="bi bi-people"></i><span>Users</span></a>
-    <a href="reports.php" class="bottom-nav-item"><i class="bi bi-bar-chart"></i><span>Reports</span></a>
-    <a href="settings.php" class="bottom-nav-item"><i class="bi bi-gear"></i><span>Settings</span></a>
-    <div class="bottom-nav-divider"></div>
-    <a href="#" class="bottom-nav-item" id="logoutBtn"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
-</nav>
+
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="../frontend/js/audit-log.js"></script>

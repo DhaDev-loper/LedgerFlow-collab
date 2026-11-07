@@ -10,10 +10,11 @@ $userRole = $_SESSION['role'];
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reports — WRS Accounting</title>
+<title>Reports — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+<link rel="stylesheet" href="../frontend/css/report-statements.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -23,19 +24,8 @@ $userRole = $_SESSION['role'];
 
     <div class="main-content">
         <div class="content-area">
-            <!-- Global Top Navigation Bar -->
-            <div class="d-flex justify-content-between align-items-center mb-4 pb-2">
-                <!-- Top-Left: Logo -->
-                <div class="d-flex align-items-center">
-                    <img src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial Logo" style="height: 42px; width: auto; object-fit: contain;">
-                </div>
+            <?php require __DIR__ . '/includes/navbar.php'; ?>
 
-                <!-- Top-Right: User Profile -->
-                <div class="d-flex align-items-center gap-2 px-3 py-1.5 rounded-pill" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--dark-border, rgba(255, 255, 255, 0.08));">
-                    <i class="bi bi-person-circle fs-5 text-gradient-neon"></i>
-                    <span class="fw-semibold small text-light"><?= htmlspecialchars($userName, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-            </div>
            <div class="mb-4">
              <h1 class="h4 mb-1">Reports</h1>
              <p class="small mb-0" style="color: var(--dark-text-muted);">Financial reports from journal activity, including cash inflows and outflows.</p>
@@ -46,10 +36,9 @@ $userRole = $_SESSION['role'];
                     <button type="button" class="quick-action-btn primary" id="tabIncomeStatement">Income Statement</button>
                     <button type="button" class="quick-action-btn" id="tabBalanceSheet">Balance Sheet</button>
                     <button type="button" class="quick-action-btn" id="tabTrialBalance">Trial Balance</button>
+                    <button type="button" class="quick-action-btn" id="tabCashFlowAnalysis">Cash Flow Analysis</button>
                     <button type="button" class="quick-action-btn" id="tabCashFlowStatement">Cash Flow Statement</button>
                 </div>
-
-                
 
             <div class="d-flex flex-wrap align-items-end gap-2">
                    <div id="incomeStatementDateControls" class="d-flex gap-2 align-items-end">
@@ -70,6 +59,16 @@ $userRole = $_SESSION['role'];
                         <label for="trialBalanceAsOfDate" class="form-label small mb-1">Trial Balance as of</label>
                         <input type="date" class="filter-input" id="trialBalanceAsOfDate">
                     </div>
+                    <div id="cashFlowAnalysisDateControls" class="d-none d-flex gap-2 align-items-end">
+                        <div>
+                            <label for="cashFlowAnalysisDateFrom" class="form-label small mb-1">From</label>
+                            <input type="date" class="filter-input" id="cashFlowAnalysisDateFrom">
+                        </div>
+                        <div>
+                            <label for="cashFlowAnalysisDateTo" class="form-label small mb-1">To</label>
+                            <input type="date" class="filter-input" id="cashFlowAnalysisDateTo">
+                        </div>
+                    </div>
                     <div id="cashFlowStatementDateControls" class="d-none d-flex gap-2 align-items-end">
                         <div>
                             <label for="cashFlowDateFrom" class="form-label small mb-1">From</label>
@@ -80,7 +79,9 @@ $userRole = $_SESSION['role'];
                             <input type="date" class="filter-input" id="cashFlowDateTo">
                         </div>
                     </div>
-             <button class="quick-action-btn" id="generateReportBtn">Generate</button>
+             <button type="button" class="quick-action-btn d-none" id="printIncomeStatementBtn">Print</button>
+             <button type="button" class="quick-action-btn d-none" id="printBalanceSheetBtn">Print</button>
+             <button type="button" class="quick-action-btn d-none" id="printTrialBalanceBtn">Print</button>
              <button type="button" class="quick-action-btn d-none" id="printCashFlowBtn">Print</button>
              <button type="button" class="quick-action-btn d-none" id="exportCashFlowExcelBtn">Export Excel</button>
              <button type="button" id="exportBtn" class="quick-action-btn">
@@ -94,80 +95,27 @@ $userRole = $_SESSION['role'];
             </div>
       </div>
 
-<div id="reportContent">
-    <p class="text-center py-5" style="color: var(--dark-text-muted);">Reports load automatically when selected.</p>
-</div>
-
+<div class="panel mb-3">
+    <div class="panel-body compact d-flex flex-wrap align-items-end justify-content-between gap-3">
+        <div>
+            <label for="projectReportSelect" class="form-label small mb-1">Project Profit &amp; Loss</label>
+            <select class="form-select form-control-dark" id="projectReportSelect" style="min-width: min(320px, 80vw);">
+                <option value="">Loading active projects...</option>
+            </select>
         </div>
-    </div>
-</div>
-          <nav class="bottom-nav">
-    <!-- LEFT SIDE (4 items) -->
-    <a href="dashboard.php" class="bottom-nav-item">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-    </a>
-    <a href="transaction.php" class="bottom-nav-item ">
-        <i class="bi bi-arrow-left-right"></i>
-        <span>Transact</span>
-    </a>
-    <a href="accounts.php" class="bottom-nav-item">
-        <i class="bi bi-wallet2"></i>
-        <span>Accounts</span>
-    </a>
-    <a href="clients.php" class="bottom-nav-item">
-        <i class="bi bi-people-fill"></i>
-        <span>Clients</span>
-    </a>
-
-
-    
-    
-    <!-- RIGHT SIDE (4 items balanced) -->
-    <div class="bottom-nav-expandable " id="journalExpandable">
-        <button type="button" class="bottom-nav-item nav-trigger" id="journalTrigger">
-            <i class="bi bi-journal-text"></i>
-            <span>Journal</span>
+        <button type="button" class="quick-action-btn primary" id="openProjectReportBtn" disabled>
+            <i class="bi bi-file-earmark-bar-graph" aria-hidden="true"></i> Open Project Report
         </button>
+    </div>
+</div>
 
-        <div class="expandable-content active">
-            <a href="journal-entries.php" class="sub-nav-item">
-                <i class="bi bi-journal-check"></i>
-                <span>Entries</span>
-            </a>
-            <a href="general-ledger.php" class="sub-nav-item">
-                <i class="bi bi-book"></i>
-                <span>Ledger</span>
-            </a>
-            <a href="cashflow.php" class="sub-nav-item">
-                <i class="bi bi-cash-stack"></i>
-                <span>Cash Flow</span>
-            </a>
+<div id="reportContent">
+    <p class="text-center py-5" style="color: var(--dark-text-muted);">Reports update automatically when you change the selected dates.</p>
+</div>
+
         </div>
     </div>
-     <?php if (in_array($_SESSION['role'], ['admin', 'owner'], true)): ?>
-            <a href="user-management.php" class="bottom-nav-item ">
-                <i class="bi bi-people"></i>
-                <span>Users</span>
-            </a>
-     <?php endif; ?>
-    <a href="reports.php" class="bottom-nav-item active" aria-current="page">
-        <i class="bi bi-bar-chart"></i>
-        <span>Reports</span>
-    </a>
-
-    <a href="settings.php" class="bottom-nav-item">
-        <i class="bi bi-gear"></i>
-        <span>Settings</span>
-    </a>
-
-    <div class="bottom-nav-divider"></div>
-    <a href="#" class="bottom-nav-item" id="logoutBtn">
-        <i class="bi bi-box-arrow-right"></i>
-        <span>Logout</span>
-    </a>
-</nav>
-
+</div>
 
 <!-- modal -->
  <!-- PDF Preview Modal -->
@@ -203,6 +151,7 @@ $userRole = $_SESSION['role'];
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="../frontend/js/reports.js"></script>
 <script src="../frontend/js/session-timeout.js"></script>
 </body>

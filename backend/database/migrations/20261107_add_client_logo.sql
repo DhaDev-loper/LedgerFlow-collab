@@ -1,0 +1,2 @@
+ALTER TABLE clients
+    ADD COLUMN logo VARCHAR(255) NULL AFTER phone;
