@@ -10,7 +10,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +19,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-notification-badge-2">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 
@@ -318,6 +318,17 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                         <input type="text" class="form-control form-control-dark" id="saleDescription" placeholder="e.g. Walk-in sale">
                     </div>
 
+                    <div class="row g-3">
+                        <div class="col-md-6 mb-3">
+                            <label for="saleProjectClient" class="form-label small">Project Client</label>
+                            <select class="form-select form-control-dark project-client-select" id="saleProjectClient"><option value="">Select a customer</option></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="saleProjectName" class="form-label small">Project (optional)</label>
+                            <input type="text" class="form-control form-control-dark project-name-input" id="saleProjectName" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
+                        </div>
+                    </div>
+
                     <div id="quickSaleError" class="alert alert-danger py-2 px-3 small d-none"></div>
                 </div>
                 <div class="modal-footer">
@@ -362,6 +373,17 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                     <div class="mb-3">
                         <label class="form-label small">Description (optional)</label>
                         <input type="text" class="form-control form-control-dark" id="expenseDescription" placeholder="e.g. Electricity bill">
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6 mb-3">
+                            <label for="expenseProjectClient" class="form-label small">Project Client</label>
+                            <select class="form-select form-control-dark project-client-select" id="expenseProjectClient"><option value="">Select a customer</option></select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="expenseProjectName" class="form-label small">Project (optional)</label>
+                            <input type="text" class="form-control form-control-dark project-name-input" id="expenseProjectName" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
+                        </div>
                     </div>
 
                     <div id="quickExpenseError" class="alert alert-danger py-2 px-3 small d-none"></div>
@@ -450,7 +472,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small mb-1">Date <span class="text-danger">*</span></label>
-                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required>
+                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required lang="en-US">
                                     </div>
                                 </div>
 
@@ -496,6 +518,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<datalist id="activeProjectNames"></datalist>
 <script src="../frontend/js/currency-inputs.js"></script>
 <script src="../frontend/js/dashboard.js?v=transactions-autoload-fix-1"></script>
 <script src="../frontend/js/session-timeout.js"></script>

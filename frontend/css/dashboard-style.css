@@ -507,8 +507,8 @@ h1, h2, h3, h4, .brand-font {
 }
 .dashboard-notification-badge {
     position: absolute;
-    top: -0.3rem;
-    right: -0.3rem;
+    top: -0.2rem;
+    right: -0.2rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1099,6 +1099,17 @@ h1, h2, h3, h4, .brand-font {
 #entryModal .journal-mode-toggle input:focus-visible + label {
     outline: 2px solid var(--form-control-focus);
     outline-offset: 3px;
+}
+
+#entryModal .journal-mode-toggle input:disabled + label {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+#entryModal #templateSearchInput:disabled,
+#entryModal #toggleTemplateDropdown:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 #entryModal .journal-auto-section {
@@ -2458,6 +2469,10 @@ body.mega-menu-open {
     background: var(--dark-surface);
     color: var(--dark-text);
     text-decoration: none;
+}
+
+#dueNotificationsButton {
+    position: relative;
 }
 
 .global-mega-nav-icon-button:hover,

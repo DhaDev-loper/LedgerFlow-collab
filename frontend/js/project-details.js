@@ -17,12 +17,9 @@ function formatProjectMoney(value) {
 }
 
 function formatProjectDate(value, includeTime = false) {
-    if (!value) return '—';
-    const date = new Date(String(value).replace(' ', 'T'));
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleString('en-PH', includeTime
-        ? { dateStyle: 'medium', timeStyle: 'short' }
-        : { dateStyle: 'medium' });
+    return includeTime
+        ? window.formatDateTimeMDY(value)
+        : window.formatDateMDY(value);
 }
 
 function renderProjectLines(elementId, lines, emptyText) {

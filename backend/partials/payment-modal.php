@@ -54,7 +54,7 @@
                         </div>
                         <div class="col-md-4">
                             <label for="paymentDate" class="form-label small">Date</label>
-                            <input type="date" class="form-control form-control-dark" id="paymentDate" required>
+                            <input type="date" class="form-control form-control-dark" id="paymentDate" required lang="en-US">
                         </div>
                         <div class="col-md-4">
                             <label for="paymentReference" class="form-label small">Reference #</label>

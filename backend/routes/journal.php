@@ -1474,7 +1474,7 @@ switch ($action) {
 
         for ($i = $days - 1; $i >= 0; $i--) {
             $date = date('Y-m-d', strtotime("-{$i} days"));
-            $labels[]  = date('M j', strtotime($date));
+            $labels[]  = date('m/d/Y', strtotime($date));
             $cashIn[]  = $byDate[$date]['in'] ?? 0;
             $cashOut[] = $byDate[$date]['out'] ?? 0;
         }
@@ -1960,7 +1960,7 @@ switch ($action) {
         $period  = new DatePeriod($parsedDateFrom, new DateInterval('P1D'), $parsedDateTo->modify('+1 day'));
         foreach ($period as $date) {
             $key       = $date->format('Y-m-d');
-            $labels[]  = $date->format('M j');
+            $labels[]  = $date->format('m/d/Y');
             $cashIn[]  = $byDate[$key]['in'] ?? 0;
             $cashOut[] = $byDate[$key]['out'] ?? 0;
         }

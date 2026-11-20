@@ -8,7 +8,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -58,11 +58,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                 </div>
                                                 <div class="col-6 col-md-2">
                                                       <label for="transactionDateFrom" class="form-label small mb-1">From</label>
-                                                      <input type="date" class="filter-input w-100" id="transactionDateFrom">
+                                                      <input type="date" class="filter-input w-100" id="transactionDateFrom" lang="en-US">
                                                 </div>
                                                 <div class="col-6 col-md-2">
                                                       <label for="transactionDateTo" class="form-label small mb-1">To</label>
-                                                      <input type="date" class="filter-input w-100" id="transactionDateTo">
+                                                      <input type="date" class="filter-input w-100" id="transactionDateTo" lang="en-US">
                                                 </div>
                                                 <div class="col-6 col-md-1">
                                                       <button type="button" class="quick-action-btn w-100" id="clearTransactionFilters" title="Clear filters" aria-label="Clear filters"><i class="bi bi-x-lg"></i></button>
@@ -208,11 +208,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                 </div>
                                                 <div class="col-md-4">
                                                       <label for="vendorBillDate" class="form-label small">Bill Date</label>
-                                                      <input type="date" id="vendorBillDate" class="form-control form-control-dark" required>
+                                                      <input type="date" id="vendorBillDate" class="form-control form-control-dark" required lang="en-US">
                                                 </div>
                                                 <div class="col-md-4">
                                                       <label for="vendorBillDueDate" class="form-label small">Due Date</label>
-                                                      <input type="date" id="vendorBillDueDate" class="form-control form-control-dark" required>
+                                                      <input type="date" id="vendorBillDueDate" class="form-control form-control-dark" required lang="en-US">
                                                 </div>
                                                 <div class="col-md-4">
                                                       <label for="vendorBillReference" class="form-label small">Bill / Reference #</label>
@@ -372,7 +372,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small mb-1">Date <span class="text-danger">*</span></label>
-                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required>
+                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required lang="en-US">
                                     </div>
                                 </div>
 

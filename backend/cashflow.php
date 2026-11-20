@@ -7,7 +7,7 @@ header('Location: reports.php?report=cash-flow-analysis', true, 302);
 exit;
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -32,11 +32,11 @@ exit;
                 <div class="d-flex gap-2 align-items-end">
                     <div>
                         <label class="form-label small mb-1">From</label>
-                        <input type="date" class="form-control form-control-dark" id="cfDateFrom">
+                        <input type="date" class="form-control form-control-dark" id="cfDateFrom" lang="en-US">
                     </div>
                     <div>
                         <label class="form-label small mb-1">To</label>
-                        <input type="date" class="form-control form-control-dark" id="cfDateTo">
+                        <input type="date" class="form-control form-control-dark" id="cfDateTo" lang="en-US">
                     </div>
                     <button class="quick-action-btn primary" id="cfGenerateBtn">Generate</button>
                 </div>

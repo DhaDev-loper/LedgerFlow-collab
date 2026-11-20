@@ -153,7 +153,7 @@
             data.items.forEach(item => {
                 const row = document.createElement('li');
                 const reference = item.reference_no ? ` · ${item.reference_no}` : '';
-                const due = item.due_date ? ` · due ${item.due_date}` : '';
+                const due = item.due_date ? ` · due ${window.formatDateMDY(item.due_date)}` : '';
                 row.textContent = `${item.description || 'Journal entry'}${reference}${due}: ${formatPaymentCurrency(item.remaining)}`;
                 list.appendChild(row);
             });

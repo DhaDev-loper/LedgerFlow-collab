@@ -154,4 +154,5 @@ $renderNavigationLinks = static function (array $links) use ($navigationLinkIsAc
         <div class="logout-confirm-progress" aria-hidden="true"><span></span></div>
     </section>
 </div>
+    <script src="../frontend/js/date-format.js?v=mdy-calendar-picker-2"></script>
 <script src="../frontend/js/mega-nav.js" defer></script>

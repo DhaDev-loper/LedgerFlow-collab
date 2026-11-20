@@ -186,13 +186,7 @@ function escapeHtml(str) {
 }
 
 function formatDate(dateStr) {
-    if (!dateStr) return '—';
-
-    const datePart = String(dateStr).split(/[ T]/, 1)[0];
-    const parts = datePart.split('-');
-    if (parts.length !== 3 || parts[0].length !== 4) return String(dateStr);
-
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return window.formatDateMDY(dateStr);
 }
 
 function formatMoney(amount) {
@@ -280,7 +274,7 @@ async function loadDueNotifications() {
                 description.textContent = [
                     item.type === 'ar' ? 'A/R · Customer invoice' : 'A/P · Vendor bill',
                     item.reference_no ? `Ref ${item.reference_no}` : item.description,
-                    `Due ${item.due_date}`,
+                    `Due ${formatDate(item.due_date)}`,
                 ].filter(Boolean).join(' · ');
                 details.append(party, description);
 
@@ -745,8 +739,8 @@ document.getElementById('quickSaleForm')?.addEventListener('submit', async (e) =
                 transaction_type_id: window.CASH_INFLOW_TYPE_ID,
                 description: description,
                 transaction_date: new Date().toISOString().split('T')[0],
-                project_name: document.getElementById('saleProjectName').value.trim(),
-                project_client_id: document.getElementById('saleProjectClient').value,
+                project_name: document.getElementById('saleProjectName')?.value.trim() || '',
+                project_client_id: document.getElementById('saleProjectClient')?.value || '',
                 debit_lines: JSON.stringify([{ account_id: toAccount, amount: amount }]),
                 credit_lines: JSON.stringify([{ account_id: fromAccount, amount: amount }]),
             }),
@@ -791,8 +785,8 @@ document.getElementById('quickExpenseForm')?.addEventListener('submit', async (e
                 transaction_type_id: window.CASH_OUTFLOW_TYPE_ID,
                 description: description,
                 transaction_date: new Date().toISOString().split('T')[0],
-                project_name: document.getElementById('expenseProjectName').value.trim(),
-                project_client_id: document.getElementById('expenseProjectClient').value,
+                project_name: document.getElementById('expenseProjectName')?.value.trim() || '',
+                project_client_id: document.getElementById('expenseProjectClient')?.value || '',
                 debit_lines: JSON.stringify([{ account_id: toAccount, amount: amount }]),
                 credit_lines: JSON.stringify([{ account_id: fromAccount, amount: amount }]),
             }),
@@ -1007,8 +1001,8 @@ async function loadArApDetails(type, sourceCard) {
                 <tr>
                     <td>${party}</td>
                     <td>${escapeDashboardHtml(item.description || '')}${reference}</td>
-                    <td class="text-nowrap">${escapeDashboardHtml(item.transaction_date || '—')}</td>
-                    <td class="text-nowrap">${escapeDashboardHtml(item.due_date || 'No due date')}</td>
+                    <td class="text-nowrap">${escapeDashboardHtml(formatDate(item.transaction_date))}</td>
+                    <td class="text-nowrap">${escapeDashboardHtml(item.due_date ? formatDate(item.due_date) : 'No due date')}</td>
                     <td class="text-end text-nowrap">${formatMoney(item.amount)}</td>
                     <td class="text-end text-nowrap">${formatMoney(item.applied)}</td>
                     <td class="text-end text-nowrap fw-semibold">${formatMoney(item.remaining)}</td>

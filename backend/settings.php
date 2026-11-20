@@ -8,7 +8,7 @@ $isOwner = $userRole === 'owner';
 $canEditBusiness = in_array($userRole, ['admin', 'owner'], true);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">

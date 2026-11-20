@@ -7,7 +7,7 @@ $projectId = filter_input(INPUT_GET, 'project_id', FILTER_VALIDATE_INT) ?: 0;
 $canManageProjects = in_array($_SESSION['role'] ?? '', ['admin', 'accountant', 'owner'], true);
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

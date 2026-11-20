@@ -7,7 +7,7 @@ $userRole = $_SESSION['role'];
 $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -38,11 +38,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small mb-1">From</label>
-                            <input type="date" class="filter-input" id="ledgerDateFrom">
+                            <input type="date" class="filter-input" id="ledgerDateFrom" lang="en-US">
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small mb-1">To</label>
-                            <input type="date" class="filter-input" id="ledgerDateTo">
+                            <input type="date" class="filter-input" id="ledgerDateTo" lang="en-US">
                         </div>
                     </div>
                 </div>

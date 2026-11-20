@@ -6,7 +6,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 $userRole = $_SESSION['role'];
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -44,39 +44,39 @@ $userRole = $_SESSION['role'];
                    <div id="incomeStatementDateControls" class="d-flex gap-2 align-items-end">
                          <div>
                                <label for="dateFrom" class="form-label small mb-1">From</label>
-                               <input type="date" class="filter-input" id="dateFrom">
+                               <input type="date" class="filter-input" id="dateFrom" lang="en-US">
                            </div>
                           <div>
                                 <label for="dateTo" class="form-label small mb-1">To</label>
-                               <input type="date" class="filter-input" id="dateTo">
+                               <input type="date" class="filter-input" id="dateTo" lang="en-US">
                           </div>
                     </div>
                     <div id="balanceSheetDateControl" class="d-none">
                         <label for="balanceSheetAsOfDate" class="form-label small mb-1">Balance Sheet as of</label>
-                        <input type="date" class="filter-input" id="balanceSheetAsOfDate">
+                        <input type="date" class="filter-input" id="balanceSheetAsOfDate" lang="en-US">
                     </div>
                     <div id="trialBalanceDateControl" class="d-none">
                         <label for="trialBalanceAsOfDate" class="form-label small mb-1">Trial Balance as of</label>
-                        <input type="date" class="filter-input" id="trialBalanceAsOfDate">
+                        <input type="date" class="filter-input" id="trialBalanceAsOfDate" lang="en-US">
                     </div>
                     <div id="cashFlowAnalysisDateControls" class="d-none d-flex gap-2 align-items-end">
                         <div>
                             <label for="cashFlowAnalysisDateFrom" class="form-label small mb-1">From</label>
-                            <input type="date" class="filter-input" id="cashFlowAnalysisDateFrom">
+                            <input type="date" class="filter-input" id="cashFlowAnalysisDateFrom" lang="en-US">
                         </div>
                         <div>
                             <label for="cashFlowAnalysisDateTo" class="form-label small mb-1">To</label>
-                            <input type="date" class="filter-input" id="cashFlowAnalysisDateTo">
+                            <input type="date" class="filter-input" id="cashFlowAnalysisDateTo" lang="en-US">
                         </div>
                     </div>
                     <div id="cashFlowStatementDateControls" class="d-none d-flex gap-2 align-items-end">
                         <div>
                             <label for="cashFlowDateFrom" class="form-label small mb-1">From</label>
-                            <input type="date" class="filter-input" id="cashFlowDateFrom">
+                            <input type="date" class="filter-input" id="cashFlowDateFrom" lang="en-US">
                         </div>
                         <div>
                             <label for="cashFlowDateTo" class="form-label small mb-1">To</label>
-                            <input type="date" class="filter-input" id="cashFlowDateTo">
+                            <input type="date" class="filter-input" id="cashFlowDateTo" lang="en-US">
                         </div>
                     </div>
              <button type="button" class="quick-action-btn d-none" id="printIncomeStatementBtn">Print</button>

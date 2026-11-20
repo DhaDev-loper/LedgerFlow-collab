@@ -38,7 +38,7 @@ async function loadClosedPeriods() {
             <tr>
                 <td><span class="badge bg-warning text-dark">${escapePeriodHtml(period.period_type)}</span> ${escapePeriodHtml(periodLabel(period))}</td>
                 <td>${escapePeriodHtml(period.closed_by_name)}</td>
-                <td>${escapePeriodHtml(period.closed_at)}</td>
+                <td>${escapePeriodHtml(window.formatDateTimeMDY(period.closed_at))}</td>
                 <td>${escapePeriodHtml(period.close_reason)}</td>
                 ${window.ACCOUNTING_PERIOD_ROLE === 'owner' ? `
                     <td>

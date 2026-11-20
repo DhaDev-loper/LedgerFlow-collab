@@ -8,7 +8,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -277,7 +277,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                           </div>
                                           <div class="col-md-4">
                                               <label class="form-label small mb-1">Date <span class="text-danger">*</span></label>
-                                              <input type="date" class="form-control form-control-dark" id="scannedDate" required>
+                                              <input type="date" class="form-control form-control-dark" id="scannedDate" required lang="en-US">
                                           </div>
                                       </div>
                                       <div class="row g-2 mb-3">

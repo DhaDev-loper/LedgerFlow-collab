@@ -37,13 +37,7 @@ function formatMoney(amount) {
 }
 
 function formatDate(dateStr) {
-    if (!dateStr) return '';
-
-    const datePart = String(dateStr).split(/[ T]/, 1)[0];
-    const parts = datePart.split('-');
-    if (parts.length !== 3 || parts[0].length !== 4) return String(dateStr);
-
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return window.formatDateMDY(dateStr, '');
 }
 
 async function loadLedgerAccounts() {

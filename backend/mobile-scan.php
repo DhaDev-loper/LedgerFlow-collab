@@ -6,7 +6,7 @@ if (empty($token) || !preg_match('/^[a-f0-9]{16}$/i', $token)) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

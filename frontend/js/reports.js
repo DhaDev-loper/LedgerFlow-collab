@@ -72,23 +72,15 @@ function formatMoney(amount) {
 }
 
 function formatStatementDate(value) {
-    const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime())
-        ? value
-        : date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
+    return window.formatDateMDY(value, '');
 }
 
 function formatLongStatementDate(value) {
-    const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime())
-        ? value
-        : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: '2-digit' });
+    return window.formatDateMDY(value, '');
 }
 
 function renderStatementFooter(businessName) {
-    const generatedAt = new Date().toLocaleString('en-US', {
-        month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
+    const generatedAt = window.formatDateTimeMDY(new Date());
     return `<div class="statement-footer">Generated automatically by ${escapeHtml(businessName)} Accounting System on ${escapeHtml(generatedAt)}</div>`;
 }
 
@@ -127,9 +119,7 @@ async function loadIncomeStatement(requestId) {
                 </tr>
             `).join('')
             : `<tr><td colspan="2" class="statement-empty">${emptyMessage}</td></tr>`;
-        const generatedAt = new Date().toLocaleString('en-US', {
-            month: 'short', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-        });
+        const generatedAt = window.formatDateTimeMDY(new Date());
 
         container.innerHTML = `
             <article class="income-statement-paper">

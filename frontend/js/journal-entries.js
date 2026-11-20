@@ -10,14 +10,31 @@ if (CAN_CREATE) {
 }
 
 // Loads reference data for dropdowns
+function setAutoTemplateAvailability(isAvailable, message) {
+    const modeToggle = document.getElementById('entryModeToggle');
+    const searchInput = document.getElementById('templateSearchInput');
+    const dropdownToggle = document.getElementById('toggleTemplateDropdown');
+    const status = document.getElementById('autoModeStatus');
+
+    if (modeToggle) {
+        modeToggle.disabled = !isAvailable;
+        modeToggle.title = isAvailable ? 'Switch between manual and automatic entry' : message;
+    }
+    if (searchInput) searchInput.disabled = !isAvailable;
+    if (dropdownToggle) dropdownToggle.disabled = !isAvailable;
+    if (status) status.textContent = message;
+}
+
 async function loadReferenceData() {
     if (!CAN_CREATE) return;
+    setAutoTemplateAvailability(false, 'Loading templates and accounts...');
 
     try {
         const response = await fetch(`${API_URL}?action=reference-data`);
         const data = await response.json();
-        
-        if (!data.success) return;
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `Failed to load reference data (HTTP ${response.status}).`);
+        }
 
         allAccountsForLines = data.accounts || [];
         refreshAccountLineOptions();
@@ -47,6 +64,11 @@ async function loadReferenceData() {
                 data.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
         }
 
+        if (allAccountsForLines.length === 0 || !data.types?.length) {
+            throw new Error('No active accounts or transaction types are available.');
+        }
+        setAutoTemplateAvailability(true, 'Templates and account dropdowns are ready.');
+
         const projectList = document.getElementById('activeProjectNames');
         if (projectList) {
             projectList.replaceChildren(...(data.projects || []).map(project => new Option(project.project_name, project.project_name)));
@@ -68,6 +90,7 @@ async function loadReferenceData() {
 
     } catch (err) {
         console.error('Failed to load reference data:', err);
+        setAutoTemplateAvailability(false, 'Auto mode could not load its accounts. You can still use Manual mode.');
     }
 }
 
@@ -351,13 +374,7 @@ function formatMoney(amount) {
 }
 
 function formatPhilippineDate(dateString) {
-    if (!dateString) return '';
-
-    const datePart = String(dateString).split(/[ T]/, 1)[0];
-    const parts = datePart.split('-');
-    if (parts.length !== 3 || parts[0].length !== 4) return String(dateString);
-
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return window.formatDateMDY(dateString, '');
 }
 
 function resetEntryFields() {
@@ -1380,6 +1397,7 @@ let currentMode = 'manual';
 const journalLineEditing = { debit: false, credit: false };
 
 function setEntryMode(mode) {
+    if (mode === 'auto' && document.getElementById('entryModeToggle')?.disabled) return;
     if (mode === 'auto' && currentMode !== 'auto' && document.getElementById('selectedTemplateId')?.value) {
         journalLineEditing.debit = false;
         journalLineEditing.credit = false;
@@ -1633,9 +1651,10 @@ function setAutoLock(locked) {
     autoLockedFields.forEach((field) => {
         if (!field) return;
 
-        if (field.tagName === 'SELECT' || field.type === 'date') {
-            field.classList.toggle('is-locked', locked);
-            field.setAttribute('tabindex', locked ? '-1' : '0');
+        if (field.tagName === 'SELECT' || field.type === 'date' || field._flatpickr) {
+            const visibleField = field._flatpickr?.altInput || field;
+            visibleField.classList.toggle('is-locked', locked);
+            visibleField.setAttribute('tabindex', locked ? '-1' : '0');
         } else {
             field.readOnly = locked;
             field.classList.toggle('is-locked', locked);

@@ -5,7 +5,7 @@ require_once __DIR__ . '/config/admin_guard.php';
 $userName = $_SESSION['full_name'] ?? 'User';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -70,11 +70,11 @@ $userName = $_SESSION['full_name'] ?? 'User';
                     </div>
                     <div class="col-6 col-lg-1">
                         <label for="auditDateFrom" class="form-label small">From</label>
-                        <input id="auditDateFrom" class="form-control form-control-dark" type="date">
+                        <input id="auditDateFrom" class="form-control form-control-dark" type="date" lang="en-US">
                     </div>
                     <div class="col-6 col-lg-1">
                         <label for="auditDateTo" class="form-label small">To</label>
-                        <input id="auditDateTo" class="form-control form-control-dark" type="date">
+                        <input id="auditDateTo" class="form-control form-control-dark" type="date" lang="en-US">
                     </div>
                     <div class="col-12 col-lg-2 d-flex align-items-center gap-2">
                         <button class="quick-action-btn" type="reset" id="clearAuditFilters" title="Clear filters" aria-label="Clear filters"><i class="bi bi-x-lg"></i></button>

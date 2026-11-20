@@ -132,11 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatAuditDate(value) {
-        if (!value) return '—';
-        const date = new Date(String(value).replace(' ', 'T'));
-        return Number.isNaN(date.getTime())
-            ? String(value)
-            : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        return window.formatDateTimeMDY(value);
     }
 
     async function loadAuditLogs() {

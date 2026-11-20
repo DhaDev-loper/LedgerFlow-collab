@@ -9,14 +9,14 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 ?>
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-US">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Journal Entries — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=20261116-auto-reference-state">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -59,11 +59,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small mb-1">From</label>
-                            <input type="date" class="filter-input w-100" id="filterDateFrom">
+                            <input type="date" class="filter-input w-100" id="filterDateFrom" lang="en-US">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small mb-1">To</label>
-                            <input type="date" class="filter-input w-100" id="filterDateTo">
+                            <input type="date" class="filter-input w-100" id="filterDateTo" lang="en-US">
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small mb-1">Type</label>
@@ -180,7 +180,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
             <div class="modal-header">
                 <h5 class="modal-title">New Journal Entry</h5>
                 <div class="journal-mode-toggle">
-                    <input type="checkbox" id="entryModeToggle" role="switch" aria-label="Auto journal entry mode" aria-checked="false">
+                    <input type="checkbox" id="entryModeToggle" role="switch" aria-label="Auto journal entry mode" aria-checked="false" disabled>
                     <label for="entryModeToggle">
                         <span class="journal-mode-manual">Manual</span>
                         <span class="journal-mode-auto">Auto</span>
@@ -196,13 +196,13 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         <label for="templateSearchInput" class="form-label small">Transaction Template</label>
                         <div class="position-relative" id="templateCombobox">
                             <div class="input-group">
-                                <input type="text" id="templateSearchInput"
+                                    <input type="text" id="templateSearchInput" disabled
                                        class="form-control bg-dark text-light border-secondary"
                                        placeholder="-- Click to browse or type to search templates --"
                                        autocomplete="off" role="combobox" aria-autocomplete="list"
                                        aria-expanded="false" aria-controls="templateDropdownList">
                                 <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
-                                        id="toggleTemplateDropdown" aria-label="Browse templates"
+                                    id="toggleTemplateDropdown" aria-label="Browse templates" disabled
                                         aria-controls="templateDropdownList" aria-expanded="false"></button>
                             </div>
                             <input type="hidden" id="selectedTemplateId" name="template_id" value="">
@@ -213,6 +213,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         <div class="form-text" style="color: var(--dark-text-muted);">
                             Pick what happened — the correct accounts fill in automatically.
                         </div>
+                        <div class="form-text" id="autoModeStatus" role="status" aria-live="polite">Loading templates and accounts...</div>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -224,7 +225,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Date</label>
-                            <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="transactionDate" name="transaction_date" required>
+                            <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="transactionDate" name="transaction_date" required lang="en-US">
                         </div>
                         <div class="col-md-4" id="clientFieldContainer">
                             <label class="form-label small">Customer / Vendor</label>
@@ -259,7 +260,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         </div>
                         <div class="col-md-4">
                             <label class="form-label small">Due Date (required for invoices and bills)</label>
-                            <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="dueDate" name="due_date">
+                            <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="dueDate" name="due_date" lang="en-US">
                         </div>
                     </div>
                     <div class="journal-line-section journal-line-section-debit" id="debitLinesSection">
@@ -496,7 +497,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     </div>
                                     <div class="col-md-4">
                                         <label class="form-label small mb-1">Date <span class="text-danger">*</span></label>
-                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required>
+                                        <input type="date" class="form-control form-control-dark" id="scannedDate" required lang="en-US">
                                     </div>
                                 </div>
 
@@ -584,7 +585,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
     window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
 </script>
-<script src="../frontend/js/journal-entries.js?v=20261018-template-combobox"></script>
+<script src="../frontend/js/journal-entries.js?v=20261116-auto-template-load"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <datalist id="activeProjectNames"></datalist>
 <script src="../frontend/js/session-timeout.js"></script>

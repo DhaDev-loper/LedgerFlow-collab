@@ -132,7 +132,7 @@ function renderTableRows(users, tbody) {
             : setupPending
                 ? 'Setup pending'
                 : isSuspended
-                    ? `Suspended until ${suspensionEnds.toLocaleString()}`
+                    ? `Suspended until ${window.formatDateTimeMDY(user.locked_until)}`
                     : user.is_active == 1 ? 'Active' : 'Inactive';
 
         const actionsHtml = isSelf
@@ -196,9 +196,7 @@ function capitalize(str) {
 }
 
 function formatDate(dateStr) {
-    if (!dateStr) return '—';
-    const date = new Date(dateStr.replace(' ', 'T'));
-    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    return window.formatDateMDY(dateStr);
 }
 
 // ---------- Add User button ----------
@@ -415,7 +413,7 @@ async function loadArchivedUsers() {
                     <span class="badge bg-secondary bg-opacity-25 text-light px-2 py-1">${escapeHtml(user.role_title || capitalize(user.role))}</span>
                     ${Number(user.suspension_level) >= 4 ? '<span class="badge bg-danger bg-opacity-25 text-danger ms-1">Locked out</span>' : ''}
                 </td>
-                <td class="text-muted small">${user.deleted_at ? new Date(user.deleted_at).toLocaleDateString() : 'N/A'}</td>
+                <td class="text-muted small">${user.deleted_at ? window.formatDateMDY(user.deleted_at) : 'N/A'}</td>
                 <td class="text-end">
                     ${Number(user.suspension_level) >= 4 && CURRENT_USER_ROLE !== 'owner'
                         ? '<span class="small text-muted">CEO only</span>'

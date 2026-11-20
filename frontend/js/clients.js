@@ -118,7 +118,7 @@ function renderClientHistory(history) {
 
     tbody.innerHTML = history.map(entry => `
         <tr>
-            <td class="text-nowrap client-history-date">${escapeClientHtml(entry.transaction_date || '')}</td>
+            <td class="text-nowrap client-history-date">${escapeClientHtml(window.formatDateMDY(entry.transaction_date, ''))}</td>
             <td>
                 <div class="client-history-description">${escapeClientHtml(entry.description || '')}</div>
                 <small class="client-detail-muted">${escapeClientHtml(entry.transaction_type || '')}${entry.reference_no ? ` · Ref ${escapeClientHtml(entry.reference_no)}` : ''}</small>

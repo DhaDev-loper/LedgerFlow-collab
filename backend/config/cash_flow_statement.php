@@ -161,7 +161,7 @@ function getCashFlowStatementData(PDO $pdo, string $dateFrom, string $dateTo): a
 
 function formatCashFlowStatementDate(string $date): string
 {
-    return (new DateTimeImmutable($date))->format('F j, Y');
+    return (new DateTimeImmutable($date))->format('m/d/Y');
 }
 
 function formatCashFlowStatementAmount(float|int|string $amount): string
