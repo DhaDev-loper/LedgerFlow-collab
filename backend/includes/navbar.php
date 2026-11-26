@@ -7,13 +7,6 @@ $navigationPage = basename((string) ($_SERVER['SCRIPT_NAME'] ?? ''));
 $navigationIsAdmin = in_array($navigationRole, ['admin', 'owner'], true);
 $navigationGroups = [
     [
-        'label' => 'Overview',
-        'icon' => 'bi-speedometer2',
-        'links' => [
-            ['label' => 'Dashboard', 'description' => 'Key balances and recent activity', 'href' => 'dashboard.php', 'icon' => 'bi-house'],
-        ],
-    ],
-    [
         'label' => 'Transactions',
         'icon' => 'bi-arrow-left-right',
         'links' => [
@@ -92,7 +85,8 @@ $renderNavigationLinks = static function (array $links) use ($navigationLinkIsAc
 <header class="global-mega-nav">
     <div class="global-mega-nav-bar">
         <a class="global-mega-nav-brand" href="dashboard.php" aria-label="KoboSocial home">
-            <img class="global-mega-nav-logo" src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial">
+            <img class="global-mega-nav-logo global-mega-nav-logo--dark" src="../frontend/assets/Logo-Kobo-Light.png" alt="KoboSocial">
+            <img class="global-mega-nav-logo global-mega-nav-logo--light" src="../frontend/assets/Logo-Kobo-LightMode.png" alt="KoboSocial">
         </a>
 
         <button class="global-mega-nav-toggle" type="button" aria-expanded="false" aria-controls="globalMegaNavMenu">
@@ -100,6 +94,10 @@ $renderNavigationLinks = static function (array $links) use ($navigationLinkIsAc
         </button>
 
         <nav class="global-mega-nav-menu" id="globalMegaNavMenu" aria-label="Main navigation">
+            <?php $dashboardLink = ['href' => 'dashboard.php']; $isDashboardActive = $navigationLinkIsActive($dashboardLink); ?>
+            <a class="mega-nav-direct-link<?= $isDashboardActive ? ' is-active' : '' ?>" href="dashboard.php" <?= $isDashboardActive ? 'aria-current="page"' : '' ?>>
+                <i class="bi bi-house" aria-hidden="true"></i><span>Dashboard</span>
+            </a>
             <?php foreach ($navigationGroups as $group): ?>
                 <?php $groupIsActive = count(array_filter($group['links'], static fn (array $link): bool => $navigationLinkIsActive($link))) > 0; ?>
                 <details class="mega-nav-group<?= $groupIsActive ? ' has-active-link' : '' ?>">
@@ -122,14 +120,12 @@ $renderNavigationLinks = static function (array $links) use ($navigationLinkIsAc
         </nav>
 
         <div class="global-mega-nav-user">
-            <?php if ($navigationPage === 'dashboard.php'): ?>
-                <button type="button" class="global-mega-nav-icon-button" id="dueNotificationsButton"
-                        data-bs-toggle="modal" data-bs-target="#dueNotificationsModal"
-                        aria-label="Payment due notifications" title="Payment due notifications">
-                    <i class="bi bi-bell" aria-hidden="true"></i>
-                    <span class="dashboard-notification-badge d-none" id="dueNotificationsCount" aria-live="polite"></span>
-                </button>
-            <?php endif; ?>
+            <button type="button" class="global-mega-nav-icon-button" id="dueNotificationsButton"
+                    data-bs-toggle="modal" data-bs-target="#dueNotificationsModal"
+                    aria-label="Payment due notifications" title="Payment due notifications">
+                <i class="bi bi-bell" aria-hidden="true"></i>
+                <span class="dashboard-notification-badge d-none" id="dueNotificationsCount" aria-live="polite"></span>
+            </button>
             <span class="global-mega-nav-profile" title="<?= htmlspecialchars($navigationRole, ENT_QUOTES, 'UTF-8') ?>">
                 <i class="bi bi-person-circle" aria-hidden="true"></i>
                 <span><?= htmlspecialchars($navigationName, ENT_QUOTES, 'UTF-8') ?></span>
@@ -142,6 +138,26 @@ $renderNavigationLinks = static function (array $links) use ($navigationLinkIsAc
 
     <div class="global-mega-nav-backdrop" hidden></div>
 </header>
+<?php if ($navigationPage !== 'dashboard.php'): ?>
+<div class="modal fade" id="dueNotificationsModal" tabindex="-1" aria-labelledby="dueNotificationsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content modal-dark">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="dueNotificationsTitle">Payment Due Notifications</h5>
+                    <p class="small mb-0">Overdue items first, followed by items due in the next 7 days.</p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="dueNotificationsList" aria-live="polite">
+                    <p class="text-center py-4 mb-0">Loading payment notifications...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 <div class="logout-confirm-backdrop" id="logoutConfirmDialog" hidden aria-hidden="true">
     <section class="logout-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="logoutConfirmTitle" aria-describedby="logoutConfirmDescription" tabindex="-1">
         <div class="logout-confirm-icon" aria-hidden="true"><i class="bi bi-box-arrow-right"></i></div>
@@ -154,5 +170,8 @@ $renderNavigationLinks = static function (array $links) use ($navigationLinkIsAc
         <div class="logout-confirm-progress" aria-hidden="true"><span></span></div>
     </section>
 </div>
-    <script src="../frontend/js/date-format.js?v=mdy-calendar-picker-2"></script>
+    <script src="../frontend/js/date-format.js?v=mdy-calendar-picker-3"></script>
+<?php if ($navigationPage !== 'dashboard.php'): ?>
+    <script src="../frontend/js/due-notifications.js" defer></script>
+<?php endif; ?>
 <script src="../frontend/js/mega-nav.js" defer></script>

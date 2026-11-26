@@ -19,6 +19,40 @@ function requireFinanceRole(): void
     }
 }
 
+/** Return a validation message when an account name or code is already in use. */
+function findDuplicateAccount(PDO $pdo, string $name, string $code, ?int $excludeId = null): ?string
+{
+    $nameSql = 'SELECT id FROM accounts WHERE LOWER(TRIM(name)) = LOWER(TRIM(:name))';
+    $codeSql = "SELECT id FROM accounts WHERE code IS NOT NULL AND TRIM(code) <> '' AND LOWER(TRIM(code)) = LOWER(TRIM(:code))";
+    $params = [':name' => $name];
+    if ($excludeId !== null) {
+        $nameSql .= ' AND id <> :exclude_id';
+        $params[':exclude_id'] = $excludeId;
+    }
+    $nameSql .= ' LIMIT 1';
+    $stmt = $pdo->prepare($nameSql);
+    $stmt->execute($params);
+    if ($stmt->fetchColumn() !== false) {
+        return 'An account with this name already exists. Use a different account name.';
+    }
+
+    if ($code !== '') {
+        $params = [':code' => $code];
+        if ($excludeId !== null) {
+            $codeSql .= ' AND id <> :exclude_id';
+            $params[':exclude_id'] = $excludeId;
+        }
+        $codeSql .= ' LIMIT 1';
+        $stmt = $pdo->prepare($codeSql);
+        $stmt->execute($params);
+        if ($stmt->fetchColumn() !== false) {
+            return 'An account with this code already exists. Use a different account code.';
+        }
+    }
+
+    return null;
+}
+
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 
 switch ($action) {
@@ -28,7 +62,9 @@ switch ($action) {
         $stmt = $pdo->query(
             "SELECT a.id, a.code, a.name, a.current_balance, a.currency_code,
                     a.is_active, a.is_cash_account, a.classification, a.notes,
-                    at.name AS type_name, at.id AS account_type_id
+                    at.name AS type_name, at.id AS account_type_id,
+                    (EXISTS (SELECT 1 FROM transactions tx WHERE tx.account_id = a.id)
+                     OR EXISTS (SELECT 1 FROM settlement_allocations sa WHERE sa.account_id = a.id)) AS has_transactions
              FROM accounts a
              JOIN account_types at ON at.id = a.account_type_id
              ORDER BY at.id ASC, a.code ASC, a.name ASC"
@@ -63,6 +99,12 @@ switch ($action) {
         }
 
         $pdo = getDbConnection();
+        $duplicateError = findDuplicateAccount($pdo, $name, $code);
+        if ($duplicateError !== null) {
+            http_response_code(409);
+            echo json_encode(['error' => $duplicateError]);
+            break;
+        }
         if ($openingBalance != 0.0 && hasClosedAccountingPeriods($pdo)) {
             http_response_code(422);
             echo json_encode([
@@ -140,22 +182,57 @@ switch ($action) {
         $isCashAccount = !empty($_POST['is_cash_account']) ? 1 : 0;
         $classification = $_POST['classification'] ?? 'current';
 
-        if ($accountId === 0 || $name === '' || $accountTypeId === 0) {
+        if ($accountId === 0 || $name === '') {
             http_response_code(422);
             echo json_encode(['error' => 'Account name and type are required.']);
             break;
         }
 
         $pdo = getDbConnection();
+        $pdo->beginTransaction();
+        $existingStmt = $pdo->prepare(
+            "SELECT a.account_type_id, a.classification, a.is_cash_account,
+                    (EXISTS (SELECT 1 FROM transactions tx WHERE tx.account_id = a.id)
+                     OR EXISTS (SELECT 1 FROM settlement_allocations sa WHERE sa.account_id = a.id)) AS has_transactions
+             FROM accounts a WHERE a.id = :id FOR UPDATE"
+        );
+        $existingStmt->execute([':id' => $accountId]);
+        $existingAccount = $existingStmt->fetch();
+        if (!$existingAccount) {
+            $pdo->rollBack();
+            http_response_code(404);
+            echo json_encode(['error' => 'Account not found.']);
+            break;
+        }
+        $duplicateError = findDuplicateAccount($pdo, $name, $code, $accountId);
+        if ($duplicateError !== null) {
+            $pdo->rollBack();
+            http_response_code(409);
+            echo json_encode(['error' => $duplicateError]);
+            break;
+        }
+        if ((bool) $existingAccount['has_transactions']) {
+            $accountTypeId = (int) $existingAccount['account_type_id'];
+            $classification = (string) $existingAccount['classification'];
+            $isCashAccount = (int) $existingAccount['is_cash_account'];
+        }
+        if ($accountTypeId === 0) {
+            $pdo->rollBack();
+            http_response_code(422);
+            echo json_encode(['error' => 'Account name and type are required.']);
+            break;
+        }
         $accountTypeStmt = $pdo->prepare("SELECT name FROM account_types WHERE id = :id");
         $accountTypeStmt->execute([':id' => $accountTypeId]);
         $accountTypeName = $accountTypeStmt->fetchColumn();
         if ($accountTypeName === false || ($isCashAccount === 1 && $accountTypeName !== 'Asset')) {
+            $pdo->rollBack();
             http_response_code(422);
             echo json_encode(['error' => 'Cash/bank accounts must use the Asset account type.']);
             break;
         }
         if (!in_array($classification, ['current', 'non_current'], true)) {
+            $pdo->rollBack();
             http_response_code(422);
             echo json_encode(['error' => 'Choose a valid account classification.']);
             break;
@@ -163,8 +240,6 @@ switch ($action) {
         if (!in_array($accountTypeName, ['Asset', 'Liability'], true)) {
             $classification = 'current';
         }
-        $pdo->beginTransaction();
-
         $stmt = $pdo->prepare(
             "UPDATE accounts 
              SET code = :code, name = :name, account_type_id = :type_id,

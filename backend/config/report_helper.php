@@ -4,7 +4,7 @@ declare(strict_types=1);
 function getAccountBalancesAsOf(PDO $pdo, string $asOf): array
 {
     $stmt = $pdo->prepare(
-        "SELECT a.id, a.name, a.is_active, a.classification, a.opening_balance, a.opening_balance_date,
+        "SELECT a.id, a.name, a.is_active, a.classification, a.opening_balance, a.opening_balance_date, a.is_cash_account,
                 at.name AS type_name, at.normal_balance,
                 COALESCE(journal_totals.total_debit, 0) AS journal_debit,
                 COALESCE(journal_totals.total_credit, 0) AS journal_credit,

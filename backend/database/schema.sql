@@ -10,6 +10,8 @@ CREATE TABLE users (
     password_setup_required TINYINT(1)  NOT NULL DEFAULT 0,
     role            ENUM('owner','admin','accountant','staff') NOT NULL DEFAULT 'staff',
     pin_hash        VARCHAR(255)        NULL,
+    pin_failed_attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    pin_locked_until DATETIME           NULL,
     is_active       TINYINT(1)          NOT NULL DEFAULT 1,
     failed_attempts TINYINT UNSIGNED    NOT NULL DEFAULT 0,
     locked_until    DATETIME            NULL,

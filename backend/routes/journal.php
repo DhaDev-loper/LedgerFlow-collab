@@ -13,9 +13,15 @@ function getReceiptImageUrl(string $imagePath): string
 {
     $projectBasePath = dirname(dirname(dirname((string) ($_SERVER['SCRIPT_NAME'] ?? ''))));
     $projectBasePath = rtrim(str_replace('\\', '/', $projectBasePath), '/');
-    $relativePath = implode('/', array_map('rawurlencode', explode('/', ltrim($imagePath, '/'))));
+    $fileName = basename($imagePath);
+    if (
+        !str_starts_with($imagePath, 'uploads/receipts/')
+        || !preg_match('/\\Areceipt_[A-Za-z0-9_-]+\\.(?:jpg|jpeg|png|webp|gif|bmp)\\z/i', $fileName)
+    ) {
+        return '';
+    }
 
-    return $projectBasePath . '/' . $relativePath;
+    return $projectBasePath . '/backend/routes/receipt-image.php?file=' . rawurlencode($fileName);
 }
 
 function saveClientLogoUpload(): ?string
@@ -80,9 +86,21 @@ function deleteClientLogoFile(?string $logoPath): void
 $action = $_POST['action'] ?? $_GET['action'] ?? '';
 $token  = $_POST['token'] ?? $_GET['token'] ?? '';
 
-// Only run desktop auth guard if it's not a mobile upload request
-if ($action !== 'push-mobile-receipt' && empty($token)) {
+// Only scanner polling and upload use the bearer token instead of a login.
+// A token parameter must never bypass authentication for other journal actions.
+$publicScannerActions = ['check-scan-session', 'push-mobile-receipt'];
+if (!in_array($action, $publicScannerActions, true)) {
     require_once __DIR__ . '/../config/auth_guard.php';
+} elseif (!is_string($token) || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
+    http_response_code(422);
+    echo json_encode(['success' => false, 'error' => 'This scanner link is invalid. Reopen the scanner and try again.']);
+    exit;
+}
+if (in_array($action, $publicScannerActions, true) && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+    exit;
 }
 
 $userRole = $_SESSION['role'] ?? 'staff';
@@ -163,7 +181,8 @@ switch ($action) {
     case 'reference-data':
         $pdo = getDbConnection();
         $accounts = $pdo->query(
-            "SELECT a.id, a.code, a.name, a.is_cash_account, a.classification, at.name AS type_name
+            "SELECT a.id, a.code, a.name, a.is_cash_account, a.classification,
+                    at.name AS type_name, at.normal_balance
              FROM accounts a
              JOIN account_types at ON at.id = a.account_type_id
              WHERE a.is_active = 1
@@ -171,10 +190,6 @@ switch ($action) {
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $types = $pdo->query("SELECT id, name FROM transaction_types ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
-
-        $categories = $pdo->query(
-            "SELECT id, name FROM categories WHERE is_active = 1 ORDER BY name"
-        )->fetchAll(PDO::FETCH_ASSOC);
 
         $cashAccountsStmt = $pdo->query(
             "SELECT a.id, a.name, at.name AS type_name
@@ -214,7 +229,6 @@ switch ($action) {
             'success'    => true,
             'accounts'   => $accounts,
             'types'      => $types,
-            'categories' => $categories,
             'cash_accounts' => $cashAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
             'receivable_accounts' => $receivableAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
             'payable_accounts' => $payableAccountsStmt->fetchAll(PDO::FETCH_ASSOC),
@@ -352,13 +366,19 @@ switch ($action) {
      case 'create':
         if (ob_get_length()) ob_clean();
 
+        if (!in_array($userRole, ['admin', 'accountant', 'owner'], true)) {
+            http_response_code(403);
+            echo json_encode(['success' => false, 'error' => 'Your role is not allowed to create journal entries.']);
+            exit;
+        }
+
         try {
+            $referenceLockName = null;
             $transactionTypeId = (int) ($_POST['transaction_type_id'] ?? 0);
             $description       = trim($_POST['description'] ?? '');
             $transactionDate   = $_POST['transaction_date'] ?? '';
             $referenceNo       = trim($_POST['reference_no'] ?? '');
             $dueDate           = !empty($_POST['due_date']) ? $_POST['due_date'] : null;
-            $categoryId        = (int) ($_POST['category_id'] ?? 0);
             $documentType      = trim($_POST['document_type'] ?? '');
             $projectName       = trim($_POST['project_name'] ?? '');
 
@@ -367,33 +387,148 @@ switch ($action) {
                 ? (int) $_POST['project_client_id']
                 : $clientId;
 
+            if ($transactionTypeId <= 0 || $transactionDate === '') {
+                throw new DomainException('Transaction type and date are required.');
+            }
+
+            $pdo = getDbConnection();
+            $transactionTypeStmt = $pdo->prepare('SELECT name FROM transaction_types WHERE id = :id');
+            $transactionTypeStmt->execute([':id' => $transactionTypeId]);
+            $transactionTypeName = $transactionTypeStmt->fetchColumn();
+            if ($transactionTypeName === false) {
+                throw new DomainException('Select a valid transaction type.');
+            }
+            $isOpeningBalance = $transactionTypeName === 'Opening Balance';
+
+            $openingBalanceAccountId = 0;
+            $openingBalanceEquityId = 0;
+            $openingBalanceAmount = 0.0;
+            $openingBalanceDirection = 'normal';
+            if ($isOpeningBalance) {
+                $openingBalanceAccountId = (int) ($_POST['opening_balance_account_id'] ?? 0);
+                $openingAmountInput = trim((string) ($_POST['opening_balance_amount'] ?? ''));
+                $openingBalanceDirection = strtolower(trim((string) ($_POST['opening_balance_direction'] ?? 'normal')));
+
+                if ($openingBalanceAccountId <= 0) {
+                    throw new DomainException('Choose an account for the opening balance.');
+                }
+                if (!preg_match('/\A(?:\d+(?:\.\d{1,2})?|\.\d{1,2})\z/', $openingAmountInput)) {
+                    throw new DomainException('Enter a positive opening balance with no more than two decimal places.');
+                }
+                $openingBalanceAmount = (float) $openingAmountInput;
+                if (!is_finite($openingBalanceAmount) || $openingBalanceAmount <= 0
+                    || $openingBalanceAmount > 999999999999.99
+                    || round($openingBalanceAmount, 2) !== $openingBalanceAmount) {
+                    throw new DomainException('Enter a positive opening balance with no more than two decimal places.');
+                }
+                if (!in_array($openingBalanceDirection, ['normal', 'debit', 'credit'], true)) {
+                    throw new DomainException('Choose a valid opening balance direction.');
+                }
+
+                $openingAccountStmt = $pdo->prepare(
+                    "SELECT a.id, a.name, a.is_active, at.name AS type_name, at.normal_balance
+                     FROM accounts a
+                     JOIN account_types at ON at.id = a.account_type_id
+                     WHERE a.id = :id"
+                );
+                $openingAccountStmt->execute([':id' => $openingBalanceAccountId]);
+                $openingAccount = $openingAccountStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$openingAccount || (int) $openingAccount['is_active'] !== 1) {
+                    throw new DomainException('Choose an existing active Chart of Accounts account.');
+                }
+                if (!in_array($openingAccount['type_name'], ['Asset', 'Liability', 'Equity'], true)) {
+                    throw new DomainException('Opening balances can only be recorded for Asset, Liability, or Equity accounts. Revenue and Expense accounts are period activity accounts.');
+                }
+
+                $openingEquityStmt = $pdo->query(
+                    "SELECT a.id, a.name, a.is_active, at.name AS type_name
+                     FROM accounts a
+                     JOIN account_types at ON at.id = a.account_type_id
+                     WHERE LOWER(TRIM(a.name)) = 'opening balance equity'
+                     ORDER BY a.id"
+                );
+                $openingEquityAccounts = $openingEquityStmt->fetchAll(PDO::FETCH_ASSOC);
+                if (!$openingEquityAccounts) {
+                    $equityTypeId = $pdo->query("SELECT id FROM account_types WHERE name = 'Equity'")->fetchColumn();
+                    if ($equityTypeId !== false) {
+                        $createEquityStmt = $pdo->prepare(
+                            "INSERT INTO accounts (account_type_id, name, opening_balance, current_balance, is_cash_account)
+                             VALUES (:type_id, 'Opening Balance Equity', 0.00, 0.00, 0)"
+                        );
+                        $createEquityStmt->execute([':type_id' => (int) $equityTypeId]);
+                    }
+                    $openingEquityStmt = $pdo->query(
+                        "SELECT a.id, a.name, a.is_active, at.name AS type_name
+                         FROM accounts a
+                         JOIN account_types at ON at.id = a.account_type_id
+                         WHERE LOWER(TRIM(a.name)) = 'opening balance equity'
+                         ORDER BY a.id"
+                    );
+                    $openingEquityAccounts = $openingEquityStmt->fetchAll(PDO::FETCH_ASSOC);
+                }
+                if (count($openingEquityAccounts) !== 1
+                    || (int) $openingEquityAccounts[0]['is_active'] !== 1
+                    || $openingEquityAccounts[0]['type_name'] !== 'Equity') {
+                    throw new DomainException(
+                        'Opening Balance Equity must be exactly one active Equity account in the Chart of Accounts.'
+                    );
+                }
+                $openingBalanceEquityId = (int) $openingEquityAccounts[0]['id'];
+                if ($openingBalanceAccountId === $openingBalanceEquityId
+                    || strcasecmp(trim((string) $openingAccount['name']), 'Opening Balance Equity') === 0) {
+                    throw new DomainException('Opening Balance Equity cannot be the account receiving its own opening balance.');
+                }
+
+                $lineDirection = $openingBalanceDirection === 'normal'
+                    ? (string) $openingAccount['normal_balance']
+                    : $openingBalanceDirection;
+                if (!in_array($lineDirection, ['debit', 'credit'], true)) {
+                    throw new DomainException('The selected account has no valid normal balance direction.');
+                }
+
+                $debitLine = ['account_id' => $openingBalanceAccountId, 'amount' => $openingBalanceAmount];
+                $creditLine = ['account_id' => $openingBalanceEquityId, 'amount' => $openingBalanceAmount];
+                $debitLines = $lineDirection === 'debit' ? [$debitLine] : [$creditLine];
+                $creditLines = $lineDirection === 'debit' ? [$creditLine] : [$debitLine];
+
+                if ($description === '') {
+                    $description = 'Opening balance - ' . $openingAccount['name'];
+                }
+                if (strlen($description) > 255) {
+                    throw new DomainException('Opening balance memo must be 255 characters or fewer.');
+                }
+
+                // Opening balances have no project, customer/vendor, due date, category, or bill document.
+                $projectName = '';
+                $clientId = null;
+                $projectClientId = null;
+                $dueDate = null;
+                $documentType = '';
+            } else {
+                $debitLines = json_decode($_POST['debit_lines'] ?? '[]', true);
+                $creditLines = json_decode($_POST['credit_lines'] ?? '[]', true);
+                if ($description === '') {
+                    throw new DomainException('A description is required.');
+                }
+            }
+
             if (strlen($projectName) > 255) {
                 throw new DomainException('Project names must be 255 characters or fewer.');
             }
-
-            $debitLines  = json_decode($_POST['debit_lines'] ?? '[]', true);
-            $creditLines = json_decode($_POST['credit_lines'] ?? '[]', true);
-
-            if ($transactionTypeId === 0 || $description === '' || $transactionDate === '') {
-                echo json_encode(['success' => false, 'error' => 'Transaction type, description, and date are required.']);
-                exit;
-            }
             $date = DateTimeImmutable::createFromFormat('!Y-m-d', $transactionDate);
             if (!$date || $date->format('Y-m-d') !== $transactionDate) {
-                echo json_encode(['success' => false, 'error' => 'Enter a valid transaction date.']);
-                exit;
+                throw new DomainException('Enter a valid transaction date.');
             }
             if ($dueDate !== null) {
                 $parsedDueDate = DateTimeImmutable::createFromFormat('!Y-m-d', $dueDate);
                 if (!$parsedDueDate || $parsedDueDate->format('Y-m-d') !== $dueDate) {
-                    echo json_encode(['success' => false, 'error' => 'Enter a valid due date.']);
-                    exit;
+                    throw new DomainException('Enter a valid due date.');
                 }
             }
 
-            if (!is_array($debitLines) || !is_array($creditLines) || empty($debitLines) || empty($creditLines)) {
-                echo json_encode(['success' => false, 'error' => 'At least one debit line and one credit line are required.']);
-                exit;
+            if (!is_array($debitLines) || !is_array($creditLines)
+                || (!$isOpeningBalance && (empty($debitLines) || empty($creditLines)))) {
+                throw new DomainException('At least one debit line and one credit line are required.');
             }
             if (count($debitLines) > 10 || count($creditLines) > 10) {
                 http_response_code(422);
@@ -448,8 +583,6 @@ switch ($action) {
                 echo json_encode(['success' => false, 'error' => "Entry is not balanced. Total Debits: {$totalDebits}, Total Credits: {$totalCredits}"]);
                 exit;
             }
-
-            $pdo = getDbConnection();
 
             // 2. FETCH ACTIVE ACCOUNTS AND THEIR ACCOUNTING CLASSIFICATION
             $allAccountIds = array_unique(array_merge($debitAccountIds, $creditAccountIds));
@@ -521,12 +654,6 @@ switch ($action) {
                 throw new DomainException('Invalid transaction pairing: You cannot debit and credit two Expense accounts directly against each other.');
             }
 
-            $transactionTypeStmt = $pdo->prepare('SELECT name FROM transaction_types WHERE id = :id');
-            $transactionTypeStmt->execute([':id' => $transactionTypeId]);
-            $transactionTypeName = $transactionTypeStmt->fetchColumn();
-            if ($transactionTypeName === false) {
-                throw new DomainException('Select a valid transaction type.');
-            }
             if ($transactionTypeName === 'Cash Inflow'
                 && (round($cashDebitTotal, 2) !== round($totalDebits, 2) || $cashCreditTotal > 0)) {
                 throw new DomainException('Cash inflows must debit only active cash, bank, or wallet accounts.');
@@ -536,12 +663,12 @@ switch ($action) {
                 throw new DomainException('Cash outflows must credit only active cash, bank, or wallet accounts.');
             }
 
-            $hasReceivableEntries = $arIncreaseByAccount || $arDecreaseByAccount;
-            $hasPayableEntries = $apIncreaseByAccount || $apDecreaseByAccount;
+            $hasReceivableEntries = !$isOpeningBalance && ($arIncreaseByAccount || $arDecreaseByAccount);
+            $hasPayableEntries = !$isOpeningBalance && ($apIncreaseByAccount || $apDecreaseByAccount);
             if (($hasReceivableEntries || $hasPayableEntries) && $clientId === null) {
                 throw new DomainException('Select the customer or vendor for every A/R or A/P entry.');
             }
-            if (($arIncreaseByAccount || $apIncreaseByAccount) && $dueDate === null) {
+            if (!$isOpeningBalance && ($arIncreaseByAccount || $apIncreaseByAccount) && $dueDate === null) {
                 throw new DomainException('A due date is required when recording an invoice or vendor bill.');
             }
 
@@ -572,6 +699,34 @@ switch ($action) {
 
             $pdo->beginTransaction();
             assertAccountingDateOpen($pdo, $transactionDate, true);
+
+            if ($isOpeningBalance) {
+                $openingLockStmt = $pdo->prepare(
+                    "SELECT a.id, a.name, a.is_active, at.name AS type_name, at.normal_balance
+                     FROM accounts a
+                     JOIN account_types at ON at.id = a.account_type_id
+                     WHERE a.id IN (?, ?)
+                     FOR UPDATE"
+                );
+                $openingLockStmt->execute([$openingBalanceAccountId, $openingBalanceEquityId]);
+                $lockedOpeningAccounts = [];
+                foreach ($openingLockStmt->fetchAll(PDO::FETCH_ASSOC) as $lockedAccount) {
+                    $lockedOpeningAccounts[(int) $lockedAccount['id']] = $lockedAccount;
+                }
+                $lockedAccount = $lockedOpeningAccounts[$openingBalanceAccountId] ?? null;
+                $lockedEquity = $lockedOpeningAccounts[$openingBalanceEquityId] ?? null;
+                if (!$lockedAccount || !$lockedEquity
+                    || (int) $lockedAccount['is_active'] !== 1
+                    || !in_array($lockedAccount['type_name'], ['Asset', 'Liability', 'Equity'], true)
+                    || (int) $lockedEquity['is_active'] !== 1
+                    || $lockedEquity['type_name'] !== 'Equity'
+                    || strcasecmp(trim((string) $lockedEquity['name']), 'Opening Balance Equity') !== 0) {
+                    throw new DomainException('The selected opening balance accounts changed or became inactive. Refresh the page and try again.');
+                }
+                if ($lockedAccount['normal_balance'] !== $accountTypesMap[$openingBalanceAccountId]['normal_balance']) {
+                    throw new DomainException('The selected account changed while saving. Refresh the page and try again.');
+                }
+            }
 
             $projectId = null;
             if ($projectName !== '') {
@@ -657,6 +812,12 @@ switch ($action) {
             }
 
             $createdBy = $userId > 0 ? $userId : 1;
+            $referenceContext = $isOpeningBalance
+                ? 'opening_balance'
+                : ($documentType === 'vendor_bill'
+                    ? 'vendor_bill'
+                    : (($arDecreaseByAccount || $apDecreaseByAccount) ? 'payment' : $transactionTypeName));
+            $referenceNo = generateEntryReference($pdo, $referenceContext, $transactionDate, $referenceLockName);
 
             $journalStmt = $pdo->prepare(
                 "INSERT INTO transaction_journals 
@@ -722,13 +883,6 @@ switch ($action) {
                 $allLines[] = ['account_id' => (int) $line['account_id'], 'entry_type' => 'credit', 'amount' => (float) $line['amount']];
             }
 
-            if ($categoryId > 0) {
-                $categoryStmt = $pdo->prepare(
-                    "INSERT INTO journal_category (transaction_journal_id, category_id) VALUES (:journal_id, :category_id)"
-                );
-                $categoryStmt->execute([':journal_id' => $journalId, ':category_id' => $categoryId]);
-            }
-
             logAudit(
                 $pdo,
                 $userId,
@@ -743,6 +897,9 @@ switch ($action) {
                     'reference_no' => $referenceNo,
                     'document_type' => $documentType !== '' ? $documentType : null,
                     'settlement_allocations' => $allocationPlans,
+                    'opening_balance_account_id' => $isOpeningBalance ? $openingBalanceAccountId : null,
+                    'opening_balance_equity_account_id' => $isOpeningBalance ? $openingBalanceEquityId : null,
+                    'opening_balance_direction' => $isOpeningBalance ? $lineDirection : null,
                 ], JSON_THROW_ON_ERROR)
             );
 
@@ -770,12 +927,21 @@ switch ($action) {
             }
 
             $pdo->commit();
-            echo json_encode(['success' => true, 'message' => 'Journal entry recorded successfully.', 'journal_id' => $journalId]);
+            releaseEntryReferenceLock($pdo, $referenceLockName);
+            echo json_encode([
+                'success' => true,
+                'message' => 'Journal entry recorded successfully.',
+                'journal_id' => $journalId,
+                'reference_no' => $referenceNo,
+            ]);
             exit;
 
         } catch (DomainException $e) {
             if (isset($pdo) && $pdo->inTransaction()) {
                 $pdo->rollBack();
+            }
+            if (isset($pdo)) {
+                releaseEntryReferenceLock($pdo, $referenceLockName ?? null);
             }
             http_response_code(422);
             echo json_encode(['success' => false, 'error' => $e->getMessage()]);
@@ -783,6 +949,9 @@ switch ($action) {
         } catch (Throwable $e) {
             if (isset($pdo) && $pdo->inTransaction()) {
                 $pdo->rollBack();
+            }
+            if (isset($pdo)) {
+                releaseEntryReferenceLock($pdo, $referenceLockName ?? null);
             }
             error_log('Journal creation failed: ' . $e->getMessage());
             http_response_code(500);
@@ -796,7 +965,6 @@ switch ($action) {
         $journalId   = (int) ($_POST['journal_id'] ?? 0);
         $description = trim($_POST['description'] ?? '');
         $referenceNo = trim($_POST['reference_no'] ?? '');
-        $categoryId  = (int) ($_POST['category_id'] ?? 0);
 
         if ($journalId === 0 || $description === '') {
             http_response_code(422);
@@ -805,11 +973,15 @@ switch ($action) {
         }
 
         $pdo = getDbConnection();
+        $referenceLockName = null;
 
         try {
             $pdo->beginTransaction();
             $checkStmt = $pdo->prepare(
-                'SELECT id, status, transaction_date FROM transaction_journals WHERE id = :id FOR UPDATE'
+                'SELECT tj.id, tj.status, tj.transaction_date, tj.reference_no, tt.name AS transaction_type_name
+                 FROM transaction_journals tj
+                 JOIN transaction_types tt ON tt.id = tj.transaction_type_id
+                 WHERE tj.id = :id FOR UPDATE'
             );
             $checkStmt->execute([':id' => $journalId]);
             $journal = $checkStmt->fetch(PDO::FETCH_ASSOC);
@@ -826,6 +998,21 @@ switch ($action) {
                 break;
             }
             assertAccountingDateOpen($pdo, (string) $journal['transaction_date'], true);
+            if ($referenceNo === '') {
+                $referenceNo = trim((string) ($journal['reference_no'] ?? ''));
+                if ($referenceNo === '') {
+                    $referenceContext = $journal['transaction_type_name'];
+                    if ($referenceContext === 'Opening Balance') {
+                        $referenceContext = 'opening_balance';
+                    }
+                    $referenceNo = generateEntryReference(
+                        $pdo,
+                        (string) $referenceContext,
+                        (string) $journal['transaction_date'],
+                        $referenceLockName
+                    );
+                }
+            }
 
             $updateStmt = $pdo->prepare(
                 "UPDATE transaction_journals
@@ -839,16 +1026,6 @@ switch ($action) {
                 ':id'          => $journalId,
             ]);
 
-            $deleteCategoryStmt = $pdo->prepare("DELETE FROM journal_category WHERE transaction_journal_id = :id");
-            $deleteCategoryStmt->execute([':id' => $journalId]);
-
-            if ($categoryId > 0) {
-                $insertCategoryStmt = $pdo->prepare(
-                    "INSERT INTO journal_category (transaction_journal_id, category_id) VALUES (:id, :category_id)"
-                );
-                $insertCategoryStmt->execute([':id' => $journalId, ':category_id' => $categoryId]);
-            }
-
             logAudit(
                 $pdo,
                 $userId,
@@ -858,18 +1035,19 @@ switch ($action) {
                 json_encode([
                     'description' => $description,
                     'reference_no' => $referenceNo,
-                    'category_id' => $categoryId ?: null,
                 ], JSON_THROW_ON_ERROR)
             );
 
             $pdo->commit();
+            releaseEntryReferenceLock($pdo, $referenceLockName);
 
-            echo json_encode(['success' => true, 'message' => 'Journal entry updated successfully.']);
+            echo json_encode(['success' => true, 'message' => 'Journal entry updated successfully.', 'reference_no' => $referenceNo]);
 
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+            releaseEntryReferenceLock($pdo, $referenceLockName);
             if ($e instanceof DomainException) {
                 http_response_code(422);
                 echo json_encode(['error' => $e->getMessage()]);
@@ -2021,19 +2199,22 @@ switch ($action) {
 
     //20. SCANNER RECEIPT DATA SESSIONS
      case 'init-scan-session':
-    $token = bin2hex(random_bytes(8));
+    $token = bin2hex(random_bytes(32));
     $pdo = getDbConnection();
-    $host = $_SERVER['HTTP_HOST'];
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https" : "http";
+    $appUrl = rtrim((string) env('APP_URL', ''), '/');
+    $appUrlParts = parse_url($appUrl);
+    if (
+        $appUrl === ''
+        || !is_array($appUrlParts)
+        || !in_array($appUrlParts['scheme'] ?? '', ['http', 'https'], true)
+        || empty($appUrlParts['host'])
+    ) {
+        http_response_code(503);
+        echo json_encode(['success' => false, 'error' => 'Receipt scanning is not configured. Set APP_URL to the application URL.']);
+        break;
+    }
 
-    $scriptName = $_SERVER['SCRIPT_NAME']; // e.g. /wrs-accounting-collab/backend/routes/journal.php
-    $pathParts = explode('/', trim($scriptName, '/'));
-    $projectFolder = !empty($pathParts[0]) ? $pathParts[0] : '';
-    
-    // Includes the correct plural 'routes' folder path
-    $basePath = $projectFolder ? "/{$projectFolder}/backend/routes" : '/backend/routes';
-
-    $mobileUrl = "{$protocol}://{$host}{$basePath}/../mobile-scan.php?token={$token}&ngrok-skip-browser-warning=true";
+    $mobileUrl = $appUrl . '/backend/mobile-scan.php?token=' . rawurlencode($token);
 
     $stmt = $pdo->prepare("INSERT INTO pending_receipt_scans (token, status) VALUES (:token, 'pending')");
     $stmt->execute([':token' => $token]);
@@ -2047,8 +2228,8 @@ switch ($action) {
 
             case 'check-scan-session':
     $pdo = getDbConnection();
-    $token = $_GET['token'] ?? '';
-    $stmt = $pdo->prepare("SELECT * FROM pending_receipt_scans WHERE token = :token AND status = 'completed'");
+    $token = $_POST['token'] ?? $_GET['token'] ?? '';
+    $stmt = $pdo->prepare("SELECT * FROM pending_receipt_scans WHERE token = :token AND status = 'completed' AND created_at >= NOW() - INTERVAL 1 HOUR");
     $stmt->execute([':token' => $token]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -2068,7 +2249,7 @@ switch ($action) {
             'extracted' => [
                 'vendor' => $extracted['vendor'] ?? 'Scanned Vendor',
                 'date' => $extracted['date'] ?? date('Y-m-d'),
-                'reference_no' => $extracted['reference_no'] ?? ('REC-' . rand(1000, 9999)),
+                'reference_no' => $extracted['reference_no'] ?? '',
                 'amount' => $extracted['amount'] ?? '0.00'
             ]
         ]);
@@ -2088,7 +2269,7 @@ switch ($action) {
         exit;
     }
 
-    if (!is_string($token) || !preg_match('/^[a-f0-9]{16}$/i', $token)) {
+    if (!is_string($token) || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
         http_response_code(422);
         echo json_encode(['success' => false, 'error' => 'This scanner link is invalid. Reopen the scanner from your computer and scan its new QR code.']);
         exit;
@@ -2120,7 +2301,7 @@ switch ($action) {
     }
 
     $pdo = getDbConnection();
-    $scanStmt = $pdo->prepare("SELECT id FROM pending_receipt_scans WHERE token = :token AND status = 'pending' LIMIT 1");
+    $scanStmt = $pdo->prepare("SELECT id FROM pending_receipt_scans WHERE token = :token AND status = 'pending' AND created_at >= NOW() - INTERVAL 1 HOUR LIMIT 1");
     $scanStmt->execute([':token' => $token]);
     if (!$scanStmt->fetchColumn()) {
         http_response_code(410);
@@ -2140,23 +2321,41 @@ switch ($action) {
         }
     }
 
-    $fileExt = pathinfo($_FILES['receipt_image']['name'], PATHINFO_EXTENSION);
-    $fileName = 'receipt_' . uniqid() . '.' . ($fileExt ?: 'jpg');
+    $fileSize = (int) ($_FILES['receipt_image']['size'] ?? 0);
+    if ($fileSize <= 0 || $fileSize > 10 * 1024 * 1024) {
+        http_response_code(413);
+        echo json_encode(['success' => false, 'error' => 'Receipt photos must be 10 MB or smaller.']);
+        exit;
+    }
+
+    $temporaryPath = (string) ($_FILES['receipt_image']['tmp_name'] ?? '');
+    $info = is_uploaded_file($temporaryPath) ? @getimagesize($temporaryPath) : false;
+    $allowedImageTypes = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        'image/bmp' => 'bmp',
+    ];
+    if (
+        $info === false
+        || !isset($allowedImageTypes[$info['mime'] ?? ''])
+        || (int) ($info[0] ?? 0) <= 0
+        || (int) ($info[1] ?? 0) <= 0
+        || (int) $info[0] * (int) $info[1] > 40000000
+    ) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'The uploaded file is not a readable image. Please take the receipt photo again.']);
+        exit;
+    }
+
+    // Pick an extension from the decoded image type, never from the client filename.
+    $fileName = 'receipt_' . bin2hex(random_bytes(16)) . '.' . $allowedImageTypes[$info['mime']];
     $targetPath = $uploadDir . DIRECTORY_SEPARATOR . $fileName;
+    $imagePath = 'uploads/receipts/' . $fileName;
 
-    if (move_uploaded_file($_FILES['receipt_image']['tmp_name'], $targetPath)) {
-        $imagePath = 'uploads/receipts/' . $fileName;
-
+    if (move_uploaded_file($temporaryPath, $targetPath)) {
         // Preprocess image for blurry/faded receipts using GD library
-        $info = @getimagesize($targetPath);
-        if ($info === false) {
-            if (!unlink($targetPath)) {
-                error_log('Failed to remove invalid mobile receipt upload: ' . $targetPath);
-            }
-            http_response_code(422);
-            echo json_encode(['success' => false, 'error' => 'The uploaded file is not a readable image. Please take the receipt photo again.']);
-            exit;
-        }
 
         if ($info) {
             $img = null;
@@ -2181,7 +2380,7 @@ switch ($action) {
         $extracted = [
             'vendor' => 'QUICK MART',
             'date' => date('Y-m-d'),
-            'reference_no' => 'REC-' . rand(1000, 9999),
+            'reference_no' => '',
             'amount' => '0.00'
         ];
 
@@ -2257,6 +2456,12 @@ switch ($action) {
     break;
     
     case 'cleanup-scans':
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+        http_response_code(405);
+        header('Allow: POST');
+        echo json_encode(['success' => false, 'error' => 'Method not allowed.']);
+        exit;
+    }
     $pdo = getDbConnection();
     // Delete pending scans older than 1 hour or clean up temporary files
     $stmt = $pdo->prepare("DELETE FROM pending_receipt_scans WHERE created_at < (NOW() - INTERVAL 1 HOUR)");

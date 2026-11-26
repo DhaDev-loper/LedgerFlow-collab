@@ -1,7 +1,46 @@
 <?php
 declare(strict_types=1);
-session_start();
+require_once __DIR__ . '/session.php';
+startApplicationSession();
 require_once __DIR__ . '/database.php';
+requireSameOriginForWriteRequests();
+$requestMethod = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+$scriptPath = strtolower(str_replace('\\', '/', (string) ($_SERVER['SCRIPT_FILENAME'] ?? '')));
+$readOnlyGetActions = [
+    'accounts.php' => ['list', 'account-types'],
+    'clients.php' => ['list'],
+    'settings.php' => ['get-business', 'list-categories'],
+    'periods.php' => ['list', 'closed-entry-options'],
+    'journal.php' => [
+        'list', 'reference-data', 'party-open-items', 'due-notifications', 'view',
+        'list-pending-deletions', 'recent', 'summary', 'cashflow-chart', 'today-sales',
+        'totals', 'receivables-payables', 'receivables-payables-items', 'ledger',
+        'cashflow-report', 'get_clients', 'list-clients', 'client-detail',
+    ],
+    'user-management.php' => ['list', 'list-archived'],
+    'reports.php' => ['cash-flow-statement', 'income-statement', 'balance-sheet', 'trial-balance'],
+    'export.php' => [
+        'cash-flow-statement-pdf', 'cash-flow-statement-xlsx', 'income-statement-pdf',
+        'balance-sheet-pdf', 'trial-balance-xlsx', 'journal-entry-pdf',
+    ],
+    'audit.php' => [''],
+    'cleanup-scans.php' => [],
+];
+if ($requestMethod === 'GET' || $requestMethod === 'HEAD') {
+    foreach ($readOnlyGetActions as $routeName => $allowedActions) {
+        if (str_ends_with($scriptPath, '/routes/' . $routeName)) {
+            $requestedAction = (string) ($_POST['action'] ?? $_GET['action'] ?? '');
+            if (!in_array($requestedAction, $allowedActions, true)) {
+                http_response_code(405);
+                header('Allow: POST');
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['success' => false, 'error' => 'This action must use POST.']);
+                exit;
+            }
+            break;
+        }
+    }
+}
 // Prevent the browser from caching this page at all. Without this,
 // pressing the Back button after logout can show a stale cached
 header('Cache-Control: no-store, no-cache, mut-revalidate, max-age=0');

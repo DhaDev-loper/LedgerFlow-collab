@@ -15,7 +15,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
     <title>User Management — KoboSocial</title>
     <script src="../frontend/js/theme.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <style>
         .avatar-initials {
@@ -52,6 +52,28 @@ $currentUserRole = $_SESSION['role'] ?? '';
             font-weight: 600;
         }
 
+        .users-table-scroll {
+            max-height: calc(100vh - 410px);
+            min-height: 220px;
+            overflow: auto !important;
+            overscroll-behavior: contain;
+            scrollbar-color: var(--dark-border) var(--dark-surface);
+            scrollbar-width: thin;
+        }
+        .users-table-scroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        .user-table-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            padding: 0.85rem 1rem;
+            border-top: 1px solid var(--dark-border);
+        }
         .action-icon-btn {
             background: transparent;
             border: none;
@@ -108,21 +130,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
                         </button>
                     </div>
                 </div>
-                <!-- Access Control Info Banner -->
-                <div class="panel p-3 mb-4 d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: rgba(255, 255, 255, 0.02); border-left: 3px solid var(--bs-primary);">
-                    <div class="d-flex align-items-center gap-3">
-                        <div class="p-2 rounded bg-primary-subtle text-primary">
-                            <i class="bi bi-shield-lock-fill fs-5"></i>
-                        </div>
-                        <div>
-                            <div class="fw-semibold text-white small">Role-Based Access Control</div>
-                            <div class="small" style="color: var(--dark-text-muted); font-size: 0.8rem;">CEOs and CFOs can create accounts, update access levels, and toggle account availability.</div>
-                        </div>
-                    </div>
-                    <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 small">
-                        <i class="bi bi-check-circle-fill me-1"></i> RBAC Active
-                    </span>
-                </div>
+                
 
                 <!-- Filters & Search Controls Bar -->
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
@@ -152,7 +160,7 @@ $currentUserRole = $_SESSION['role'] ?? '';
 
                 <!-- Table Panel -->
                 <div class="panel">
-                    <div class="table-responsive">
+                    <div class="table-responsive users-table-scroll">
                         <table class="table table-transactions mb-0">
                             <thead>
                                 <tr>
@@ -168,6 +176,18 @@ $currentUserRole = $_SESSION['role'] ?? '';
                                 <tr><td colspan="6" class="text-center py-4" style="color: var(--dark-text-muted);">Loading...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="user-table-footer">
+                        <div class="d-flex align-items-center flex-wrap gap-3">
+                            <small id="userPageInfo" style="color: var(--dark-text-muted);"></small>
+                            <label for="userRowsPerPage" class="d-flex align-items-center gap-2 small mb-0" style="color: var(--dark-text-muted);">Show
+                                <select id="userRowsPerPage" class="form-select form-select-sm form-control-dark" style="width: auto;">
+                                    <option value="10" selected>10</option><option value="25">25</option>
+                                    <option value="50">50</option><option value="100">100</option>
+                                </select> entries
+                            </label>
+                        </div>
+                        <nav aria-label="User list pagination"><ul id="userPagination" class="pagination pagination-sm mb-0"></ul></nav>
                     </div>
                 </div>
 

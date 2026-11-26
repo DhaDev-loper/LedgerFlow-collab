@@ -68,7 +68,7 @@ function loadActiveReport() {
 function formatMoney(amount) {
     const num = parseFloat(amount) || 0;
     const sign = num < 0 ? '-' : '';
-    return sign + '₱' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2 });
+    return sign + '\u20B1' + Math.abs(num).toLocaleString(undefined, { minimumFractionDigits: 2 });
 }
 
 function formatStatementDate(value) {
@@ -111,14 +111,13 @@ async function loadIncomeStatement(requestId) {
             return;
         }
 
-        const renderStatementRows = (lines, emptyMessage) => lines?.length
-            ? lines.map(line => `
-                <tr>
-                    <td>${escapeHtml(line.name)}</td>
-                    <td class="text-right">${formatMoney(line.net_amount)}</td>
-                </tr>
-            `).join('')
-            : `<tr><td colspan="2" class="statement-empty">${emptyMessage}</td></tr>`;
+        const row = (label, amount, rowClass = '') => `<tr class="${rowClass}"><td>${escapeHtml(label)}</td><td class="text-right">${formatMoney(amount ?? 0)}</td></tr>`;
+        const reportTable = (rows) => `<table class="statement-data-table"><colgroup><col style="width:70%"><col style="width:30%"></colgroup><thead><tr><th>Account Name</th><th class="text-right">Amount (&#8369;)</th></tr></thead><tbody>${rows}</tbody></table>`;
+        const section = (title, lines, totalLabel, total) => `
+            <div class="statement-section-header">${escapeHtml(title)}</div>
+            ${reportTable([...lines.map(line => row(line.name, line.amount)), row(totalLabel, total, 'statement-subtotal-row')].join(''))}
+        `;
+        const summaryRows = (data.summary || []).map(line => row(line.name, line.amount, 'statement-subtotal-row')).join('');
         const generatedAt = window.formatDateTimeMDY(new Date());
 
         container.innerHTML = `
@@ -131,35 +130,23 @@ async function loadIncomeStatement(requestId) {
                         </td>
                         <td>
                             <div class="statement-report-title">Income Statement</div>
-                            <div class="statement-report-meta">Period: ${escapeHtml(formatStatementDate(data.date_from))} &mdash; ${escapeHtml(formatStatementDate(data.date_to))}</div>
+                            <div class="statement-report-meta">For the Period Ended ${escapeHtml(formatStatementDate(data.date_to))}</div>
                         </td>
                     </tr></tbody>
                 </table>
 
-                <div class="statement-section-header">Revenue</div>
-                <table class="statement-data-table">
-                    <thead><tr><th>Account Name</th><th class="text-right" style="width: 30%;">Amount</th></tr></thead>
-                    <tbody>
-                        ${renderStatementRows(data.revenue_lines, 'No revenue recorded for this period.')}
-                        <tr class="statement-subtotal-row"><td>Total Revenue</td><td class="text-right">${formatMoney(data.total_revenue)}</td></tr>
-                    </tbody>
-                </table>
-
-                <div class="statement-section-header">Operating Expenses</div>
-                <table class="statement-data-table">
-                    <thead><tr><th>Account Name</th><th class="text-right" style="width: 30%;">Amount</th></tr></thead>
-                    <tbody>
-                        ${renderStatementRows(data.expense_lines, 'No expenses recorded for this period.')}
-                        <tr class="statement-subtotal-row"><td>Total Operating Expenses</td><td class="text-right">${formatMoney(data.total_expense)}</td></tr>
-                    </tbody>
-                </table>
-
-                <table class="statement-grand-total-table">
-                    <tbody><tr class="statement-grand-total-row">
-                        <td>Net Income / (Loss)</td>
-                        <td class="text-right">${formatMoney(data.net_income)}</td>
-                    </tr></tbody>
-                </table>
+                ${section('Revenue', data.revenue_lines || [], 'Total Revenue', data.total_revenue)}
+                ${section('Cost of Services', data.cost_of_services || [], 'Total Cost of Services', data.total_cost_of_services)}
+                <div class="statement-section-header">Gross Profit</div>
+                ${reportTable(row('Gross Profit', data.gross_profit, 'statement-grand-total-row'))}
+                ${section('Operating Expenses', data.operating_expenses || [], 'Total Operating Expenses', data.total_operating_expenses)}
+                <div class="statement-section-header">Net Income (Loss) Before Tax</div>
+                ${reportTable(row('Net Income (Loss) Before Tax', data.net_income_before_tax, 'statement-subtotal-row'))}
+                <div class="statement-section-header">Income Tax Expense</div>
+                ${reportTable(row('Income Tax Expense', data.income_tax_expense))}
+                <div class="statement-section-header">Net Income (Loss) After Tax</div>
+                ${reportTable(row('Net Income (Loss) After Tax', data.net_income_after_tax, 'statement-grand-total-row'))}
+                <section class="statement-summary"><h3>Summary</h3>${reportTable(summaryRows)}</section>
                 <div class="statement-footer">Generated automatically by ${escapeHtml(data.business_name || 'WRS Accounting / KoboSocial')} Accounting System on ${escapeHtml(generatedAt)}</div>
             </article>
         `;
@@ -191,21 +178,26 @@ async function loadBalanceSheet(requestId) {
         }
 
         const businessName = data.business_name || 'WRS Accounting / KoboSocial';
-        const renderRows = items => (items || []).map(item => `
-            <tr><td>${escapeHtml(item.name)}</td><td class="text-right">${formatMoney(item.current_balance)}</td></tr>
-        `).join('') || '<tr><td colspan="2" class="statement-empty">No accounts with active balances.</td></tr>';
-        const assets = [...(data.current_assets || []), ...(data.non_current_assets || [])];
-        const liabilities = [...(data.current_liabilities || []), ...(data.non_current_liabilities || [])];
+        const renderRows = items => Object.entries(items || {}).map(([name, amount]) => `
+            <tr><td>${escapeHtml(name)}</td><td class="text-right">${formatMoney(amount)}</td></tr>
+        `).join('');
         const renderSection = (title, items, totalLabel, total) => `
-            <div class="statement-section-header">${title}</div>
+            <div class="statement-section-header">${escapeHtml(title)}</div>
             <table class="statement-data-table">
-                <thead><tr><th>Account Name</th><th class="text-right" style="width: 30%;">Balance</th></tr></thead>
-                <tbody>
-                    ${renderRows(items)}
-                    <tr class="statement-subtotal-row"><td>${totalLabel}</td><td class="text-right">${formatMoney(total)}</td></tr>
-                </tbody>
+                <colgroup><col style="width:70%"><col style="width:30%"></colgroup>
+                <thead><tr><th>Account Name</th><th class="text-right">Balance (&#8369;)</th></tr></thead>
+                <tbody>${renderRows(items)}<tr class="statement-subtotal-row"><td>${escapeHtml(totalLabel)}</td><td class="text-right">${formatMoney(total)}</td></tr></tbody>
             </table>
         `;
+        const renderGrandTotal = (label, amount) => `
+            <table class="statement-grand-total-table">
+                <colgroup><col style="width:70%"><col style="width:30%"></colgroup>
+                <tbody><tr class="statement-grand-total-row"><td>${escapeHtml(label)}</td><td class="text-right">${formatMoney(amount)}</td></tr></tbody>
+            </table>
+        `;
+        const summaryRows = (data.summary || []).map(line => `
+            <tr class="${line.name === 'Balance Status' && !data.is_balanced ? 'statement-subtotal-row' : ''}"><td>${escapeHtml(line.name)}</td><td class="text-right">${line.amount === undefined ? escapeHtml(line.value) : formatMoney(line.amount)}</td></tr>
+        `).join('');
 
         container.innerHTML = `
             <article class="income-statement-paper">
@@ -213,20 +205,17 @@ async function loadBalanceSheet(requestId) {
                     <td><div class="statement-brand-title">${escapeHtml(businessName)}</div><div class="statement-brand-sub">Financial Position</div></td>
                     <td><div class="statement-report-title">Balance Sheet</div><div class="statement-report-meta">As of ${escapeHtml(formatLongStatementDate(data.as_of))}</div></td>
                 </tr></tbody></table>
-                ${renderSection('Assets', assets, 'Total Assets', data.total_assets)}
-                ${renderSection('Liabilities', liabilities, 'Total Liabilities', data.total_liabilities)}
-                <div class="statement-section-header">Equity</div>
-                <table class="statement-data-table">
-                    <thead><tr><th>Account Name</th><th class="text-right" style="width: 30%;">Balance</th></tr></thead>
-                    <tbody>
-                        ${renderRows(data.equity)}
-                        <tr><td>Retained Earnings (Unappropriated)</td><td class="text-right">${formatMoney(data.retained_earnings)}</td></tr>
-                        <tr class="statement-subtotal-row"><td>Total Equity</td><td class="text-right">${formatMoney(data.total_equity)}</td></tr>
-                    </tbody>
-                </table>
-                <table class="statement-grand-total-table"><tbody><tr class="statement-grand-total-row">
-                    <td>Total Liabilities &amp; Equity</td><td class="text-right">${formatMoney(data.total_liabilities_and_equity)}</td>
-                </tr></tbody></table>
+                <div class="statement-section-header">Assets</div>
+                ${renderSection('Current Assets', data.current_assets, 'Total Current Assets', data.total_current_assets)}
+                ${renderSection('Non-Current Assets', data.non_current_assets, 'Total Non-Current Assets', data.total_non_current_assets)}
+                ${renderGrandTotal('TOTAL ASSETS', data.total_assets)}
+                <div class="statement-section-header">Liabilities</div>
+                ${renderSection('Current Liabilities', data.current_liabilities, 'Total Current Liabilities', data.total_current_liabilities)}
+                ${renderSection('Non-Current Liabilities', data.non_current_liabilities, 'Total Non-Current Liabilities', data.total_non_current_liabilities)}
+                ${renderGrandTotal('TOTAL LIABILITIES', data.total_liabilities)}
+                ${renderSection("Owner's Equity", data.equity, "TOTAL OWNER'S EQUITY", data.total_equity)}
+                ${renderGrandTotal("TOTAL LIABILITIES & OWNER'S EQUITY", data.total_liabilities_and_equity)}
+                <section class="statement-summary"><h3>Summary</h3><table class="statement-data-table"><colgroup><col style="width:70%"><col style="width:30%"></colgroup><tbody>${summaryRows}</tbody></table></section>
                 ${renderStatementFooter(businessName)}
             </article>
         `;

@@ -37,6 +37,7 @@ async function loadReferenceData() {
         }
 
         allAccountsForLines = data.accounts || [];
+        populateOpeningBalanceAccountSelect();
         refreshAccountLineOptions();
         const accountOptions = allAccountsForLines.map(a => `<option value="${a.id}">${a.name} (${a.type_name})</option>`).join('');
 
@@ -58,11 +59,7 @@ async function loadReferenceData() {
                 data.types.map(t => `<option value="${t.id}">${t.type_name || t.name || t.transaction_type}</option>`).join('');
         }
 
-        const categorySelect = document.getElementById('categoryId');
-        if (categorySelect && data.categories) {
-            categorySelect.innerHTML = '<option value="">-- None --</option>' + 
-                data.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-        }
+        updateOpeningBalanceMode();
 
         if (allAccountsForLines.length === 0 || !data.types?.length) {
             throw new Error('No active accounts or transaction types are available.');
@@ -83,6 +80,8 @@ async function loadReferenceData() {
         });
         entryForm?.addEventListener('reset', () => {
             if (projectClientSelect) projectClientSelect.required = false;
+            const dueDateInput = document.getElementById('dueDate');
+            if (dueDateInput) dueDateInput.required = false;
         });
 
         const transDate = document.getElementById('transactionDate');
@@ -97,6 +96,7 @@ async function loadReferenceData() {
 let journalEntries = [];
 let journalCurrentPage = 1;
 let journalRowsPerPage = 10;
+const journalLineCache = new Map();
 
 function getLocalDateInputValue() {
     const now = new Date();
@@ -111,6 +111,28 @@ document.getElementById('journalRowsPerPage')?.addEventListener('change', event 
     journalRowsPerPage = selectedPageSize;
     journalCurrentPage = 1;
     renderJournalRows();
+});
+
+document.getElementById('toggleJournalSummary')?.addEventListener('click', event => {
+    const button = event.currentTarget;
+    const summaryColumn = document.getElementById('journalSummaryColumn');
+    const entriesColumn = document.getElementById('journalEntriesColumn');
+    const summaryPanel = document.getElementById('journalSummaryPanel');
+    const summaryDock = document.getElementById('journalSummaryDock');
+    if (!summaryColumn || !entriesColumn || !summaryPanel || !summaryDock) return;
+
+    const isOpen = button.getAttribute('aria-expanded') === 'true';
+    summaryPanel.classList.toggle('d-none', isOpen);
+    document.getElementById('journalMainGrid')?.classList.toggle('is-collapsed', isOpen);
+    summaryDock.classList.toggle('is-collapsed', isOpen);
+    summaryColumn.setAttribute('aria-hidden', String(isOpen));
+    button.setAttribute('aria-expanded', String(!isOpen));
+    button.classList.toggle('is-open', !isOpen);
+    button.setAttribute('aria-label', isOpen ? 'Open summary' : 'Close summary');
+    button.title = isOpen ? 'Open summary' : 'Close summary';
+    button.innerHTML = isOpen
+        ? '<span>Summary</span><i class="bi bi-chevron-left" aria-hidden="true"></i>'
+        : '<span>Summary</span><i class="bi bi-chevron-right" aria-hidden="true"></i>';
 });
 
 function renderJournalPagination() {
@@ -186,7 +208,7 @@ function renderJournalRows() {
     const start = (journalCurrentPage - 1) * journalRowsPerPage;
     const pageEntries = journalEntries.slice(start, start + journalRowsPerPage);
 
-    const totalCols = CAN_CREATE ? 5 : 4;
+    const totalCols = 5;
 
     if (pageEntries.length === 0) {
         tbody.innerHTML = `
@@ -224,10 +246,13 @@ function renderJournalRows() {
             : '';
 
         let actionButtons = `
+            <button type="button" class="table-action-btn btn-toggle-journal-lines" data-id="${Number(j.id)}" aria-expanded="false" aria-label="Show account lines" title="Show debit and credit lines">
+                <i class="bi bi-list-ul" aria-hidden="true"></i><span class="visually-hidden">Lines</span>
+            </button>
             <button type="button" class="table-action-btn" onclick="event.stopPropagation(); viewEntry(${j.id})">View</button>
         `;
 
-        if (!isVoided) {
+        if (CAN_CREATE && !isVoided) {
             if (currentRole === 'owner') {
                 actionButtons += `
                     <button type="button" class="table-action-btn danger btn-direct-delete" 
@@ -253,6 +278,7 @@ function renderJournalRows() {
             }
         }
 
+        const entryId = Number(j.id);
         return `
             <tr style="cursor: pointer;${isEdited && !isVoided ? ' box-shadow: inset 3px 0 #f59e0b; background-color: rgba(245, 158, 11, 0.06);' : ''}" class="${isVoided ? 'opacity-50 text-decoration-line-through' : ''}" onclick="viewEntry(${j.id})">
                 <!-- Column 1: Date & Reference -->
@@ -284,13 +310,14 @@ function renderJournalRows() {
                 </td>
 
                 <!-- Column 5: Actions -->
-                ${CAN_CREATE ? `
-                    <td class="text-end" onclick="event.stopPropagation();">
-                        <div class="btn-group">
-                            ${actionButtons}
-                        </div>
-                    </td>
-                ` : ''}
+                <td class="text-end" onclick="event.stopPropagation();">
+                    <div class="btn-group">
+                        ${actionButtons}
+                    </div>
+                </td>
+            </tr>
+            <tr class="journal-lines-detail-row" data-journal-lines-row="${entryId}" hidden>
+                <td colspan="${totalCols}" class="journal-lines-detail-cell"></td>
             </tr>
         `;
     }).join('');
@@ -323,7 +350,7 @@ async function loadJournalEntries() {
         if (!response.ok || !data.success) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center py-4 text-danger">
+                    <td colspan="5" class="text-center py-4 text-danger">
                         ${escapeHtml(data.error || `Failed to load entries (HTTP ${response.status}).`)}
                     </td>
                 </tr>
@@ -347,7 +374,7 @@ async function loadJournalEntries() {
 
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4 text-danger">
+                <td colspan="5" class="text-center py-4 text-danger">
                     ${escapeHtml(message)}
                 </td>
             </tr>
@@ -399,6 +426,7 @@ function resetEntryFields() {
     updateJournalLineControls('credit');
 
     document.getElementById('transactionDate').value = getLocalDateInputValue();
+    document.getElementById('transactionTypeId')?.dispatchEvent(new Event('change'));
     formError.textContent = '';
     formError.classList.add('d-none');
     recalculateLineTotals();
@@ -419,62 +447,83 @@ if (CAN_CREATE) {
     entryForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         formError.classList.add('d-none');
-        const accountRuleError = refreshAccountRuleWarning();
-        if (accountRuleError) {
-            formError.textContent = accountRuleError;
-            formError.classList.remove('d-none');
-            return;
-        }
-
+        const isOpeningBalance = getJournalTransactionTypeName() === 'Opening Balance';
         const debitLines = [];
-        let debitTotalCents = 0;
-        document.querySelectorAll('#debitLinesContainer > div').forEach(row => {
-            const accSelect = row.querySelector('.line-account');
-            const amtInput = row.querySelector('.line-amount');
-            if (accSelect && amtInput) {
-                const amountCents = getJournalAmountCents(amtInput);
-                debitLines.push({
-                    account_id: accSelect.value,
-                    amount: Number.isFinite(amountCents) ? (amountCents / 100).toFixed(2) : '',
-                });
-                if (Number.isFinite(amountCents)) debitTotalCents += amountCents;
-            }
-        });
-
         const creditLines = [];
-        let creditTotalCents = 0;
-        document.querySelectorAll('#creditLinesContainer > div').forEach(row => {
-            const accSelect = row.querySelector('.line-account');
-            const amtInput = row.querySelector('.line-amount');
-            if (accSelect && amtInput) {
-                const amountCents = getJournalAmountCents(amtInput);
-                creditLines.push({
-                    account_id: accSelect.value,
-                    amount: Number.isFinite(amountCents) ? (amountCents / 100).toFixed(2) : '',
-                });
-                if (Number.isFinite(amountCents)) creditTotalCents += amountCents;
-            }
-        });
+        let openingAmountCents = 0;
 
-        const hasInvalidLine = [...debitLines, ...creditLines].some(line =>
-            !line.account_id || !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0
-        );
-        const hasTooManyLines = debitLines.length > MAX_JOURNAL_LINES_PER_SIDE
-            || creditLines.length > MAX_JOURNAL_LINES_PER_SIDE;
-        if (hasTooManyLines) {
-            formError.textContent = `A journal entry can have at most ${MAX_JOURNAL_LINES_PER_SIDE} debit lines and ${MAX_JOURNAL_LINES_PER_SIDE} credit lines.`;
-            formError.classList.remove('d-none');
-            return;
-        }
-        if (debitLines.length === 0 || creditLines.length === 0 || hasInvalidLine) {
-            formError.textContent = 'Add at least one debit and credit line, and select an account and positive amount for each line.';
-            formError.classList.remove('d-none');
-            return;
-        }
-        if (debitTotalCents !== creditTotalCents) {
-            formError.textContent = 'Debits and credits must balance before you can save this entry.';
-            formError.classList.remove('d-none');
-            return;
+        if (isOpeningBalance) {
+            const accountId = document.getElementById('openingBalanceAccountId').value;
+            const amount = Number(document.getElementById('openingBalanceAmount').value);
+            openingAmountCents = Math.round(amount * 100);
+            if (!accountId) {
+                formError.textContent = 'Choose an account for the opening balance.';
+                formError.classList.remove('d-none');
+                return;
+            }
+            if (!Number.isFinite(amount) || amount <= 0 || amount > 999999999999.99
+                || !Number.isSafeInteger(openingAmountCents)
+                || Math.abs(amount * 100 - openingAmountCents) > 0.00001) {
+                formError.textContent = 'Enter an opening amount greater than zero with no more than two decimal places.';
+                formError.classList.remove('d-none');
+                return;
+            }
+        } else {
+            const accountRuleError = refreshAccountRuleWarning();
+            if (accountRuleError) {
+                formError.textContent = accountRuleError;
+                formError.classList.remove('d-none');
+                return;
+            }
+
+            let debitTotalCents = 0;
+            document.querySelectorAll('#debitLinesContainer > div').forEach(row => {
+                const accSelect = row.querySelector('.line-account');
+                const amtInput = row.querySelector('.line-amount');
+                if (accSelect && amtInput) {
+                    const amountCents = getJournalAmountCents(amtInput);
+                    debitLines.push({
+                        account_id: accSelect.value,
+                        amount: Number.isFinite(amountCents) ? (amountCents / 100).toFixed(2) : '',
+                    });
+                    if (Number.isFinite(amountCents)) debitTotalCents += amountCents;
+                }
+            });
+
+            let creditTotalCents = 0;
+            document.querySelectorAll('#creditLinesContainer > div').forEach(row => {
+                const accSelect = row.querySelector('.line-account');
+                const amtInput = row.querySelector('.line-amount');
+                if (accSelect && amtInput) {
+                    const amountCents = getJournalAmountCents(amtInput);
+                    creditLines.push({
+                        account_id: accSelect.value,
+                        amount: Number.isFinite(amountCents) ? (amountCents / 100).toFixed(2) : '',
+                    });
+                    if (Number.isFinite(amountCents)) creditTotalCents += amountCents;
+                }
+            });
+
+            const hasInvalidLine = [...debitLines, ...creditLines].some(line =>
+                !line.account_id || !Number.isFinite(Number(line.amount)) || Number(line.amount) <= 0
+            );
+            const hasTooManyLines = debitLines.length > MAX_JOURNAL_LINES_PER_SIDE
+                || creditLines.length > MAX_JOURNAL_LINES_PER_SIDE;
+            if (hasTooManyLines) {
+                formError.textContent = `A journal entry can have at most ${MAX_JOURNAL_LINES_PER_SIDE} debit lines and ${MAX_JOURNAL_LINES_PER_SIDE} credit lines.`;
+                formError.classList.remove('d-none');
+                return;
+            }
+            if (debitLines.length === 0 || creditLines.length === 0 || hasInvalidLine) {
+                formError.textContent = 'Add at least one debit and credit line, and select an account and positive amount for each line.';
+                formError.classList.remove('d-none');
+                return;
+            }
+            if (debitTotalCents !== creditTotalCents) {
+                formError.textContent = 'Debits and credits must balance before you can save this entry.';
+                formError.classList.remove('d-none');
+                return;
+            }
         }
 
         const saveBtn = document.getElementById('saveEntryBtn');
@@ -486,8 +535,14 @@ if (CAN_CREATE) {
             formData.append('action', 'create');
             formData.set('transaction_type_id', document.getElementById('transactionTypeId').value);
             formData.set('reference_no', document.getElementById('referenceNo').value);
-            formData.append('debit_lines', JSON.stringify(debitLines));
-            formData.append('credit_lines', JSON.stringify(creditLines));
+            formData.set('debit_lines', JSON.stringify(debitLines));
+            formData.set('credit_lines', JSON.stringify(creditLines));
+
+            if (isOpeningBalance) {
+                formData.set('opening_balance_account_id', document.getElementById('openingBalanceAccountId').value);
+                formData.set('opening_balance_amount', (openingAmountCents / 100).toFixed(2));
+                formData.set('opening_balance_direction', document.getElementById('openingBalanceDirection').value);
+            }
 
             const clientSelect = document.getElementById('clientIdSelect');
             if (clientSelect) {
@@ -501,8 +556,9 @@ if (CAN_CREATE) {
                 entryModal.hide();
                 entryForm.reset();
                 document.getElementById('transactionDate').value = getLocalDateInputValue();
+                document.getElementById('transactionTypeId')?.dispatchEvent(new Event('change'));
 
-                showToast('Journal entry recorded successfully!', 'success');
+                showToast(`Journal entry recorded successfully. Reference: ${data.reference_no}`, 'success');
 
                 loadJournalEntries();
                 loadSummaryTotals();
@@ -587,7 +643,7 @@ async function viewEntry(journalId) {
                     <div class="fw-medium">${escapeHtml(j.type_name)}</div>
                 </div>
                 <div class="col-6">
-                    <div class="small" style="color: var(--dark-text-muted);">Reference No.</div>
+                    <div class="small" style="color: var(--dark-text-muted);">Invoice No.</div>
                     <div class="fw-medium">${escapeHtml(j.reference_no || '—')}</div>
                 </div>
                 <div class="col-6">
@@ -690,6 +746,125 @@ function isCashJournalAccount(account) {
 function getJournalTransactionTypeName() {
     const typeSelect = document.getElementById('transactionTypeId');
     return typeSelect?.selectedOptions[0]?.textContent.trim() || '';
+}
+
+function populateOpeningBalanceAccountSelect() {
+    const select = document.getElementById('openingBalanceAccountId');
+    if (!select) return;
+
+    const selectedValue = select.value;
+    select.replaceChildren(new Option('-- Select account --', ''));
+
+    const eligibleAccounts = allAccountsForLines.filter(account =>
+        ['Asset', 'Liability', 'Equity'].includes(account.type_name)
+        && String(account.name).trim().toLowerCase() !== 'opening balance equity'
+    );
+    const groups = new Map();
+    eligibleAccounts.forEach(account => {
+        if (!groups.has(account.type_name)) groups.set(account.type_name, []);
+        groups.get(account.type_name).push(account);
+    });
+    groups.forEach((accounts, typeName) => {
+        const group = document.createElement('optgroup');
+        group.label = `${typeName} Accounts`;
+        accounts.forEach(account => {
+            const option = new Option(getJournalAccountOptionLabel(account), String(account.id));
+            option.dataset.normalBalance = account.normal_balance;
+            option.dataset.accountType = account.type_name;
+            option.dataset.accountName = account.name;
+            group.append(option);
+        });
+        select.append(group);
+    });
+
+    if (eligibleAccounts.length === 0) {
+        select.append(new Option('No active Asset, Liability, or Equity accounts available', ''));
+    } else if (selectedValue) {
+        select.value = selectedValue;
+    }
+    updateOpeningBalanceDirectionHelp();
+}
+
+function updateOpeningBalanceDirectionHelp() {
+    const select = document.getElementById('openingBalanceAccountId');
+    const direction = document.getElementById('openingBalanceDirection')?.value || 'normal';
+    const help = document.getElementById('openingBalanceNormalSideHelp');
+    const account = select?.selectedOptions[0];
+    if (!help) return;
+
+    if (!account?.value) {
+        help.textContent = 'Choose an account to see its normal balance.';
+        return;
+    }
+
+    const normalBalance = account.dataset.normalBalance;
+    const entrySide = direction === 'normal' ? normalBalance : direction;
+    const equitySide = entrySide === 'debit' ? 'credit' : 'debit';
+    help.textContent = `${account.dataset.accountName} normally carries a ${normalBalance} balance. This entry will ${entrySide} it; Opening Balance Equity will be ${equitySide}ed.`;
+}
+
+function updateOpeningBalanceMode() {
+    const isOpeningBalance = getJournalTransactionTypeName() === 'Opening Balance';
+    const openingSection = document.getElementById('openingBalanceSection');
+    if (!openingSection) return;
+
+    const enteringOpeningBalance = isOpeningBalance && openingSection.dataset.active !== 'true';
+    openingSection.dataset.active = String(isOpeningBalance);
+    openingSection.classList.toggle('d-none', !isOpeningBalance);
+    openingSection.setAttribute('aria-hidden', String(!isOpeningBalance));
+
+    const openingAccount = document.getElementById('openingBalanceAccountId');
+    const openingAmount = document.getElementById('openingBalanceAmount');
+    if (openingAccount) openingAccount.required = isOpeningBalance;
+    if (openingAmount) openingAmount.required = isOpeningBalance;
+
+    document.getElementById('clientFieldContainer')?.classList.toggle('d-none', isOpeningBalance);
+    document.getElementById('projectNameRow')?.classList.toggle('d-none', isOpeningBalance);
+    document.getElementById('dueDateFieldContainer')?.classList.toggle('d-none', isOpeningBalance);
+    document.getElementById('journalModeToggleContainer')?.classList.toggle('d-none', isOpeningBalance);
+    document.getElementById('autoModeSection')?.classList.toggle('d-none', isOpeningBalance);
+    document.getElementById('accountRuleWarning')?.classList.toggle('d-none', isOpeningBalance);
+    document.getElementById('journalTotalsRow')?.classList.toggle('d-none', isOpeningBalance);
+
+    const description = document.getElementById('description');
+    const descriptionLabel = document.getElementById('descriptionFieldLabel');
+    if (description) {
+        description.required = !isOpeningBalance;
+        description.placeholder = isOpeningBalance ? 'Optional memo' : 'e.g. Walk-in sale, Electricity bill';
+    }
+    if (descriptionLabel) descriptionLabel.textContent = isOpeningBalance ? 'Memo (optional)' : 'Description';
+
+    const transactionDateLabel = document.querySelector('label[for="transactionDate"]');
+    if (transactionDateLabel) transactionDateLabel.textContent = isOpeningBalance ? 'Date / As-of Date' : 'Date';
+
+    ['debitLinesSection', 'creditLinesSection'].forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (!section) return;
+        section.classList.toggle('d-none', isOpeningBalance);
+        section.querySelectorAll('input, select, button').forEach(control => {
+            if (isOpeningBalance) {
+                if (!control.hasAttribute('data-opening-balance-disabled')) {
+                    control.dataset.openingBalanceDisabled = String(control.disabled);
+                }
+                control.disabled = true;
+            } else if (control.hasAttribute('data-opening-balance-disabled')) {
+                control.disabled = control.dataset.openingBalanceDisabled === 'true';
+                delete control.dataset.openingBalanceDisabled;
+            }
+        });
+    });
+
+    if (enteringOpeningBalance) {
+        if (currentMode !== 'manual') setEntryMode('manual');
+        document.getElementById('selectedTemplateId').value = '';
+        document.getElementById('templateSearchInput').value = '';
+        document.getElementById('clientIdSelect').value = '';
+        document.getElementById('projectName').value = '';
+        document.getElementById('clientFieldContainer').classList.add('d-none');
+        closeTemplateDropdown();
+    }
+
+    updateOpeningBalanceDirectionHelp();
 }
 
 function isJournalAccountAllowedForSide(account, side, transactionType) {
@@ -878,7 +1053,12 @@ function refreshAccountLineOptions() {
     refreshAccountRuleWarning();
 }
 
-document.getElementById('transactionTypeId')?.addEventListener('change', refreshAccountLineOptions);
+document.getElementById('transactionTypeId')?.addEventListener('change', () => {
+    refreshAccountLineOptions();
+    updateOpeningBalanceMode();
+});
+document.getElementById('openingBalanceAccountId')?.addEventListener('change', updateOpeningBalanceDirectionHelp);
+document.getElementById('openingBalanceDirection')?.addEventListener('change', updateOpeningBalanceDirectionHelp);
 
 function updateJournalLineAccountLabel(row) {
     if (!row) return;
@@ -941,13 +1121,6 @@ async function openEditEntryModal(journalId) {
     document.getElementById('editReferenceNo').value = '';
     errorBox.classList.add('d-none');
 
-    const categorySelect = document.getElementById('editCategoryId');
-    const sourceCategorySelect = document.getElementById('categoryId');
-    if (categorySelect && sourceCategorySelect) {
-        categorySelect.innerHTML = sourceCategorySelect.innerHTML;
-        categorySelect.value = '';
-    }
-
     editEntryModal.show();
 
     try {
@@ -960,7 +1133,6 @@ async function openEditEntryModal(journalId) {
 
         document.getElementById('editDescription').value = data.journal.description || '';
         document.getElementById('editReferenceNo').value = data.journal.reference_no || '';
-        if (categorySelect) categorySelect.value = data.journal.category_id || '';
     } catch (err) {
         console.error('Failed to load journal entry for editing:', err);
         errorBox.textContent = err.message || 'Could not load this journal entry.';
@@ -968,7 +1140,84 @@ async function openEditEntryModal(journalId) {
     }
 }
 
+function renderJournalLineDetails(container, lines) {
+    const totals = lines.reduce((sum, line) => {
+        const amount = Number(line.amount) || 0;
+        if (line.entry_type === 'debit') sum.debit += amount;
+        if (line.entry_type === 'credit') sum.credit += amount;
+        return sum;
+    }, { debit: 0, credit: 0 });
+
+    const rows = lines.map(line => `
+        <tr>
+            <td>${escapeHtml(line.account_name || 'Unknown account')}<small class="d-block journal-line-account-type">${escapeHtml(line.account_type || '')}</small></td>
+            <td class="text-end">${line.entry_type === 'debit' ? formatMoney(line.amount) : '—'}</td>
+            <td class="text-end">${line.entry_type === 'credit' ? formatMoney(line.amount) : '—'}</td>
+        </tr>
+    `).join('');
+
+    container.innerHTML = `
+        <section class="journal-expanded-lines" aria-label="Journal entry account lines">
+            <div class="journal-expanded-lines-heading">
+                <strong>Accounts used</strong>
+                <span>Total debits <b>${formatMoney(totals.debit)}</b></span>
+                <span>Total credits <b>${formatMoney(totals.credit)}</b></span>
+            </div>
+            <table class="table table-sm table-transactions mb-0">
+                <thead><tr><th>Account</th><th class="text-end">Debit</th><th class="text-end">Credit</th></tr></thead>
+                <tbody>${rows || '<tr><td colspan="3" class="text-center">No account lines found.</td></tr>'}</tbody>
+            </table>
+        </section>
+    `;
+}
+
+async function toggleJournalLines(button) {
+    const journalId = Number(button.dataset.id);
+    const tbody = document.getElementById('journalTableBody');
+    const detailRow = tbody?.querySelector(`tr[data-journal-lines-row="${journalId}"]`);
+    const detailCell = detailRow?.querySelector('.journal-lines-detail-cell');
+    if (!journalId || !detailRow || !detailCell) return;
+
+    const isExpanded = button.getAttribute('aria-expanded') === 'true';
+    detailRow.hidden = isExpanded;
+    button.setAttribute('aria-expanded', String(!isExpanded));
+    button.setAttribute('aria-label', isExpanded ? 'Show account lines' : 'Hide account lines');
+    button.title = isExpanded ? 'Show debit and credit lines' : 'Hide debit and credit lines';
+    button.querySelector('i')?.classList.toggle('bi-chevron-up', !isExpanded);
+    button.querySelector('i')?.classList.toggle('bi-list-ul', isExpanded);
+    if (isExpanded) return;
+
+    if (journalLineCache.has(journalId)) {
+        renderJournalLineDetails(detailCell, journalLineCache.get(journalId));
+        return;
+    }
+
+    detailCell.innerHTML = '<div class="journal-expanded-lines-loading">Loading account lines…</div>';
+    try {
+        const response = await fetch(`${API_URL}?action=view&journal_id=${encodeURIComponent(journalId)}`);
+        const result = await parseJournalApiResponse(response);
+        if (!response.ok || !result.success || !Array.isArray(result.lines)) {
+            throw new Error(result.error || 'Could not load the account lines.');
+        }
+
+        journalLineCache.set(journalId, result.lines);
+        if (detailRow.isConnected) renderJournalLineDetails(detailCell, result.lines);
+    } catch (error) {
+        if (detailRow.isConnected) {
+            detailCell.innerHTML = `<div class="journal-expanded-lines-error">${escapeHtml(error.message || 'Could not load the account lines.')}</div>`;
+        }
+    }
+}
+
 document.getElementById('journalTableBody')?.addEventListener('click', event => {
+    const linesButton = event.target.closest('.btn-toggle-journal-lines');
+    if (linesButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        void toggleJournalLines(linesButton);
+        return;
+    }
+
     const editButton = event.target.closest('.btn-edit-entry');
     if (!editButton) return;
 
@@ -994,7 +1243,6 @@ document.getElementById('editEntryForm')?.addEventListener('submit', async (e) =
                 journal_id: document.getElementById('editJournalId').value,
                 description: document.getElementById('editDescription').value,
                 reference_no: document.getElementById('editReferenceNo').value,
-                category_id: document.getElementById('editCategoryId').value,
             }),
         });
         const data = await response.json();
@@ -1318,12 +1566,52 @@ const ENTRY_TEMPLATES = [
         clientRelated: true,
     },
     {
-        label: "One-Time Agency Project Billing — Logo, Web, or Video Campaign",
+        label: "Issue client invoice for completed services (A/R)",
         debitAccount: "Accounts Receivable",
         creditAccount: "Service Revenue",
         transactionType: "Transfer",
-        description: "To bill client for completed one-time design, production, or strategy project",
+        description: "To record an invoice for completed client services on account",
         clientRelated: true,
+        requiresParty: true,
+        requiresDueDate: true,
+    },
+    {
+        label: "Collect payment from a client against A/R",
+        debitAccount: "Cash",
+        creditAccount: "Accounts Receivable",
+        transactionType: "Cash Inflow",
+        description: "To record collection of an outstanding client invoice",
+        clientRelated: true,
+        requiresParty: true,
+    },
+    {
+        label: "Record a vendor utility bill on account (A/P)",
+        debitAccount: "Utilities",
+        creditAccount: "Accounts Payable",
+        transactionType: "Transfer",
+        description: "To record a vendor utility bill payable at a later date",
+        clientRelated: true,
+        requiresParty: true,
+        requiresDueDate: true,
+    },
+    {
+        label: "Record a vendor rent bill on account (A/P)",
+        debitAccount: "Rent",
+        creditAccount: "Accounts Payable",
+        transactionType: "Transfer",
+        description: "To record rent incurred and payable to the landlord",
+        clientRelated: true,
+        requiresParty: true,
+        requiresDueDate: true,
+    },
+    {
+        label: "Pay a vendor bill against A/P",
+        debitAccount: "Accounts Payable",
+        creditAccount: "Cash",
+        transactionType: "Cash Outflow",
+        description: "To record payment of an outstanding vendor bill",
+        clientRelated: true,
+        requiresParty: true,
     },
     {
         label: "Sales Record — general cash sale",
@@ -1461,6 +1749,11 @@ function updateClientFieldVisibility(template = null) {
         || Boolean(usesReceivableOrPayable);
 
     clientField.classList.toggle('d-none', !shouldShowClient);
+    clientSelect.required = currentMode === 'auto' && Boolean(activeTemplate?.requiresParty);
+    const dueDateInput = document.getElementById('dueDate');
+    if (dueDateInput) {
+        dueDateInput.required = currentMode === 'auto' && Boolean(activeTemplate?.requiresDueDate);
+    }
     if (!shouldShowClient) clientSelect.value = '';
 }
 
@@ -1563,6 +1856,7 @@ function renderTemplateResults(query = '') {
 
     dropdown.style.display = 'block';
     dropdown.classList.add('show');
+    document.getElementById('templateCombobox')?.classList.add('is-open');
     searchInput.setAttribute('aria-expanded', 'true');
     document.getElementById('toggleTemplateDropdown').setAttribute('aria-expanded', 'true');
 }
@@ -1583,6 +1877,7 @@ function closeTemplateDropdown() {
 
     dropdown.style.display = 'none';
     dropdown.classList.remove('show');
+    document.getElementById('templateCombobox')?.classList.remove('is-open');
     searchInput.setAttribute('aria-expanded', 'false');
     document.getElementById('toggleTemplateDropdown')?.setAttribute('aria-expanded', 'false');
 }
@@ -1591,9 +1886,22 @@ function selectTemplate(index) {
     const template = ENTRY_TEMPLATES[index];
     if (!template) return;
 
-    const findTemplateAccount = name => name.toLowerCase() === 'cash'
-        ? allAccountsForLines.find(account => Number(account.is_cash_account) === 1)
-        : allAccountsForLines.find(account => account.name === name);
+    const normalizeAccountName = name => String(name || '').toLocaleLowerCase().replace(/[^a-z0-9]/g, '');
+    const findTemplateAccount = name => {
+        const normalizedName = normalizeAccountName(name);
+        if (normalizedName === 'cash') {
+            return allAccountsForLines.find(account => Number(account.is_cash_account) === 1 && account.type_name === 'Asset');
+        }
+        if (normalizedName === 'accountsreceivable' || normalizedName === 'ar') {
+            return allAccountsForLines.find(account => account.type_name === 'Asset'
+                && normalizeAccountName(account.name) === 'accountsreceivable');
+        }
+        if (normalizedName === 'accountspayable' || normalizedName === 'ap') {
+            return allAccountsForLines.find(account => account.type_name === 'Liability'
+                && normalizeAccountName(account.name) === 'accountspayable');
+        }
+        return allAccountsForLines.find(account => normalizeAccountName(account.name) === normalizedName);
+    };
     const debitAccount = findTemplateAccount(template.debitAccount);
     const creditAccount = findTemplateAccount(template.creditAccount);
 
@@ -1635,6 +1943,10 @@ function selectTemplate(index) {
     updateJournalLineControls('credit');
 
     document.getElementById('description').value = template.description;
+    const clientSelect = document.getElementById('clientIdSelect');
+    if (template.requiresParty && clientSelect) clientSelect.value = '';
+    const dueDateInput = document.getElementById('dueDate');
+    if (dueDateInput) dueDateInput.value = '';
     updateClientFieldVisibility(template);
 
     recalculateLineTotals();
@@ -1650,6 +1962,14 @@ const autoLockedFields = [
 function setAutoLock(locked) {
     autoLockedFields.forEach((field) => {
         if (!field) return;
+
+        // Invoice references are generated by the server after save, so keep
+        // this display-only field locked and out of required-field validation.
+        if (field.id === 'referenceNo') {
+            field.readOnly = true;
+            field.classList.add('is-locked');
+            return;
+        }
 
         if (field.tagName === 'SELECT' || field.type === 'date' || field._flatpickr) {
             const visibleField = field._flatpickr?.altInput || field;
@@ -1684,6 +2004,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ---------- Export PDF Receipt ----------
 let receiptPreviewModal;
+let receiptPreviewBlobUrl = null;
+let receiptPreviewRequestController = null;
 
 document.getElementById('printReceiptBtn')?.addEventListener('click', function () {
     const mainModalEl = document.getElementById('viewEntryModal');
@@ -1691,7 +2013,7 @@ document.getElementById('printReceiptBtn')?.addEventListener('click', function (
     const entryId = mainModalEl?.dataset.journalId;
 
     if (!entryId) {
-        alert('No entry details loaded.');
+        alert('No invoice details loaded.');
         return;
     }
 
@@ -1701,6 +2023,12 @@ document.getElementById('printReceiptBtn')?.addEventListener('click', function (
         previewModalEl.addEventListener('hidden.bs.modal', function () {
             mainModalEl.classList.remove('side-by-side');
             previewModalEl.classList.remove('side-by-side');
+            receiptPreviewRequestController?.abort();
+            receiptPreviewRequestController = null;
+            if (receiptPreviewBlobUrl) {
+                URL.revokeObjectURL(receiptPreviewBlobUrl);
+                receiptPreviewBlobUrl = null;
+            }
         });
     }
 
@@ -1710,7 +2038,28 @@ document.getElementById('printReceiptBtn')?.addEventListener('click', function (
     const previewUrl = `routes/export.php?action=journal-entry-pdf&id=${entryId}&preview=1`;
     const downloadUrl = `routes/export.php?action=journal-entry-pdf&id=${entryId}`;
     
-    document.getElementById('receiptPreviewFrame').src = previewUrl;
+    const previewFrame = document.getElementById('receiptPreviewFrame');
+    receiptPreviewRequestController?.abort();
+    receiptPreviewRequestController = new AbortController();
+    previewFrame.srcdoc = '<p style="font: 16px Arial, sans-serif; padding: 24px;">Loading invoice preview...</p>';
+    fetch(previewUrl, { credentials: 'same-origin', signal: receiptPreviewRequestController.signal })
+        .then(async response => {
+            const contentType = response.headers.get('Content-Type') || '';
+            if (!response.ok || !contentType.toLowerCase().includes('application/pdf')) {
+                throw new Error('Your session may have expired. Reload the page, sign in again, and reopen the invoice.');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            if (receiptPreviewBlobUrl) URL.revokeObjectURL(receiptPreviewBlobUrl);
+            receiptPreviewBlobUrl = URL.createObjectURL(blob);
+            previewFrame.removeAttribute('srcdoc');
+            previewFrame.src = receiptPreviewBlobUrl;
+        })
+        .catch(error => {
+            if (error.name === 'AbortError') return;
+            previewFrame.srcdoc = `<p style="font: 16px Arial, sans-serif; padding: 24px; color: #b91c1c;">${escapeHtml(error.message || 'Could not load the invoice preview.')}</p>`;
+        });
 
     document.getElementById('downloadReceiptBtn').onclick = function () {
         window.location.href = downloadUrl;
@@ -1881,7 +2230,7 @@ async function initScanSession() {
     if (qrContainer) qrContainer.innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"></div> Loading QR...';
 
     try {
-        const response = await fetch(`${API_URL}?action=init-scan-session`);
+        const response = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'init-scan-session' }) });
         const data = await response.json();
 
         if (data.success && data.mobile_url) {
@@ -1926,7 +2275,7 @@ function startScanPolling() {
         if (!currentScanToken) return;
 
         try {
-            const response = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const response = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
             const data = await response.json();
 
             if (data.success && data.status === 'completed') {
@@ -1967,7 +2316,7 @@ fileInput?.addEventListener('change', async (e) => {
 
         if (data.success) {
             // Re-check session immediately
-            const checkRes = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const checkRes = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
             const checkData = await checkRes.json();
             if (checkData.success && checkData.status === 'completed') {
                 stopScanPolling();
@@ -2122,7 +2471,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
 
 async function triggerCleanupRoutine() {
     try {
-        await fetch('backend/routes/cleanup-scans.php?ajax=1');
+        await fetch('backend/routes/cleanup-scans.php?ajax=1', { method: 'POST' });
     } catch (err) {
         // Fail silently so it never interrupts the user experience
         console.debug('Background cleanup check completed.');

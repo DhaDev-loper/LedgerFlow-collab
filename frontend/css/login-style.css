@@ -252,3 +252,32 @@ svg.wave-bg {
         padding: 0.6rem 0.75rem;
     }
 }
+
+/* Keep standalone authentication screens in the same readable dark palette. */
+body:has(.login-page, .login-page-glass) {
+    color: #f4f7ff;
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+:is(.login-card, .login-card-glass) :is(label, .form-label, .form-check-label, .text-secondary, .text-muted, .text-white-50, small) {
+    color: #c2cde0 !important;
+}
+
+:is(.login-card, .login-card-glass) :is(input, select, textarea) {
+    color: #f4f7ff;
+    caret-color: #79aaf2;
+}
+
+:is(.login-card, .login-card-glass) :is(input, select, textarea)::placeholder {
+    color: #aab7cd;
+    opacity: 1;
+}
+
+:is(.login-card, .login-card-glass) a:not(.btn) {
+    color: #93c5fd;
+}
+
+:is(.login-card, .login-card-glass) :is(input, select, textarea, button, a):focus-visible {
+    outline: 2px solid #79aaf2;
+    outline-offset: 2px;
+}

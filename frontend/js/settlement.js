@@ -279,7 +279,12 @@
             if (typeof loadDashboardAccounts === 'function') loadDashboardAccounts();
             if (typeof loadCashflowChart === 'function') loadCashflowChart();
             if (typeof loadReceivablesPayables === 'function') loadReceivablesPayables();
-            showAlert(successAlert, data.message || 'Payment recorded successfully.');
+            const successMessage = `${data.message || 'Payment recorded successfully.'} Reference: ${data.reference_no}`;
+            if (typeof window.showToast === 'function') {
+                window.showToast(successMessage, 'success');
+            } else {
+                showAlert(successAlert, successMessage);
+            }
             paymentForm.reset();
             window.setTimeout(() => {
                 if (reopenClientId && typeof window.viewClient === 'function') {

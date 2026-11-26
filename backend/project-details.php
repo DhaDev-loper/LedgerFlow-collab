@@ -14,7 +14,7 @@ $canManageProjects = in_array($_SESSION['role'] ?? '', ['admin', 'accountant', '
     <title>Project Profit &amp; Loss — WRS Accounting</title>
     <script src="../frontend/js/theme.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
     <link rel="stylesheet" href="../frontend/css/report-statements.css">
     <link rel="stylesheet" href="../frontend/css/project-details.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">

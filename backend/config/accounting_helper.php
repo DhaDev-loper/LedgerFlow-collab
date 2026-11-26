@@ -7,6 +7,53 @@ function isCashBankAccount(array $account): bool
         && (int) ($account['is_cash_account'] ?? 0) === 1;
 }
 
+function generateEntryReference(PDO $pdo, string $typeOrContext, string $transactionDate, ?string &$lockName = null): string
+{
+    $context = strtolower(trim($typeOrContext));
+    // All new transaction vouchers use invoice-style numbering. Existing references
+    // remain untouched; opening-balance setup records retain their distinct prefix.
+    $prefix = in_array($context, ['opening balance', 'opening_balance'], true) ? 'OB' : 'INV';
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $transactionDate);
+    if (!$date || $date->format('Y-m-d') !== $transactionDate) {
+        throw new InvalidArgumentException('A valid transaction date is required to generate a reference number.');
+    }
+
+    $year = $date->format('Y');
+    $lockName = 'wrs_entry_ref_' . strtolower($prefix) . '_' . $year;
+    $lockStmt = $pdo->prepare('SELECT GET_LOCK(:lock_name, 10)');
+    $lockStmt->execute([':lock_name' => $lockName]);
+    if ((int) $lockStmt->fetchColumn() !== 1) {
+        $lockName = null;
+        throw new RuntimeException('Could not reserve a unique reference number. Please try again.');
+    }
+
+    $sequenceStmt = $pdo->prepare(
+        "SELECT reference_no
+         FROM transaction_journals
+         WHERE reference_no REGEXP :reference_pattern
+         FOR UPDATE"
+    );
+    $sequenceStmt->execute([':reference_pattern' => '^' . $prefix . '-' . $year . '-[0-9]+$']);
+    $maxSequence = 0;
+    $referencePattern = '/^' . preg_quote($prefix, '/') . '-' . preg_quote($year, '/') . '-([0-9]+)$/i';
+    foreach ($sequenceStmt->fetchAll(PDO::FETCH_COLUMN) as $existingReference) {
+        if (preg_match($referencePattern, (string) $existingReference, $matches)) {
+            $maxSequence = max($maxSequence, (int) $matches[1]);
+        }
+    }
+    $nextSequence = $maxSequence + 1;
+    return sprintf('%s-%s-%05d', $prefix, $year, $nextSequence);
+}
+
+function releaseEntryReferenceLock(PDO $pdo, ?string $lockName): void
+{
+    if ($lockName === null) {
+        return;
+    }
+    $releaseStmt = $pdo->prepare('SELECT RELEASE_LOCK(:lock_name)');
+    $releaseStmt->execute([':lock_name' => $lockName]);
+}
+
 function getPartyOpenItems(
     PDO $pdo,
     int $accountId,

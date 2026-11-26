@@ -5,6 +5,7 @@ require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/report_helper.php';
 require_once __DIR__ . '/../config/cash_flow_statement.php';
+require_once __DIR__ . '/../config/financial_statements.php';
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 use Dompdf\Dompdf;
@@ -74,7 +75,7 @@ switch ($action) {
         $options->set('defaultFont', 'DejaVu Serif');
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml(
-            '<!DOCTYPE html><html lang="en-US"><head><meta charset="UTF-8"><title>Statement of Cash Flows</title></head><body>'
+            '<!DOCTYPE html><html lang="en-US"><head><meta charset="UTF-8"><title>Statement of Cash Flows (Indirect Method)</title></head><body>'
             . renderCashFlowStatementHtml($data)
             . '</body></html>',
             'UTF-8'
@@ -90,7 +91,6 @@ switch ($action) {
     case 'cash-flow-statement-xlsx':
         $dateFrom = (string) ($_GET['date_from'] ?? '');
         $dateTo = (string) ($_GET['date_to'] ?? '');
-
         try {
             $data = getCashFlowStatementData($pdo, $dateFrom, $dateTo);
         } catch (InvalidArgumentException $exception) {
@@ -104,81 +104,71 @@ switch ($action) {
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Cash Flows');
         $sheet->setShowGridLines(false);
-        $sheet->mergeCells('A1:B1');
-        $sheet->mergeCells('A2:B2');
-        $sheet->setCellValue('A1', 'Statement of Cash Flows');
-        $sheet->setCellValue(
-            'A2',
-            'For the Period ' . formatCashFlowStatementDate($dateFrom) . ' to ' . formatCashFlowStatementDate($dateTo)
-        );
-        $sheet->getStyle('A1:B2')->getFont()->setName('Times New Roman');
+        foreach ([1, 2, 3] as $headerRow) { $sheet->mergeCells("A{$headerRow}:B{$headerRow}"); }
+        $sheet->setCellValue('A1', mb_strtoupper($data['business_name']));
+        $sheet->setCellValue('A2', 'Statement of Cash Flows (Indirect Method)');
+        $sheet->setCellValue('A3', 'For the Period Ended ' . formatCashFlowStatementDate($dateTo));
+        $sheet->getStyle('A1:B3')->getFont()->setName('Times New Roman');
         $sheet->getStyle('A1:B1')->getFont()->setBold(true)->setSize(16);
-        $sheet->getStyle('A2:B2')->getFont()->setItalic(true)->setSize(11);
-        $sheet->getStyle('A1:B2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getRowDimension(1)->setRowHeight(26);
-        $sheet->getRowDimension(2)->setRowHeight(22);
+        $sheet->getStyle('A2:B2')->getFont()->setBold(true)->setSize(13);
+        $sheet->getStyle('A3:B3')->getFont()->setItalic(true)->setSize(11);
+        $sheet->getStyle('A1:B3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getColumnDimension('A')->setWidth(92);
         $sheet->getColumnDimension('B')->setWidth(24);
-        $sheet->getPageSetup()
-            ->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT)
-            ->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)
-            ->setFitToWidth(1)
-            ->setFitToHeight(0);
-        $sheet->getPageMargins()->setTop(0.7)->setRight(0.6)->setBottom(0.7)->setLeft(0.6);
+        $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_PORTRAIT)->setPaperSize(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::PAPERSIZE_A4)->setFitToWidth(1)->setFitToHeight(0);
         $sheet->getPageSetup()->setFitToPage(true);
-
-        $row = 4;
-        $totalLabels = [
-            'operating' => 'Net cash provided by (used in) operating activities',
-            'investing' => 'Net cash provided by (used in) investing activities',
-            'financing' => 'Net cash provided by (used in) financing activities',
-        ];
-        $currencyFormat = '₱#,##0.00;(₱#,##0.00);₱0.00';
-
-        foreach ($data['sections'] as $key => $section) {
-            $sheet->setCellValue("A{$row}", $section['title']);
+        $sheet->getPageMargins()->setTop(0.7)->setRight(0.6)->setBottom(0.7)->setLeft(0.6);
+        $currencyFormat = "\u{20B1}#,##0.00;(\u{20B1}#,##0.00);\u{20B1}0.00";
+        $row = 5;
+        $write = static function (string $label, float $amount, bool $bold = false, bool $doubleRule = false) use ($sheet, &$row, $currencyFormat): void {
+            $sheet->setCellValue("A{$row}", $label);
+            $sheet->setCellValue("B{$row}", $amount);
+            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setSize(11)->setBold($bold);
+            $sheet->getStyle("A{$row}")->getAlignment()->setIndent(1);
+            $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
+            $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            if ($bold) { $sheet->getStyle("A{$row}:B{$row}")->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN); }
+            if ($doubleRule) { $sheet->getStyle("B{$row}")->getBorders()->getBottom()->setBorderStyle(Border::BORDER_DOUBLE); }
+            $row++;
+        };
+        $heading = static function (string $label) use ($sheet, &$row): void {
+            $sheet->setCellValue("A{$row}", $label);
             $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true)->setSize(12);
             $sheet->getRowDimension($row)->setRowHeight(21);
             $row++;
+        };
 
-            if (!$section['items']) {
-                $activityName = strtolower(str_replace(' Activities', '', $section['title']));
-                $sheet->setCellValue("A{$row}", 'No ' . $activityName . ' transactions in this period');
-                $sheet->setCellValue("B{$row}", 0);
-                $sheet->getStyle("A{$row}:B{$row}")->getFont()
-                    ->setName('Times New Roman')->setItalic(true)->getColor()->setRGB('777777');
-                $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
-                $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $row++;
-            } else {
-                foreach ($section['items'] as $item) {
+        foreach ($data['sections'] as $section) {
+            $heading($section['title']);
+            foreach ($section['items'] as $item) {
+                if (($item['kind'] ?? '') === 'subheading') {
                     $sheet->setCellValue("A{$row}", $item['label']);
-                    $sheet->setCellValue("B{$row}", (float) $item['amount']);
-                    $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setSize(11);
-                    $sheet->getStyle("A{$row}")->getAlignment()->setIndent(1);
-                    $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
-                    $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true)->setItalic(true);
                     $row++;
+                } else {
+                    $write($item['label'], (float) $item['amount']);
                 }
             }
-
-            $sheet->setCellValue("A{$row}", $totalLabels[$key]);
-            $sheet->setCellValue("B{$row}", (float) $section['total']);
-            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true);
-            $sheet->getStyle("A{$row}:B{$row}")->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN);
-            $sheet->getStyle("B{$row}")->getBorders()->getBottom()->setBorderStyle(Border::BORDER_THIN);
-            $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
-            $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-            $row += 2;
+            $write($section['total_label'], (float) $section['total'], true);
+            $row++;
         }
-
-        $sheet->setCellValue("A{$row}", 'Net Increase (Decrease) in Cash');
-        $sheet->setCellValue("B{$row}", (float) $data['net_change']);
-        $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setBold(true);
-        $sheet->getStyle("A{$row}:B{$row}")->getBorders()->getTop()->setBorderStyle(Border::BORDER_THIN);
-        $sheet->getStyle("B{$row}")->getBorders()->getBottom()->setBorderStyle(Border::BORDER_DOUBLE);
-        $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
-        $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $write('NET INCREASE (DECREASE) IN CASH', (float) $data['net_change'], true);
+        $write('Cash at Beginning of Period', (float) $data['beginning_cash']);
+        $write('CASH AT END OF PERIOD', (float) $data['ending_cash'], true, true);
+        $row++;
+        $heading('Summary');
+        foreach ($data['summary'] as $line) {
+            $sheet->setCellValue("A{$row}", $line['label']);
+            if (array_key_exists('amount', $line)) {
+                $sheet->setCellValue("B{$row}", (float) $line['amount']);
+                $sheet->getStyle("B{$row}")->getNumberFormat()->setFormatCode($currencyFormat);
+            } else {
+                $sheet->setCellValue("B{$row}", (string) ($line['text'] ?? ''));
+            }
+            $sheet->getStyle("A{$row}:B{$row}")->getFont()->setName('Times New Roman')->setSize(10);
+            $sheet->getStyle("B{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $row++;
+        }
 
         $writer = new Xlsx($spreadsheet);
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -186,119 +176,112 @@ switch ($action) {
         header('Cache-Control: max-age=0');
         $writer->save('php://output');
         exit;
-
     case 'income-statement-pdf':
-        $dateFrom = $_GET['date_from'] ?? date('Y-m-01');
-        $dateTo = $_GET['date_to'] ?? date('Y-m-d');
-
-        // Fetch Revenue Lines
-        $revenueStmt = $pdo->prepare(
-            "SELECT a.name, SUM(CASE WHEN t.entry_type = 'credit' THEN t.amount ELSE -t.amount END) AS net_amount
-             FROM transactions t
-             JOIN accounts a ON a.id = t.account_id
-             JOIN account_types at ON at.id = a.account_type_id
-             JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-             WHERE at.name = 'Revenue' AND tj.transaction_date BETWEEN :date_from AND :date_to
-               AND tj.status != 'voided'
-             GROUP BY a.id, a.name HAVING net_amount != 0 ORDER BY a.name"
-        );
-        $revenueStmt->execute([':date_from' => $dateFrom, ':date_to' => $dateTo]);
-        $revenueLines = $revenueStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Fetch Expense Lines
-        $expenseStmt = $pdo->prepare(
-            "SELECT a.name, SUM(CASE WHEN t.entry_type = 'debit' THEN t.amount ELSE -t.amount END) AS net_amount
-             FROM transactions t
-             JOIN accounts a ON a.id = t.account_id
-             JOIN account_types at ON at.id = a.account_type_id
-             JOIN transaction_journals tj ON tj.id = t.transaction_journal_id
-             WHERE at.name = 'Expense' AND tj.transaction_date BETWEEN :date_from AND :date_to
-               AND tj.status != 'voided'
-             GROUP BY a.id, a.name HAVING net_amount != 0 ORDER BY a.name"
-        );
-        $expenseStmt->execute([':date_from' => $dateFrom, ':date_to' => $dateTo]);
-        $expenseLines = $expenseStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $totalRevenue = array_sum(array_column($revenueLines, 'net_amount'));
-        $totalExpense = array_sum(array_column($expenseLines, 'net_amount'));
-        $netIncome = $totalRevenue - $totalExpense;
-
-        $fmt = fn($n) => '&#8369;' . number_format((float) $n, 2);
-
-        $revenueRows = '';
-        foreach ($revenueLines as $line) {
-            $name = htmlspecialchars($line['name'], ENT_QUOTES, 'UTF-8');
-            $revenueRows .= "<tr><td>{$name}</td><td class='text-right'>" . $fmt($line['net_amount']) . "</td></tr>";
+        $dateFrom = (string) ($_GET['date_from'] ?? date('Y-m-01'));
+        $dateTo = (string) ($_GET['date_to'] ?? date('Y-m-d'));
+        try {
+            $data = getIncomeStatementData($pdo, $dateFrom, $dateTo);
+        } catch (InvalidArgumentException $exception) {
+            http_response_code(422);
+            exit(htmlspecialchars($exception->getMessage(), ENT_QUOTES, 'UTF-8'));
         }
-        if (empty($revenueLines)) {
-            $revenueRows = "<tr><td colspan='2' style='color: #94a3b8;'>No revenue recorded for this period.</td></tr>";
-        }
-
-        $expenseRows = '';
-        foreach ($expenseLines as $line) {
-            $name = htmlspecialchars($line['name'], ENT_QUOTES, 'UTF-8');
-            $expenseRows .= "<tr><td>{$name}</td><td class='text-right'>" . $fmt($line['net_amount']) . "</td></tr>";
-        }
-        if (empty($expenseLines)) {
-            $expenseRows = "<tr><td colspan='2' style='color: #94a3b8;'>No expenses recorded for this period.</td></tr>";
-        }
-
-        $safeBusinessName = htmlspecialchars($businessName, ENT_QUOTES, 'UTF-8');
-
-        $html = "
-        <html><head>" . getReportCss() . "</head><body>
-            <div class='footer'>Generated automatically by {$safeBusinessName} Accounting System on " . date('m/d/Y h:i A') . "</div>
-            <table class='header-table'>
-                <tr>
-                    <td style='vertical-align: top;'>
-                        <div class='brand-title'>{$safeBusinessName}</div>
-                        <div class='brand-sub'>Financial Statement</div>
-                    </td>
-                    <td style='vertical-align: top;'>
-                        <div class='report-title'>Income Statement</div>
-                        <div class='report-meta'>Period: " . date('m/d/Y', strtotime($dateFrom)) . " &mdash; " . date('m/d/Y', strtotime($dateTo)) . "</div>
-                    </td>
-                </tr>
-            </table>
-
-            <div class='section-header'>Revenue</div>
-            <table class='data-table'>
-                <thead><tr><th>Account Name</th><th class='text-right' style='width: 30%;'>Amount</th></tr></thead>
-                <tbody>
-                    {$revenueRows}
-                    <tr class='subtotal-row'><td>Total Revenue</td><td class='text-right'>" . $fmt($totalRevenue) . "</td></tr>
-                </tbody>
-            </table>
-
-            <div class='section-header'>Operating Expenses</div>
-            <table class='data-table'>
-                <thead><tr><th>Account Name</th><th class='text-right' style='width: 30%;'>Amount</th></tr></thead>
-                <tbody>
-                    {$expenseRows}
-                    <tr class='subtotal-row'><td>Total Operating Expenses</td><td class='text-right'>" . $fmt($totalExpense) . "</td></tr>
-                </tbody>
-            </table>
-
-            <table class='grand-total-table'>
-                <tr class='grand-total-row'>
-                    <td>Net Income / (Loss)</td>
-                    <td class='text-right'>" . $fmt($netIncome) . "</td>
-                </tr>
-            </table>
-        </body></html>";
-
+        $safeName = htmlspecialchars($data['business_name'], ENT_QUOTES, 'UTF-8');
+        $fmt = static fn(float $amount): string => '&#8369;' . number_format($amount, 2);
+        $table = static function (array $lines, ?array $total = null, bool $grandTotal = false) use ($fmt): string {
+            $rows = '';
+            foreach ($lines as $line) {
+                $rows .= '<tr><td>' . htmlspecialchars((string) $line['name'], ENT_QUOTES, 'UTF-8')
+                    . '</td><td class="text-right">' . $fmt((float) $line['amount']) . '</td></tr>';
+            }
+            if ($total !== null) {
+                $class = $grandTotal ? 'subtotal-row grand-total-row' : 'subtotal-row';
+                $rows .= '<tr class="' . $class . '"><td>' . htmlspecialchars((string) $total['name'], ENT_QUOTES, 'UTF-8')
+                    . '</td><td class="text-right">' . $fmt((float) $total['amount']) . '</td></tr>';
+            }
+            return '<table class="data-table"><colgroup><col style="width:70%"><col style="width:30%"></colgroup><thead><tr><th>Account Name</th><th class="text-right">Amount (&#8369;)</th></tr></thead><tbody>' . $rows . '</tbody></table>';
+        };
+        $section = static fn(string $title, array $lines, string $totalLabel, float $total): string =>
+            '<div class="section-header">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</div>'
+            . $table($lines, ['name' => $totalLabel, 'amount' => $total]);
+        $single = static fn(string $title, string $label, float $amount, bool $grand = false): string =>
+            '<div class="section-header">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</div>'
+            . $table([], ['name' => $label, 'amount' => $amount], $grand);
+        $summaryLines = $data['summary'];
+        $html = '<html><head>' . getReportCss() . '</head><body><div class="footer">Generated automatically by ' . $safeName . ' Accounting System on ' . date('m/d/Y h:i A') . '</div>'
+            . '<table class="header-table"><tr><td><div class="brand-title">' . $safeName . '</div><div class="brand-sub">Financial Statement</div></td>'
+            . '<td><div class="report-title">Income Statement</div><div class="report-meta">For the Period Ended ' . date('m/d/Y', strtotime($dateTo)) . '</div></td></tr></table>'
+            . $section('Revenue', $data['revenue_lines'], 'Total Revenue', $data['total_revenue'])
+            . $section('Cost of Services', $data['cost_of_services'], 'Total Cost of Services', $data['total_cost_of_services'])
+            . $single('Gross Profit', 'Gross Profit', $data['gross_profit'], true)
+            . $section('Operating Expenses', $data['operating_expenses'], 'Total Operating Expenses', $data['total_operating_expenses'])
+            . $single('Net Income (Loss) Before Tax', 'Net Income (Loss) Before Tax', $data['net_income_before_tax'])
+            . $single('Income Tax Expense', 'Income Tax Expense', $data['income_tax_expense'])
+            . $single('Net Income (Loss) After Tax', 'Net Income (Loss) After Tax', $data['net_income_after_tax'], true)
+            . '<div class="section-header">Summary</div>' . $table($summaryLines) . '</body></html>';
         $options = new Options();
         $options->set('isRemoteEnabled', false);
         $dompdf = new Dompdf($options);
-        $dompdf->loadHtml($html);
+        $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
-
-        // Attachment => 0 renders inside iframe preview, 1 forces direct file download
         $dompdf->stream('Income_Statement_' . $dateFrom . '_to_' . $dateTo . '.pdf', ['Attachment' => $isPreview ? 0 : 1]);
         exit;
 
     case 'balance-sheet-pdf':
+        $asOf = getReportAsOfDate($_GET);
+        $data = getBalanceSheetData($pdo, $asOf);
+        $safeName = htmlspecialchars($data['business_name'], ENT_QUOTES, 'UTF-8');
+        $fmt = static fn(float $amount): string => '&#8369;' . number_format($amount, 2);
+        $table = static function (array $items, ?array $totalLine = null, bool $grandTotal = false) use ($fmt): string {
+            $rows = '';
+            foreach ($items as $label => $amount) {
+                $rows .= '<tr><td>' . htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') . '</td><td class="text-right">' . $fmt((float) $amount) . '</td></tr>';
+            }
+            if ($totalLine !== null) {
+                $rowClass = $grandTotal ? 'grand-total-row' : 'subtotal-row';
+                $rows .= '<tr class="' . $rowClass . '"><td>' . htmlspecialchars((string) $totalLine['name'], ENT_QUOTES, 'UTF-8')
+                    . '</td><td class="text-right">' . $fmt((float) $totalLine['amount']) . '</td></tr>';
+            }
+            $class = $grandTotal ? 'grand-total-table' : 'data-table';
+            $header = $grandTotal ? '' : '<thead><tr><th>Account Name</th><th class="text-right">Balance (&#8369;)</th></tr></thead>';
+            return '<table class="' . $class . '"><colgroup><col style="width:70%"><col style="width:30%"></colgroup>' . $header . '<tbody>' . $rows . '</tbody></table>';
+        };
+        $section = static fn(string $title, array $items, string $totalLabel, float $total): string =>
+            '<div class="section-header">' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</div>'
+            . $table($items, ['name' => $totalLabel, 'amount' => $total]);
+        $grandTotal = static fn(string $label, float $amount): string =>
+            $table([], ['name' => $label, 'amount' => $amount], true);
+        $summaryHtml = '';
+        foreach ($data['summary'] as $line) {
+            $value = array_key_exists('amount', $line)
+                ? $fmt((float) $line['amount'])
+                : htmlspecialchars((string) ($line['value'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $statusClass = $line['name'] === 'Balance Status' && !$data['is_balanced'] ? ' class="subtotal-row"' : '';
+            $summaryHtml .= '<tr' . $statusClass . '><td>' . htmlspecialchars((string) $line['name'], ENT_QUOTES, 'UTF-8') . '</td><td class="text-right">' . $value . '</td></tr>';
+        }
+        $html = '<html><head>' . getReportCss() . '</head><body><div class="footer">Generated automatically by ' . $safeName . ' Accounting System on ' . date('m/d/Y h:i A') . '</div>'
+            . '<table class="header-table"><tr><td><div class="brand-title">' . $safeName . '</div><div class="brand-sub">Financial Position</div></td>'
+            . '<td><div class="report-title">Balance Sheet</div><div class="report-meta">As of ' . date('m/d/Y', strtotime($asOf)) . '</div></td></tr></table>'
+            . '<div class="section-header">Assets</div>'
+            . $section('Current Assets', $data['current_assets'], 'Total Current Assets', $data['total_current_assets'])
+            . $section('Non-Current Assets', $data['non_current_assets'], 'Total Non-Current Assets', $data['total_non_current_assets'])
+            . $grandTotal('TOTAL ASSETS', $data['total_assets'])
+            . '<div class="section-header">Liabilities</div>'
+            . $section('Current Liabilities', $data['current_liabilities'], 'Total Current Liabilities', $data['total_current_liabilities'])
+            . $section('Non-Current Liabilities', $data['non_current_liabilities'], 'Total Non-Current Liabilities', $data['total_non_current_liabilities'])
+            . $grandTotal('TOTAL LIABILITIES', $data['total_liabilities'])
+            . $section("Owner's Equity", $data['equity'], "TOTAL OWNER'S EQUITY", $data['total_equity'])
+            . $grandTotal("TOTAL LIABILITIES & OWNER'S EQUITY", $data['total_liabilities_and_equity'])
+            . '<div class="section-header">Summary</div><table class="data-table"><colgroup><col style="width:70%"><col style="width:30%"></colgroup><tbody>' . $summaryHtml . '</tbody></table></body></html>';
+        $options = new Options();
+        $options->set('isRemoteEnabled', false);
+        $dompdf = new Dompdf($options);
+        $dompdf->loadHtml($html, 'UTF-8');
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+        $dompdf->stream('Balance_Sheet_' . $asOf . '.pdf', ['Attachment' => $isPreview ? 0 : 1]);
+        exit;
+
         $asOf = getReportAsOfDate($_GET);
         $fmt = fn($n) => '&#8369;' . number_format((float) $n, 2);
 
@@ -575,11 +558,11 @@ switch ($action) {
             <tr>
                 <td style='vertical-align: top;'>
                     <div class='brand-title'>{$safeBusinessName}</div>
-                    <div class='brand-sub'>Transaction Voucher / Receipt</div>
+                    <div class='brand-sub'>Invoice</div>
                     {$receiptContactHtml}
                 </td>
                 <td style='vertical-align: top;'>
-                    <div class='report-title'>Entry #" . str_pad((string)$journal['id'], 5, '0', STR_PAD_LEFT) . "</div>
+                    <div class='report-title'>Invoice</div>
                     <div class='report-meta'>Date: " . date('m/d/Y', strtotime($journal['transaction_date'])) . "</div>
                 </td>
             </tr>
@@ -587,7 +570,7 @@ switch ($action) {
 
         <div style='margin: 15px 0; font-size: 13px;'>
             <strong>Description:</strong> " . htmlspecialchars($journal['description'] ?? 'N/A') . "<br>
-            <strong>Reference No:</strong> " . htmlspecialchars($journal['reference_no'] ?? '—') . "<br>
+            <strong>Invoice No:</strong> " . htmlspecialchars($journal['reference_no'] ?? '—', ENT_QUOTES, 'UTF-8') . "<br>
             <strong>Type:</strong> " . htmlspecialchars($journal['type_name'] ?? '—') . "<br>
             <strong>Recorded By:</strong> " . htmlspecialchars($journal['recorded_by_name'] ?? 'System') . "
         </div>
@@ -619,20 +602,9 @@ switch ($action) {
     $dompdf->setPaper('A5', 'landscape');
     $dompdf->render();
 
-    $dompdf->stream('Receipt_Entry_' . $id . '.pdf', ['Attachment' => 0]);
-    
-    // Read preview parameter (defaults to false if not set)
     $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
-
-    $options = new Options();
-    $options->set('isRemoteEnabled', false);
-    $dompdf = new Dompdf($options);
-    $dompdf->loadHtml($html);
-    $dompdf->setPaper('A5', 'landscape');
-    $dompdf->render();
-
-    // Stream inline (Attachment = 0) for iframe display, or force download (Attachment = 1)
-    $dompdf->stream('Receipt_Entry_' . $id . '.pdf', ['Attachment' => $isPreview ? 0 : 1]);
+    $invoiceNumber = preg_replace('/[^A-Za-z0-9_-]/', '_', (string) ($journal['reference_no'] ?? ('INV-' . $id)));
+    $dompdf->stream('Invoice_' . $invoiceNumber . '.pdf', ['Attachment' => $isPreview ? 0 : 1]);
     exit;
     
         

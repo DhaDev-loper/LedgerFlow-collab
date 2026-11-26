@@ -1,0 +1,7 @@
+Options -Indexes
+
+# Uploaded content is data only. Never allow PHP or CGI execution from this
+# tree, including files with multiple extensions.
+<FilesMatch "(?i)\.(php[0-9]?|phtml|phar|cgi|pl|py|sh|asp|aspx|jsp)(\..*)?$">
+    Require all denied
+</FilesMatch>

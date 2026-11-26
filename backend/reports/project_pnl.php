@@ -5,6 +5,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../config/auth_guard.php';
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../config/audit_helper.php';
 
 function getProjectIncomeStatement(int $projectId): ?array
 {
@@ -163,17 +164,28 @@ try {
             echo json_encode(['success' => false, 'error' => 'A valid project and status are required.']);
             exit;
         }
+        $pdo->beginTransaction();
         $stmt = $pdo->prepare('UPDATE projects SET status = :status WHERE id = :project_id');
         $stmt->execute([':status' => $status, ':project_id' => $projectId]);
         if ($stmt->rowCount() === 0) {
             $exists = $pdo->prepare('SELECT id FROM projects WHERE id = :project_id');
             $exists->execute([':project_id' => $projectId]);
             if (!$exists->fetchColumn()) {
+                $pdo->rollBack();
                 http_response_code(404);
                 echo json_encode(['success' => false, 'error' => 'Project not found.']);
                 exit;
             }
         }
+        logAudit(
+            $pdo,
+            (int) ($_SESSION['user_id'] ?? 0),
+            'SET_PROJECT_STATUS',
+            'project',
+            $projectId,
+            json_encode(['status' => $status], JSON_THROW_ON_ERROR)
+        );
+        $pdo->commit();
         echo json_encode(['success' => true, 'status' => $status]);
         exit;
     }

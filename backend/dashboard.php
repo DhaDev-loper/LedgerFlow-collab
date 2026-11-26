@@ -19,7 +19,7 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-notification-badge-2">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 
@@ -46,13 +46,15 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                 <div class="d-flex flex-wrap gap-2">
                     <button class="quick-action-btn primary" data-bs-toggle="modal" data-bs-target="#quickSaleModal">+ New Transaction</button>
                     <button class="quick-action-btn" data-bs-toggle="modal" data-bs-target="#quickExpenseModal">Expense</button>
+                     <button type="button" class="quick-action-btn" id="toggleDashboardKpiView" aria-controls="dashboardKpiViews" aria-pressed="false">
+                    Show Cash Flow KPIs
+                </button>
                 </div>
+
             </div>
 
             <div class="d-flex justify-content-end mb-2">
-                <button type="button" class="quick-action-btn" id="toggleDashboardKpiView" aria-controls="dashboardKpiViews" aria-pressed="false">
-                    Show Cash Flow KPIs
-                </button>
+               
             </div>
 
             <div id="dashboardKpiViews" class="dashboard-kpi-views mb-4">
@@ -133,33 +135,31 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                 </div>
             </div>
 
-            <!-- Main two-column layout -->
-            <div class="row g-4">
-
-                <!-- Left: chart + recent transactions -->
-                <div class="col-lg-8 d-flex flex-column gap-4">
-
-                    <div class="panel">
-                        <div class="panel-header">
-                            <div class="d-flex align-items-center gap-3">
-                                <h2 class="h6 mb-0">Cash Flow</h2>
-                                <a href="reports.php?report=cash-flow-analysis" class="small text-decoration-none" style="color: var(--accent-blue);">View Analysis</a>
-                            </div>
-                            <select class="form-select form-control-dark" id="periodFilter" style="width: auto; min-width: 140px;">
-                                <option value="1">Today</option>
-                                <option value="7">Last 7 Days</option>
-                                <option value="30" selected>Last 30 Days</option>
-                                <option value="365">Last 365 Days</option>
-                            </select>
-                        </div>
-                        <div class="panel-body">
-                           <div class="cashflow-chart-container">
-                               <canvas id="cashflowChart"></canvas>
-                           </div>
-                        </div>
+            <!-- Cash Flow remains above the lower dashboard grid. -->
+            <div class="panel dashboard-cashflow-panel mb-4">
+                <div class="panel-header">
+                    <div class="d-flex align-items-center gap-3">
+                        <h2 class="h6 mb-0">Cash Flow</h2>
+                        <a href="reports.php?report=cash-flow-analysis" class="small text-decoration-none" style="color: var(--accent-blue);">View Analysis</a>
                     </div>
+                    <select class="form-select form-control-dark" id="periodFilter" style="width: auto; min-width: 140px;">
+                        <option value="1">Today</option>
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="365">Last 365 Days</option>
+                    </select>
+                </div>
+                <div class="panel-body">
+                    <div class="cashflow-chart-container">
+                        <canvas id="cashflowChart"></canvas>
+                    </div>
+                </div>
+            </div>
 
-                    <div class="panel">
+            <!-- Recent transactions and accounts share the lower row. -->
+            <div class="row g-4 dashboard-lower-grid align-items-stretch">
+                <div class="col-lg-8">
+                    <div class="panel dashboard-recent-panel h-100">
                         <div class="panel-header">
                             <h2 class="h6 mb-0">Recent Transactions</h2>
                             <a href="../backend/journal-entries.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
@@ -202,24 +202,22 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 
                 </div>
 
-                <!-- Right: stacked stat widgets -->
-                <div class=" panel col-lg-4 d-flex flex-column gap-4">
-                    <div class="panel-header d-flex justify-content-between align-items-center">
-                         <h2 class="h6 mb-0">Accounts</h2>
-                  <a href="../backend/accounts.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
-                     </div>
-                  <div class="panel-body compact">
-                        
-                        <div id="dashboardAccountsList">
-                            <p class="text-center py-3" style="color: var(--dark-text-muted);">Loading...</p>
+                <div class="col-lg-4">
+                    <section class="panel dashboard-accounts-panel h-100" aria-labelledby="dashboardAccountsTitle">
+                        <div class="panel-header d-flex justify-content-between align-items-center">
+                            <h2 class="h6 mb-0" id="dashboardAccountsTitle">Accounts</h2>
+                            <a href="../backend/accounts.php" class="small text-decoration-none" style="color: var(--accent-blue);">View all</a>
                         </div>
-                        <hr style="border-color: var(--dark-border);">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="fw-semibold small">Total Assets</div>
+                        <div class="panel-body compact">
+                            <div id="dashboardAccountsList" class="dashboard-accounts-list">
+                                <p class="text-center py-3" style="color: var(--dark-text-muted);">Loading...</p>
+                            </div>
+                            <div class="dashboard-accounts-total d-flex justify-content-between align-items-center">
+                                <div class="fw-semibold small">Total Assets</div>
                             <div class="money fw-semibold" id="dashboardTotalAssets">₱0.00</div>
+                                </div>
                         </div>
-                    </div>
-
+                    </section>
                 </div>
             </div>
 
@@ -240,8 +238,8 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                 <button type="button" class="btn-close btn-close-white ar-ap-details-close" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="table-responsive">
-                    <table class="table table-transactions align-middle mb-0">
+                <div class="wrs-table-container ar-ap-details-table-container">
+                    <table class="wrs-table ar-ap-details-table">
                         <thead>
                             <tr>
                                 <th>Customer / Vendor</th>
@@ -318,6 +316,11 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                         <input type="text" class="form-control form-control-dark" id="saleDescription" placeholder="e.g. Walk-in sale">
                     </div>
 
+                    <div class="mb-3">
+                        <label for="saleReference" class="form-label small">Invoice Number (assigned on save)</label>
+                        <input type="text" class="form-control form-control-dark" id="saleReference" maxlength="50" placeholder="Generated automatically when saved" readonly required>
+                    </div>
+
                     <div class="row g-3">
                         <div class="col-md-6 mb-3">
                             <label for="saleProjectClient" class="form-label small">Project Client</label>
@@ -373,6 +376,11 @@ $canCreate = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                     <div class="mb-3">
                         <label class="form-label small">Description (optional)</label>
                         <input type="text" class="form-control form-control-dark" id="expenseDescription" placeholder="e.g. Electricity bill">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="expenseReference" class="form-label small">Invoice Number (assigned on save)</label>
+                        <input type="text" class="form-control form-control-dark" id="expenseReference" maxlength="50" placeholder="Generated automatically when saved" readonly required>
                     </div>
 
                     <div class="row g-3">

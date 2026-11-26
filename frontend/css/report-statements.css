@@ -319,6 +319,29 @@
     font-weight: 700;
 }
 
+.statement-data-table .statement-section-row td {
+    border-bottom: 0;
+    background: transparent;
+    font-weight: 700;
+}
+
+.statement-summary {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-left: 3px solid #2563eb;
+    background: #f8fafc;
+    color: #334155;
+}
+
+.statement-summary h3 {
+    margin: 0 0 5px;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.statement-summary p { margin: 3px 0; }
+
 .statement-empty {
     color: #94a3b8 !important;
 }

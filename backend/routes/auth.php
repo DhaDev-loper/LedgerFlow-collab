@@ -22,19 +22,27 @@ set_exception_handler(static function (Throwable $exception): void {
 });
 
 $remember = isset($_POST['remember']) && $_POST['remember'] === '1';
+$cookieLifetime = null;
 
 if ($remember) {
-    $lifetime = 30 * 24 * 60 * 60; // 30 days, in seconds
-    session_set_cookie_params(['lifetime' => $lifetime]);
-    ini_set('session.gc_maxlifetime', (string) $lifetime);
+    $cookieLifetime = 30 * 24 * 60 * 60; // 30 days, in seconds
+    ini_set('session.gc_maxlifetime', (string) $cookieLifetime);
 }
-session_start(); // start session so that php can track who is logged in and who is not
+require_once __DIR__ . '/../config/session.php';
+startApplicationSession($cookieLifetime); // start session so that php can track who is logged in and who is not
 
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../config/audit_helper.php';
+requireSameOriginForWriteRequests();
 //this reads a value called action from the incoming request
 
 $action = $_POST['action'] ?? $_GET['action'] ?? ''; // the double ? if the value is not set it will default and not crash the system
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
+    http_response_code(405);
+    header('Allow: POST');
+    echo json_encode(['error' => 'Method not allowed.']);
+    exit;
+}
 
 
 //LOGIN SYSTEM
@@ -57,6 +65,7 @@ switch ($action) {
             $stmt = $pdo->prepare(
                 "SELECT id, full_name, email, password_hash, password_setup_required, role, is_active,
                         failed_attempts, locked_until, suspension_level,
+                        pin_failed_attempts, pin_locked_until,
                         active_session_id, active_session_last_seen,
                         (active_session_last_seen >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)) AS active_session_is_recent,
                         deleted_at
@@ -87,13 +96,15 @@ switch ($action) {
 
             $isOwner = $user['role'] === 'owner';
             $lockedUntil = $user['locked_until'] === null ? false : strtotime($user['locked_until']);
-            if (!$isOwner && $lockedUntil !== false && $lockedUntil > time()) {
+            if ($lockedUntil !== false && $lockedUntil > time()) {
                 $secondsLeft = $lockedUntil - time();
                 $minutesLeft = (int) ceil($secondsLeft / 60);
                 $pdo->commit();
                 http_response_code(429);
                 echo json_encode([
-                    'error' => "Your account is suspended. Try again in {$minutesLeft} minute(s).",
+                    'error' => $isOwner
+                        ? "Sign-in is temporarily locked. Try again in {$minutesLeft} minute(s)."
+                        : "Your account is suspended. Try again in {$minutesLeft} minute(s).",
                     'suspended' => true,
                     'suspension_level' => (int) $user['suspension_level'],
                     'remaining_seconds' => $secondsLeft,
@@ -101,7 +112,7 @@ switch ($action) {
                 break;
             }
 
-            if (!$isOwner && $lockedUntil !== false) {
+            if ($lockedUntil !== false) {
                 $pdo->prepare(
                     "UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = :id"
                 )->execute([':id' => $user['id']]);
@@ -120,7 +131,20 @@ switch ($action) {
             }
 
             if (!password_verify($password, $user['password_hash'])) {
-                if (!$isOwner) {
+                if ($isOwner) {
+                    $failedAttempts = (int) $user['failed_attempts'] + 1;
+                    if ($failedAttempts >= 5) {
+                        $pdo->prepare(
+                            'UPDATE users SET failed_attempts = 0, locked_until = DATE_ADD(NOW(), INTERVAL 15 MINUTE) WHERE id = :id'
+                        )->execute([':id' => $user['id']]);
+                        $pdo->commit();
+                        http_response_code(429);
+                        echo json_encode(['error' => 'Sign-in is temporarily locked after too many failed attempts. Try again in 15 minutes.']);
+                        break;
+                    }
+                    $pdo->prepare('UPDATE users SET failed_attempts = :attempts WHERE id = :id')
+                        ->execute([':attempts' => $failedAttempts, ':id' => $user['id']]);
+                } else {
                     $failedAttempts = (int) $user['failed_attempts'] + 1;
                     if ($failedAttempts >= 5) {
                         $nextLevel = (int) $user['suspension_level'] + 1;
@@ -181,6 +205,16 @@ switch ($action) {
                 break;
             }
 
+            if ($isOwner && $user['pin_locked_until'] !== null && strtotime($user['pin_locked_until']) > time()) {
+                $secondsLeft = strtotime($user['pin_locked_until']) - time();
+                $pdo->commit();
+                http_response_code(429);
+                echo json_encode([
+                    'error' => 'Owner PIN verification is temporarily locked. Try again later.',
+                    'remaining_seconds' => $secondsLeft,
+                ]);
+                break;
+            }
             $currentSessionId = session_id();
             $hasRecentOtherSession = !empty($user['active_session_id'])
                 && $user['active_session_id'] !== $currentSessionId
@@ -273,9 +307,11 @@ switch ($action) {
                 ]);
                 break;
             }
+            $pdo->beginTransaction();
             $stmt = $pdo->prepare(
-                'SELECT id, full_name, role, pin_hash, is_active, active_session_id, deleted_at
-                 FROM users WHERE id = :id'
+                'SELECT id, full_name, role, pin_hash, pin_failed_attempts, pin_locked_until, is_active,
+                        active_session_id, deleted_at
+                 FROM users WHERE id = :id FOR UPDATE'
             );
             $stmt->execute([':id' => $_SESSION['pending_owner_id']]);
             $user = $stmt->fetch();
@@ -288,23 +324,48 @@ switch ($action) {
             ) {
                 unset($_SESSION['pending_owner_id']);
                 unset($_SESSION['pending_owner_takeover'], $_SESSION['pending_owner_previous_session_id']);
+                $pdo->commit();
                 http_response_code(403);
                 echo json_encode(['error' => 'The owner session changed before verification. Please sign in again.']);
                 break;
             }
 
+            if ($user['pin_locked_until'] !== null && strtotime($user['pin_locked_until']) > time()) {
+                $secondsLeft = strtotime($user['pin_locked_until']) - time();
+                $pdo->commit();
+                http_response_code(429);
+                echo json_encode(['error' => 'Owner PIN verification is temporarily locked. Try again later.', 'remaining_seconds' => $secondsLeft]);
+                break;
+            }
             if (!password_verify($pin, $user['pin_hash'])) {
+                $pinAttempts = min(65535, (int) $user['pin_failed_attempts'] + 1);
+                $pinLockMinutes = $pinAttempts >= 15 ? 1440 : ($pinAttempts >= 10 ? 60 : ($pinAttempts >= 5 ? 15 : 0));
                 $pdo->prepare(
-                    "UPDATE users SET active_session_last_seen = NOW()
+                    "UPDATE users
+                     SET pin_failed_attempts = :attempts,
+                         pin_locked_until = CASE WHEN :has_lock = 1 THEN DATE_ADD(NOW(), INTERVAL :lock_minutes MINUTE) ELSE pin_locked_until END,
+                         active_session_id = CASE WHEN :clear_session = 1 THEN NULL ELSE active_session_id END,
+                         active_session_last_seen = CASE WHEN :clear_last_seen = 1 THEN NULL ELSE NOW() END
                      WHERE id = :id AND active_session_id = :session_id"
-                )->execute([':id' => $user['id'], ':session_id' => session_id()]);
-                http_response_code(401);
-                echo json_encode(['error' => 'Incorrect PIN.']);
+                )->execute([
+                    ':attempts' => $pinAttempts,
+                    ':has_lock' => $pinLockMinutes > 0 ? 1 : 0,
+                    ':lock_minutes' => $pinLockMinutes,
+                    ':clear_session' => $pinLockMinutes > 0 ? 1 : 0,
+                    ':clear_last_seen' => $pinLockMinutes > 0 ? 1 : 0,
+                    ':id' => $user['id'],
+                    ':session_id' => session_id(),
+                ]);
+                $pdo->commit();
+                http_response_code($pinLockMinutes > 0 ? 429 : 401);
+                echo json_encode(['error' => $pinLockMinutes > 0
+                    ? "Incorrect PIN. Try again in {$pinLockMinutes} minute(s)."
+                    : 'Incorrect PIN.']);
                 break;
             }
 
             $pdo->prepare(
-                "UPDATE users SET active_session_last_seen = NOW()
+                "UPDATE users SET active_session_last_seen = NOW(), pin_failed_attempts = 0, pin_locked_until = NULL
                  WHERE id = :id AND active_session_id = :session_id"
             )->execute([':id' => $user['id'], ':session_id' => session_id()]);
 
@@ -319,6 +380,7 @@ switch ($action) {
                 (int) $user['id'],
                 json_encode(['role' => $user['role'], 'method' => 'password_and_pin'], JSON_THROW_ON_ERROR)
             );
+            $pdo->commit();
             // Clear pending state and create session
             unset($_SESSION['pending_owner_id']);
             unset($_SESSION['pending_owner_takeover'], $_SESSION['pending_owner_previous_session_id']);
@@ -503,7 +565,14 @@ switch ($action) {
         session_destroy(); // destroy the session
         if (ini_get('session.use_cookies')) {
             $cookie = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $cookie['path'], $cookie['domain'], $cookie['secure'], $cookie['httponly']);
+            setcookie(session_name(), '', [
+                'expires' => time() - 42000,
+                'path' => $cookie['path'],
+                'domain' => $cookie['domain'],
+                'secure' => $cookie['secure'],
+                'httponly' => $cookie['httponly'],
+                'samesite' => $cookie['samesite'] ?? 'Lax',
+            ]);
         }
             echo json_encode(['success' => true]);
         break;

@@ -1,7 +1,11 @@
 <?php
 // No session_start() needed here to prevent session conflicts!
+header('Cache-Control: no-store, private');
+header('Referrer-Policy: no-referrer');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
 $token = $_GET['token'] ?? '';
-if (empty($token) || !preg_match('/^[a-f0-9]{16}$/i', $token)) {
+if (empty($token) || !preg_match('/\A[a-f0-9]{64}\z/i', $token)) {
     die('Invalid or expired scanner link.');
 }
 ?>
@@ -14,10 +18,13 @@ if (empty($token) || !preg_match('/^[a-f0-9]{16}$/i', $token)) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        body { background-color: #f4f6f9; color: #16233a; min-height: 100vh; }
-        .upload-card { background: #ffffff; border-radius: 1rem; border: 1px solid rgba(8, 13, 30, 0.12); box-shadow: 0 12px 32px rgba(22, 35, 58, 0.08); }
-        .btn-capture { background: linear-gradient(135deg, #2563eb, #1d4ed8); border: none; font-weight: 600; }
-        .text-light { color: #16233a !important; }
+        :root { color-scheme: dark; }
+        body { background-color: #080d1e; color: #f4f7ff; min-height: 100vh; font-family: Inter, "Segoe UI", system-ui, sans-serif; }
+        .upload-card { background: #0d1428; color: #f4f7ff; border-radius: 1rem; border: 1px solid rgba(190, 205, 235, 0.15); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); }
+        .btn-capture { background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; font-weight: 600; }
+        .btn-capture:hover, .btn-capture:focus-visible { background: linear-gradient(135deg, #60a5fa, #3b82f6); }
+        .text-light { color: #f4f7ff !important; }
+        .text-secondary { color: #b1bdd2 !important; }
     </style>
 </head>
 <body>

@@ -43,6 +43,11 @@
         document.querySelectorAll('input[type="date"]:not([data-date-picker-ready])').forEach(input => {
             const inputId = input.id;
             const required = input.required;
+            const control = document.createElement('div');
+            control.className = `date-picker-control${input.classList.contains('w-100') ? ' is-full-width' : ''}`;
+            input.parentNode.insertBefore(control, input);
+            control.appendChild(input);
+
             const instance = window.flatpickr(input, {
                 altInput: true,
                 altFormat: 'm/d/Y',
@@ -64,9 +69,6 @@
                         });
                     }
                     input.required = false;
-
-                    const control = input.parentElement;
-                    control.classList.add('date-picker-control');
 
                     const calendarButton = document.createElement('button');
                     calendarButton.type = 'button';
@@ -138,7 +140,7 @@
 
         const themeStylesheet = document.createElement('link');
         themeStylesheet.rel = 'stylesheet';
-        themeStylesheet.href = '../frontend/css/date-picker.css?v=readable-weekdays-1';
+        themeStylesheet.href = '../frontend/css/date-picker.css?v=aligned-controls-1';
         document.head.appendChild(themeStylesheet);
 
         if (typeof window.flatpickr === 'function') {

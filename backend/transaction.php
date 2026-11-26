@@ -15,7 +15,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <title>Transaction</title>
       <script src="../frontend/js/theme.js"></script>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-      <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+      <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -65,7 +65,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                       <input type="date" class="filter-input w-100" id="transactionDateTo" lang="en-US">
                                                 </div>
                                                 <div class="col-6 col-md-1">
-                                                      <button type="button" class="quick-action-btn w-100" id="clearTransactionFilters" title="Clear filters" aria-label="Clear filters"><i class="bi bi-x-lg"></i></button>
+                                                      <button type="button" class="quick-action-btn w-100" id="clearTransactionFilters" title="Clear filters" aria-label="Clear filters">Clear</button>
                                                 </div>
                                           </div>
                                     </div>
@@ -153,6 +153,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                           <label class="form-label small">Description (optional)</label>
                                           <input type="text" class="form-control form-control-dark" id="saleDescription" placeholder="e.g. Walk-in sale">
                                     </div>
+                                    <div class="mb-3">
+                                          <label for="saleReference" class="form-label small">Invoice Number (assigned on save)</label>
+                                          <input type="text" class="form-control form-control-dark" id="saleReference" maxlength="50" placeholder="Generated automatically when saved" readonly required>
+                                    </div>
                                     <div class="row g-3">
                                           <div class="col-md-6 mb-3">
                                                 <label for="saleProjectClient" class="form-label small">Project Client</label>
@@ -215,8 +219,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                                       <input type="date" id="vendorBillDueDate" class="form-control form-control-dark" required lang="en-US">
                                                 </div>
                                                 <div class="col-md-4">
-                                                      <label for="vendorBillReference" class="form-label small">Bill / Reference #</label>
-                                                      <input type="text" id="vendorBillReference" class="form-control form-control-dark" maxlength="50">
+                                                      <label for="vendorBillReference" class="form-label small">Invoice Reference (assigned on save)</label>
+                                                      <input type="text" id="vendorBillReference" class="form-control form-control-dark" maxlength="50" placeholder="Generated automatically when saved" readonly required>
                                                 </div>
                                                 <div class="col-12">
                                                       <label for="vendorBillDescription" class="form-label small">Description</label>
@@ -275,6 +279,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                     <label class="form-label small">Description (optional)</label>
                                     <input type="text" class="form-control form-control-dark" id="expenseDescription" placeholder="e.g. Electricity bill">
                               </div>
+                        <div class="mb-3">
+                              <label for="expenseReference" class="form-label small">Invoice Number (assigned on save)</label>
+                              <input type="text" class="form-control form-control-dark" id="expenseReference" maxlength="50" placeholder="Generated automatically when saved" readonly required>
+                        </div>
 
                               <div class="row g-3">
                                     <div class="col-md-6 mb-3">

@@ -7,7 +7,6 @@ function setActiveSettingsTab(tab) {
     const tabs = {
         business: 'tabBusiness',
         account: 'tabAccount',
-        categories: 'tabCategories',
         appearance: 'tabAppearance',
     };
     Object.entries(tabs).forEach(([name, id]) => {
@@ -20,13 +19,11 @@ function setActiveSettingsTab(tab) {
 
     if (tab === 'business') loadBusinessTab();
     else if (tab === 'account') loadAccountTab();
-    else if (tab === 'categories') loadCategoriesTab();
     else loadAppearanceTab();
 }
 
 document.getElementById('tabBusiness').addEventListener('click', () => setActiveSettingsTab('business'));
 document.getElementById('tabAccount').addEventListener('click', () => setActiveSettingsTab('account'));
-document.getElementById('tabCategories').addEventListener('click', () => setActiveSettingsTab('categories'));
 document.getElementById('tabAppearance').addEventListener('click', () => setActiveSettingsTab('appearance'));
 
 function escapeHtml(str) {
@@ -216,116 +213,6 @@ async function loadAccountTab() {
                 errorBox.classList.remove('d-none');
             }
         });
-    }
-}
-
-async function loadCategoriesTab() {
-    const container = document.getElementById('settingsContent');
-    container.innerHTML = `<p class="text-center py-4" style="color: var(--dark-text-muted);">Loading...</p>`;
-
-    try {
-        const response = await fetch(`${API_URL}?action=list-categories`);
-        const data = await response.json();
-
-        if (!data.success) {
-            container.innerHTML = `<p class="text-danger">Failed to load categories.</p>`;
-            return;
-        }
-
-        const rows = data.categories.map(cat => `
-            <tr>
-                <td>${escapeHtml(cat.name)}</td>
-                <td>
-                    <span class="badge-${cat.is_active == 1 ? 'in' : 'out'}">
-                        ${cat.is_active == 1 ? 'Active' : 'Inactive'}
-                    </span>
-                </td>
-                <td class="text-end">
-                    <button class="table-action-btn" onclick="toggleCategory(${cat.id})">
-                        ${cat.is_active == 1 ? 'Deactivate' : 'Activate'}
-                    </button>
-                </td>
-            </tr>
-        `).join('');
-
-        container.innerHTML = `
-            <div class="panel settings-card mb-4">
-                <div class="panel-header"><h2 class="h6 mb-0">Add Category</h2></div>
-                <div class="panel-body">
-                    <form id="categoryForm" class="d-flex gap-2">
-                        <input type="text" class="form-control form-control-dark" id="newCategoryName" placeholder="Category name" required>
-                        <button type="submit" class="quick-action-btn primary">Add</button>
-                    </form>
-                    <div id="categoryError" class="alert alert-danger py-2 px-3 small mt-2 d-none"></div>
-                </div>
-            </div>
-
-            <div class="panel">
-                <div class="table-responsive">
-                    <table class="table table-transactions mb-0">
-                        <thead>
-                            <tr>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th class="text-end">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-
-        document.getElementById('categoryForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const errorBox = document.getElementById('categoryError');
-            errorBox.classList.add('d-none');
-
-            try {
-                const res = await fetch(API_URL, {
-                    method: 'POST',
-                    body: new URLSearchParams({
-                        action: 'create-category',
-                        name: document.getElementById('newCategoryName').value,
-                    }),
-                });
-                const result = await res.json();
-
-                if (result.success) {
-                    loadCategoriesTab();
-                } else {
-                    errorBox.textContent = result.error || 'Something went wrong.';
-                    errorBox.classList.remove('d-none');
-                }
-            } catch (err) {
-                console.error('Create category failed:', err);
-                errorBox.textContent = 'Could not reach the server.';
-                errorBox.classList.remove('d-none');
-            }
-        });
-
-    } catch (err) {
-        console.error('Failed to load categories tab:', err);
-        container.innerHTML = `<p class="text-danger">Could not reach the server.</p>`;
-    }
-}
-
-async function toggleCategory(categoryId) {
-    try {
-        const res = await fetch(API_URL, {
-            method: 'POST',
-            body: new URLSearchParams({ action: 'toggle-category', category_id: categoryId }),
-        });
-        const result = await res.json();
-
-        if (result.success) {
-            loadCategoriesTab();
-        } else {
-            alert(result.error || 'Something went wrong.');
-        }
-    } catch (err) {
-        console.error('Toggle category failed:', err);
-        alert('Could not reach the server.');
     }
 }
 

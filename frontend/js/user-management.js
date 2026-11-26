@@ -13,7 +13,18 @@ const passwordGroup = document.getElementById('passwordGroup');
 let rawUsersList = [];
 let activeRoleFilter = 'all';
 let userIdPendingDelete = null;
+let userCurrentPage = 1;
+let userRowsPerPage = 10;
 const roleSortOrder = { owner: 0, admin: 1, accountant: 2, staff: 3 };
+
+function canManageUserTarget(user) {
+    const targetRole = (user.role || '').toLowerCase();
+    const isSelf = Number(user.id) === Number(CURRENT_USER_ID);
+    if (isSelf) return true;
+    if (targetRole === 'owner') return false;
+    if (CURRENT_USER_ROLE === 'owner') return true;
+    return CURRENT_USER_ROLE === 'admin' && targetRole !== 'admin';
+}
 
 // ---------- Load and render users ----------
 async function loadUsers() {
@@ -65,6 +76,7 @@ function updateRoleBadgeCounts() {
 // ---------- Filter Logic ----------
 window.setRoleFilter = function (role) {
     activeRoleFilter = role;
+    userCurrentPage = 1;
 
     const btns = document.querySelectorAll('#roleFilterContainer .role-filter-btn');
     btns.forEach(btn => {
@@ -78,10 +90,26 @@ window.setRoleFilter = function (role) {
     applyUserFilters();
 };
 
-document.getElementById('userSearchInput')?.addEventListener('input', applyUserFilters);
+document.getElementById('userSearchInput')?.addEventListener('input', () => {
+    userCurrentPage = 1;
+    applyUserFilters();
+});
+document.getElementById('userRowsPerPage')?.addEventListener('change', event => {
+    userRowsPerPage = Number(event.target.value);
+    userCurrentPage = 1;
+    applyUserFilters();
+});
+document.getElementById('userPagination')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-page]');
+    if (!button) return;
+    const page = Number(button.dataset.page);
+    const totalPages = Math.max(1, Math.ceil(getFilteredUsers().length / userRowsPerPage));
+    if (page < 1 || page > totalPages) return;
+    userCurrentPage = page;
+    applyUserFilters();
+});
 
-function applyUserFilters() {
-    const tbody = document.getElementById('usersTableBody');
+function getFilteredUsers() {
     const searchTerm = (document.getElementById('userSearchInput')?.value || '').toLowerCase().trim();
 
     let filtered = rawUsersList;
@@ -108,7 +136,28 @@ function applyUserFilters() {
         });
     });
 
-    renderTableRows(organizedUsers, tbody);
+    return organizedUsers;
+}
+
+function applyUserFilters() {
+    const tbody = document.getElementById('usersTableBody');
+    const organizedUsers = getFilteredUsers();
+    const totalPages = Math.max(1, Math.ceil(organizedUsers.length / userRowsPerPage));
+    userCurrentPage = Math.min(userCurrentPage, totalPages);
+    const start = organizedUsers.length ? (userCurrentPage - 1) * userRowsPerPage : 0;
+    renderTableRows(organizedUsers.slice(start, start + userRowsPerPage), tbody);
+
+    const pageInfo = document.getElementById('userPageInfo');
+    if (pageInfo) pageInfo.textContent = organizedUsers.length
+        ? `Showing ${start + 1}-${Math.min(start + userRowsPerPage, organizedUsers.length)} of ${organizedUsers.length}`
+        : 'No matching users';
+    const pagination = document.getElementById('userPagination');
+    if (pagination) {
+        let html = `<li class="page-item ${userCurrentPage === 1 ? 'disabled' : ''}"><button class="page-link" data-page="${userCurrentPage - 1}">Previous</button></li>`;
+        for (let page = 1; page <= totalPages; page++) html += `<li class="page-item ${page === userCurrentPage ? 'active' : ''}"><button class="page-link" data-page="${page}">${page}</button></li>`;
+        html += `<li class="page-item ${userCurrentPage === totalPages ? 'disabled' : ''}"><button class="page-link" data-page="${userCurrentPage + 1}">Next</button></li>`;
+        pagination.innerHTML = html;
+    }
 }
 
 // ---------- Render Table ----------
@@ -126,7 +175,7 @@ function renderTableRows(users, tbody) {
         const setupPending = Number(user.password_setup_required) === 1;
         const suspensionEnds = user.locked_until ? new Date(user.locked_until.replace(' ', 'T')) : null;
         const isSuspended = suspensionEnds && suspensionEnds > new Date();
-        const isOwner = typeof CURRENT_USER_ROLE !== 'undefined' && CURRENT_USER_ROLE === 'owner';
+        const canManageTarget = canManageUserTarget(user);
         const statusLabel = isLockedOut
             ? 'Locked out — CEO activation required'
             : setupPending
@@ -136,18 +185,20 @@ function renderTableRows(users, tbody) {
                     : user.is_active == 1 ? 'Active' : 'Inactive';
 
         const actionsHtml = isSelf
-            ? `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit Profile">
+            ? `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit Profile" aria-label="Edit your profile">
                    <i class="bi bi-pencil"></i>
                </button>`
-            : `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit User">
+            : canManageTarget
+            ? `<button class="action-icon-btn" onclick='openEditModal(${JSON.stringify(user)})' title="Edit User" aria-label="Edit ${escapeHtml(user.full_name)}">
                    <i class="bi bi-pencil"></i>
                </button>
-            ${isLockedOut && !isOwner ? '' : `<button class="action-icon-btn warning" onclick="toggleStatus(${user.id})" title="${isLockedOut ? 'Reactivate locked-out user' : user.is_active == 1 ? 'Deactivate' : 'Activate'} User">
+            ${isLockedOut && CURRENT_USER_ROLE !== 'owner' ? '' : `<button class="action-icon-btn warning" onclick="toggleStatus(${user.id})" title="${isLockedOut ? 'Reactivate locked-out user' : user.is_active == 1 ? 'Deactivate' : 'Activate'} User" aria-label="${user.is_active == 1 ? 'Deactivate' : 'Activate'} ${escapeHtml(user.full_name)}">
                    <i class="bi bi-power"></i>
             </button>`}
-               <button class="action-icon-btn danger" onclick='openDeleteModal(${user.id}, ${JSON.stringify(user.full_name)})' title="Delete User">
+               <button class="action-icon-btn danger" onclick='openDeleteModal(${user.id}, ${JSON.stringify(user.full_name)})' title="Delete User" aria-label="Delete ${escapeHtml(user.full_name)}">
                    <i class="bi bi-trash"></i>
-               </button>`;
+               </button>`
+            : '';
 
         return `
             <tr>
@@ -169,7 +220,7 @@ function renderTableRows(users, tbody) {
                 <td><span class="small" style="color: var(--dark-text-muted);">${formatDate(user.created_at)}</span></td>
                 <td class="text-end">
                     ${actionsHtml}
-                    ${setupPending && user.is_active == 1 ? `<button class="action-icon-btn" onclick="resendSetupInvitation(${user.id})" title="Resend setup invitation">
+                    ${setupPending && user.is_active == 1 && canManageTarget && !isSelf ? `<button class="action-icon-btn" onclick="resendSetupInvitation(${user.id})" title="Resend setup invitation">
                         <i class="bi bi-envelope-arrow-up"></i>
                     </button>` : ''}
                 </td>
@@ -206,31 +257,35 @@ document.getElementById('addUserBtn')?.addEventListener('click', () => {
     userModalTitle.textContent = 'Add User';
     
     // Reset Role Container to standard dropdown
-    renderRoleField(false, 'staff');
+    renderRoleField(false, 'staff', false);
 
     passwordGroup.classList.remove('d-none');
     formError.classList.add('d-none');
 });
 
 // ---------- Helper to render Role field dynamically ----------
-function renderRoleField(isOwner, currentRole = 'staff') {
+function renderRoleField(isOwner, currentRole = 'staff', isSelf = false) {
     const roleContainer = document.getElementById('roleContainer');
     if (!roleContainer) return;
 
-    if (isOwner) {
+    if (isOwner || isSelf) {
+        const roleTitle = { owner: 'CEO', admin: 'CFO', accountant: 'Senior Accountant', staff: 'Accounts Executive' }[currentRole] || capitalize(currentRole);
         roleContainer.innerHTML = `
             <label class="form-label small">Role</label>
-            <input type="text" class="form-control form-control-dark" value="CEO" disabled>
-            <input type="hidden" name="role" value="owner">
-            <div class="form-text" style="color: var(--dark-text-muted);">CEO role cannot be changed.</div>
+            <input type="text" class="form-control form-control-dark" value="${escapeHtml(roleTitle)}" disabled>
+            <input type="hidden" name="role" value="${escapeHtml(currentRole)}">
+            <div class="form-text" style="color: var(--dark-text-muted);">${isOwner ? 'CEO role cannot be changed.' : 'Your role cannot be changed here.'}</div>
         `;
     } else {
+        const adminOption = CURRENT_USER_ROLE === 'owner'
+            ? `<option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>CFO</option>`
+            : '';
         roleContainer.innerHTML = `
             <label class="form-label small">Role</label>
             <select class="form-select form-control-dark" id="role" name="role">
                 <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>Accounts Executive</option>
                 <option value="accountant" ${currentRole === 'accountant' ? 'selected' : ''}>Senior Accountant</option>
-                <option value="admin" ${currentRole === 'admin' ? 'selected' : ''}>CFO</option>
+                ${adminOption}
             </select>
         `;
     }
@@ -246,7 +301,8 @@ window.openEditModal = function (user) {
     document.getElementById('email').value = user.email;
 
     const isOwner = (user.role || '').toLowerCase() === 'owner';
-    renderRoleField(isOwner, (user.role || '').toLowerCase());
+    const isSelf = Number(user.id) === Number(CURRENT_USER_ID);
+    renderRoleField(isOwner, (user.role || '').toLowerCase(), isSelf);
 
     userModalTitle.textContent = isOwner ? 'Edit Profile' : 'Edit User';
     passwordGroup.classList.add('d-none');
@@ -415,9 +471,11 @@ async function loadArchivedUsers() {
                 </td>
                 <td class="text-muted small">${user.deleted_at ? window.formatDateMDY(user.deleted_at) : 'N/A'}</td>
                 <td class="text-end">
-                    ${Number(user.suspension_level) >= 4 && CURRENT_USER_ROLE !== 'owner'
-                        ? '<span class="small text-muted">CEO only</span>'
-                        : `<button type="button" onclick="restoreUser(${user.id})" class="btn btn-sm btn-success bg-opacity-25 text-success border-0 px-3 rounded-pill">Restore</button>`}
+                    ${!canManageUserTarget(user)
+                        ? ''
+                        : Number(user.suspension_level) >= 4 && CURRENT_USER_ROLE !== 'owner'
+                            ? '<span class="small text-muted">CEO only</span>'
+                            : `<button type="button" onclick="restoreUser(${user.id})" class="btn btn-sm btn-success bg-opacity-25 text-success border-0 px-3 rounded-pill">Restore</button>`}
                 </td>
             </tr>
         `).join('');

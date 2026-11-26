@@ -86,11 +86,16 @@ switch ($action) {
             echo json_encode(['error' => 'Invalid role.']);
             break;
         }
+        if (($_SESSION['role'] ?? '') !== 'owner' && $role === 'admin') {
+            http_response_code(403);
+            echo json_encode(['error' => 'Only the owner can create a CFO account.']);
+            break;
+        }
 
         $pdo = getDbConnection();
 
         // 1. Check if email belongs to an existing account (active or soft-deleted)
-        $checkStmt = $pdo->prepare("SELECT id, deleted_at, suspension_level FROM users WHERE email = :email");
+        $checkStmt = $pdo->prepare("SELECT id, role, deleted_at, suspension_level FROM users WHERE email = :email");
         $checkStmt->execute([':email' => $email]);
         $existingUser = $checkStmt->fetch();
 
@@ -105,6 +110,15 @@ switch ($action) {
             if ((int) $existingUser['suspension_level'] >= 4 && ($_SESSION['role'] ?? '') !== 'owner') {
                 http_response_code(403);
                 echo json_encode(['error' => 'Only the owner can reactivate an account locked out after repeated suspensions.']);
+                break;
+            }
+
+            if (!canManageTarget(
+                ['id' => $_SESSION['user_id'] ?? 0, 'role' => $_SESSION['role'] ?? ''],
+                ['id' => $existingUser['id'], 'role' => $existingUser['role']]
+            )) {
+                http_response_code(403);
+                echo json_encode(['error' => 'You do not have permission to restore this account.']);
                 break;
             }
 
@@ -378,6 +392,11 @@ switch ($action) {
                 echo json_encode(['error' => 'Invalid role selected.']);
                 break;
             }
+            if (($_SESSION['role'] ?? '') !== 'owner' && $inputRole === 'admin') {
+                http_response_code(403);
+                echo json_encode(['error' => 'Only the owner can assign the CFO role.']);
+                break;
+            }
             $finalRole = $inputRole;
         }
 
@@ -541,6 +560,15 @@ switch ($action) {
         if ((int) $targetUser['suspension_level'] >= 4 && ($_SESSION['role'] ?? '') !== 'owner') {
             http_response_code(403);
             echo json_encode(['error' => 'Only the owner can restore an account locked out after repeated suspensions.']);
+            break;
+        }
+
+        if (!canManageTarget(
+            ['id' => $_SESSION['user_id'] ?? 0, 'role' => $_SESSION['role'] ?? ''],
+            $targetUser
+        )) {
+            http_response_code(403);
+            echo json_encode(['error' => 'You do not have permission to restore this account.']);
             break;
         }
 

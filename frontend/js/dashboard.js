@@ -707,6 +707,7 @@ document.getElementById('vendorBillForm')?.addEventListener('submit', async even
 
         bootstrap.Modal.getInstance(document.getElementById('vendorBillModal')).hide();
         document.getElementById('vendorBillForm').reset();
+        showToast(`Vendor bill recorded. Reference: ${data.reference_no}`, 'success');
         loadRecentTransactions();
         loadDashboardSummary();
         loadDashboardAccounts();
@@ -750,6 +751,7 @@ document.getElementById('quickSaleForm')?.addEventListener('submit', async (e) =
         if (data.success) {
             bootstrap.Modal.getInstance(document.getElementById('quickSaleModal')).hide();
             document.getElementById('quickSaleForm').reset();
+            showToast(`Sale recorded. Reference: ${data.reference_no}`, 'success');
             loadRecentTransactions();
             loadDashboardSummary();
             loadDashboardAccounts();
@@ -796,6 +798,7 @@ document.getElementById('quickExpenseForm')?.addEventListener('submit', async (e
         if (data.success) {
             bootstrap.Modal.getInstance(document.getElementById('quickExpenseModal')).hide();
             document.getElementById('quickExpenseForm').reset();
+            showToast(`Expense recorded. Reference: ${data.reference_no}`, 'success');
             loadRecentTransactions();
             loadDashboardSummary();
             loadDashboardAccounts();
@@ -1117,7 +1120,7 @@ async function initScanSession() {
     if (qrContainer) qrContainer.innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"></div> Loading QR...';
 
     try {
-        const response = await fetch(`${API_URL}?action=init-scan-session`);
+        const response = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'init-scan-session' }) });
         const data = await response.json();
 
         if (data.success && data.mobile_url) {
@@ -1162,7 +1165,7 @@ function startScanPolling() {
         if (!currentScanToken) return;
 
         try {
-            const response = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const response = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
             const data = await response.json();
 
             if (data.success && data.status === 'completed') {
@@ -1203,7 +1206,7 @@ fileInput?.addEventListener('change', async (e) => {
 
         if (data.success) {
             // Re-check session immediately
-            const checkRes = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const checkRes = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
             const checkData = await checkRes.json();
             if (checkData.success && checkData.status === 'completed') {
                 stopScanPolling();
@@ -1319,7 +1322,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
 
 async function triggerCleanupRoutine() {
     try {
-        const response = await fetch('routes/cleanup-scans.php?ajax=1');
+        const response = await fetch('routes/cleanup-scans.php?ajax=1', { method: 'POST' });
         if (!response.ok) {
             console.error(`Receipt scan cleanup failed with HTTP ${response.status}.`);
         }

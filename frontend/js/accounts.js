@@ -92,7 +92,7 @@ function renderSummaryCards(accounts, container) {
                  style="cursor: pointer;">
                 <div>
                     <div class="kpi-label small text-uppercase text-white-50 tracking-wider mb-2">Asset Accounts</div>
-                    <div class="kpi-value money display-5 fw-bold text-white mb-2">${formatMoney(groups['Asset'])}</div>
+                    <div class="kpi-value money display-10 fw-bold text-white mb-9">${formatMoney(groups['Asset'])}</div>
                 </div>
                 <div class="kpi-footer pt-3 mt-3 border-top border-secondary text-white-50 small d-flex justify-content-between align-items-center">
                     <span>Total active asset balances</span>
@@ -358,12 +358,18 @@ if (CAN_MANAGE) {
         if (!supportsClassification) classificationInput.value = 'current';
     }
 
+    function setAccountTypeLocked(locked) {
+        accountTypeSelect.disabled = locked;
+        classificationInput.disabled = locked;
+    }
+
     accountTypeSelect.addEventListener('change', updateCashAccountOption);
 
     // ---------- Add Account button ----------
     document.getElementById('addAccountBtn')?.addEventListener('click', () => {
         accountForm.reset();
         document.getElementById('accountId').value = '';
+        setAccountTypeLocked(false);
         isCashAccountInput.checked = false;
         updateCashAccountOption();
         modalTitle.textContent = 'Add Account';
@@ -377,6 +383,7 @@ if (CAN_MANAGE) {
         formError.classList.add('d-none');
 
         document.getElementById('accountId').value = account.id;
+        setAccountTypeLocked(Number(account.has_transactions) === 1);
         document.getElementById('accountCode').value = account.code || '';
         document.getElementById('accountName').value = account.name;
         document.getElementById('accountTypeId').value = account.account_type_id;
@@ -400,6 +407,11 @@ if (CAN_MANAGE) {
         const isEdit = accountId !== '';
 
         const formData = new FormData(accountForm);
+        if (isEdit) {
+            // Disabled controls are omitted by FormData.
+            formData.set('account_type_id', accountTypeSelect.value);
+            formData.set('classification', classificationInput.value);
+        }
         formData.append('action', isEdit ? 'edit' : 'create');
 
         try {
@@ -530,7 +542,7 @@ async function initScanSession() {
     if (qrContainer) qrContainer.innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"></div> Loading QR...';
 
     try {
-        const response = await fetch(`${SCAN_API_URL}?action=init-scan-session`);
+        const response = await fetch(SCAN_API_URL, { method: 'POST', body: new URLSearchParams({ action: 'init-scan-session' }) });
         const data = await response.json();
 
         if (data.success && data.mobile_url) {
@@ -573,7 +585,7 @@ function startScanPolling() {
         if (!currentScanToken) return;
 
         try {
-            const response = await fetch(`${SCAN_API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const response = await fetch(SCAN_API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
             const data = await response.json();
 
             if (data.success && data.status === 'completed') {
@@ -614,7 +626,7 @@ fileInput?.addEventListener('change', async (e) => {
 
         if (data.success) {
             // Re-check session immediately
-            const checkRes = await fetch(`${SCAN_API_URL}?action=check-scan-session&token=${currentScanToken}`);
+            const checkRes = await fetch(SCAN_API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
             const checkData = await checkRes.json();
             if (checkData.success && checkData.status === 'completed') {
                 stopScanPolling();
@@ -728,7 +740,7 @@ document.getElementById('saveScannedEntryBtn')?.addEventListener('click', async 
 
 async function triggerCleanupRoutine() {
     try {
-        await fetch('../backend/routes/cleanup-scans.php?ajax=1');
+        await fetch('../backend/routes/cleanup-scans.php?ajax=1', { method: 'POST' });
     } catch (err) {
         console.debug('Background cleanup check completed.');
     }

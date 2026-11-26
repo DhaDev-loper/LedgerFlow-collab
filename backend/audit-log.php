@@ -12,8 +12,24 @@ $userName = $_SESSION['full_name'] ?? 'User';
     <title>Audit Log — KoboSocial</title>
     <script src="../frontend/js/theme.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+    <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <style>
+        #auditLogScroll {
+            max-height: min(65vh, 680px);
+            overflow: auto !important;
+            overscroll-behavior: contain;
+            scrollbar-color: var(--dark-border) var(--dark-surface);
+            scrollbar-width: thin;
+        }
+
+        #auditLogScroll thead th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: var(--dark-surface);
+        }
+    </style>
 </head>
 <body>
 <div class="app-shell">
@@ -77,8 +93,7 @@ $userName = $_SESSION['full_name'] ?? 'User';
                         <input id="auditDateTo" class="form-control form-control-dark" type="date" lang="en-US">
                     </div>
                     <div class="col-12 col-lg-2 d-flex align-items-center gap-2">
-                        <button class="quick-action-btn" type="reset" id="clearAuditFilters" title="Clear filters" aria-label="Clear filters"><i class="bi bi-x-lg"></i></button>
-                        <span class="small" style="color: var(--dark-text-muted);">Updates automatically</span>
+                        <button class="quick-action-btn" type="reset" id="clearAuditFilters" title="Clear filters" aria-label="Clear filters">Clear</button>
                     </div>
                 </form>
             </div>
@@ -95,7 +110,7 @@ $userName = $_SESSION['full_name'] ?? 'User';
                         </select>
                     </label>
                 </div>
-                <div class="table-responsive">
+                <div id="auditLogScroll" class="table-responsive" aria-label="Scrollable audit log entries">
                     <table class="table table-transactions mb-0">
                         <thead>
                             <tr>

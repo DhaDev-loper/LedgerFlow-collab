@@ -1,0 +1,22 @@
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY" "expr=%{QUERY_STRING} !~ m#(^|&)action=(journal-entry-pdf|cash-flow-statement-pdf|income-statement-pdf|balance-sheet-pdf)(&|$)#"
+    Header always set X-Frame-Options "SAMEORIGIN" "expr=%{QUERY_STRING} =~ m#(^|&)action=(journal-entry-pdf|cash-flow-statement-pdf|income-statement-pdf|balance-sheet-pdf)(&|$)#"
+    Header always set Content-Security-Policy "frame-ancestors 'self'" "expr=%{QUERY_STRING} =~ m#(^|&)action=(journal-entry-pdf|cash-flow-statement-pdf|income-statement-pdf|balance-sheet-pdf)(&|$)#"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Keep configuration, dependency metadata, database sources, and operational
+# scripts out of the public document tree. The application still loads them
+# from PHP on the server.
+<FilesMatch "^(\.env|\.env\..*|composer\.(json|lock)|README\.md)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\. - [F,END,NC]
+    RewriteRule ^(?:\.git|\.vscode|tools|vendor|backend/database|backend/testing)(?:/|$) - [F,END,NC]
+</IfModule>

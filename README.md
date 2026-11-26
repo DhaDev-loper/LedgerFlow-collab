@@ -79,6 +79,8 @@ Run `backend/database/migrations/20261107_add_client_logo.sql` once to add clien
 logo paths for the Clients Directory.
 Run `backend/database/migrations/20261107_add_projects_and_project_journals.sql`
 once to add active-by-default projects and project links on journal entries.
+Run `backend/database/migrations/20261122_add_owner_pin_lockout.sql` once to
+add escalating owner PIN lockouts after five, ten, and fifteen failed attempts.
 
 Successful logins and journal, account, client, and user-management changes are
 recorded in `audit`. Audit details intentionally exclude credentials and
@@ -157,13 +159,25 @@ configured mail settings. If email delivery fails, the seed prints the setup
 link to the command line; use that link to set the password. Delete the
 printed link from any terminal logs or history where practical.
 
-### Seed the official owner account
-Run `backend/database/seeds/seed_owner.php` from PowerShell after setting
-`OWNER_SEED_PASSWORD` and `OWNER_SEED_PIN` in the current shell session. The
-password must be at least 8 characters; the PIN must be exactly 4 digits.
-These values are read at runtime and are not stored in the seed file. The
-script only runs from the command line, creates `KoboSocial@gmail.com` as an
-owner, and does not overwrite an existing account.
+### Seed the company's owner account
+Run `backend/database/seeds/seed_owner.php` from PowerShell after setting the
+company owner's details in the current shell session. `APP_URL` must already be
+configured in `.env`.
+
+```powershell
+$env:OWNER_SEED_NAME = "Company Owner"
+$env:OWNER_SEED_EMAIL = "owner@your-company.example"
+$env:OWNER_SEED_PIN = "REPLACE_WITH_A_UNIQUE_4_DIGIT_PIN"
+php backend/database/seeds/seed_owner.php
+Remove-Item Env:OWNER_SEED_NAME
+Remove-Item Env:OWNER_SEED_EMAIL
+Remove-Item Env:OWNER_SEED_PIN
+```
+
+The PIN must be exactly 4 digits. The owner account must use its one-time setup
+invitation to choose a password; the link expires after 24 hours. The seed only
+runs from the command line and will not overwrite an existing account. Replace
+the example name, email, and PIN with the company's actual values.
 
 ### 7. Access the system
 
@@ -230,6 +244,61 @@ If bucket versioning is enabled, configure expiration for noncurrent versions
 as well. Test restore from an object before relying on a new provider, bucket,
 or credentials. Restore tests need database space for a second copy of the
 database while they run.
+
+## Production deployment checklist
+
+The Laragon/XAMPP instructions above are for local development. Do not expose
+the development machine directly to the internet. Before hosting this system:
+
+1. Use maintained PHP and MySQL/MariaDB releases supported by the installed
+   Composer packages. Enable the required PHP extensions (`pdo_mysql`, `fileinfo`,
+   `mbstring`, `openssl`, `zip`, and `gd`) and install dependencies with
+   `composer install --no-dev --optimize-autoloader` during deployment.
+2. Serve the application only over HTTPS. Configure the TLS terminator so PHP
+   receives `HTTPS=on`; the application uses that value to mark session cookies
+   Secure. Do not trust client-supplied `X-Forwarded-Proto` headers. Set
+   `APP_URL` to the canonical HTTPS URL, including any application subdirectory.
+   Authenticated write requests are checked against this origin, so use one
+   canonical hostname and redirect alternate hostnames to it.
+3. For Apache, enable `mod_rewrite` and `AllowOverride` for this directory so the
+   repository `.htaccess` rules apply. For Nginx or another server, implement
+   equivalent denials for dotfiles, `.env`, `vendor`, `tools`, `backend/database`,
+   and `backend/testing`; do not assume `.htaccess` is read. Prefer a document
+   root that exposes only the required frontend and backend entry points.
+4. Keep `.env` outside the public document root where possible. Use a dedicated
+   MySQL account with access only to this application's database, a strong
+   unique password, and no remote database access unless the host requires it.
+   Do not use the Laragon/XAMPP `root` account.
+5. Keep uploads writable by PHP but not executable. The included `uploads/.htaccess`
+   blocks script execution on Apache; configure the equivalent on other servers.
+   Restrict filesystem and database access to the application service account.
+6. Disable `display_errors` in production and send PHP errors to protected logs.
+   Configure log rotation, disk-space alerts, database monitoring, and a way to
+   receive outage and backup-failure alerts. Apply request rate limits at the
+   web server or proxy for login, password recovery, and receipt uploads.
+7. Configure off-site encrypted backups for the hosting environment. Store the
+   archive password separately from bucket credentials, restrict bucket access,
+   set retention and lifecycle rules, and perform a restore test before go-live
+   and on a recurring schedule. The included scheduled-task scripts target
+   Windows; Linux hosting needs equivalent scheduled jobs and a tested restore
+   procedure.
+8. Review all existing accounts before go-live and remove any developer,
+   demonstration, or unused owner accounts. Have the company accountant approve
+   the chart of accounts, opening balances, fiscal-year and period-close process,
+   tax treatment, invoice/payment workflows, and report mappings. Reconcile
+   sample transactions against independent calculations and source documents.
+   Receipt photos are sent to OCR.space for extraction when scanning is used;
+   review its current data handling terms and the company's privacy requirements
+   before enabling that feature for real receipts.
+9. Test the complete deployment with non-production data: login and role access,
+   password recovery, concurrent users, journal posting and correction, period
+   locks, settlement allocations, all financial reports and exports, upload
+   handling, backup, and restore. Record who owns updates, access reviews,
+   reconciliations, incident response, and recovery.
+
+These steps are a deployment gate, not a claim of certification or accounting
+compliance. Hosting should begin only after the server configuration, security
+review, accountant review, and restore procedure have all been completed.
 
 ## Project Structure
 

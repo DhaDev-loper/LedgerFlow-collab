@@ -15,7 +15,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <title>Clients Directory — KoboSocial</title>
       <script src="../frontend/js/theme.js"></script>
       <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-      <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+      <link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
     <link rel="stylesheet" href="../frontend/css/clients.css">
       <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
@@ -38,8 +38,29 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                       <?php endif; ?>
                   </div>
                   
+                  <div class="client-directory-toolbar">
+                      <div class="client-search-wrap">
+                          <label class="form-label small mb-1" for="clientDirectorySearch">Search clients and vendors</label>
+                          <input type="search" class="filter-input-search w-100" id="clientDirectorySearch" placeholder="Search name, company, email, phone, or type...">
+                      </div>
+                      
+                  </div>
+                  <div class="client-directory-scroll">
                   <div class="client-directory" id="clientsTableBody" aria-live="polite">
                       <p class="client-directory-message">Loading clients...</p>
+                  </div>
+                  </div>
+                  <div class="client-directory-footer">
+                    <label for="clientRowsPerPage" class="d-flex align-items-center gap-2 small mb-0 client-directory-muted">
+                          Show
+                          <select id="clientRowsPerPage" class="form-select form-select-sm form-control-dark" style="width: auto;">
+                              <option value="10" selected>10</option><option value="25">25</option>
+                              <option value="50">50</option><option value="100">100</option>
+                          </select>
+                          entries
+                      </label>
+                      <small id="clientPageInfo" class="client-directory-muted"></small>
+                      <nav aria-label="Clients and vendors pagination"><ul id="clientPagination" class="pagination pagination-sm mb-0"></ul></nav>
                   </div>
               </div>
           </div>
@@ -325,47 +346,90 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
       <script>
          const API_URL = 'routes/journal.php';
          const CAN_MANAGE_CLIENTS = <?= $canCreate ? 'true' : 'false' ?>;
-          async function loadClients() {
+         let allDirectoryClients = [];
+         let clientDirectoryPage = 1;
+         let clientDirectoryPageSize = 10;
+
+         function renderClients() {
+             const clientList = document.getElementById('clientsTableBody');
+             const search = (document.getElementById('clientDirectorySearch').value || '').trim().toLocaleLowerCase();
+             const filtered = allDirectoryClients.filter(client => [client.name, client.company_name, client.party_type, client.email, client.phone, client.status]
+                 .some(value => String(value || '').toLocaleLowerCase().includes(search)));
+             const totalPages = Math.max(1, Math.ceil(filtered.length / clientDirectoryPageSize));
+             clientDirectoryPage = Math.min(clientDirectoryPage, totalPages);
+             const start = filtered.length ? (clientDirectoryPage - 1) * clientDirectoryPageSize : 0;
+             const pageClients = filtered.slice(start, start + clientDirectoryPageSize);
+             if (!allDirectoryClients.length) {
+                 clientList.innerHTML = '<p class="client-directory-message">No clients or vendors recorded yet.</p>';
+             } else if (!filtered.length) {
+                 clientList.innerHTML = '<p class="client-directory-message">No clients or vendors match your search.</p>';
+             } else {
+                 clientList.innerHTML = pageClients.map(client => {
+                     const name = escapeHtml(client.name || 'Unnamed client');
+                     const logoUrl = getClientLogoUrl(client.logo);
+                     const initials = getClientInitials(client.name);
+                     const nextStatus = client.status === 'active' ? 'inactive' : 'active';
+                     return `
+                         <article class="client-card" data-client-id="${Number(client.id)}" tabindex="0" role="button" aria-label="View details and transaction history for ${name}">
+                             <div class="client-card-logo" style="--client-logo-hue: ${(Number(client.id) * 67) % 360};">
+                                 ${logoUrl ? `<img src="${logoUrl}" alt="${name} logo" loading="lazy">` : `<span aria-hidden="true">${escapeHtml(initials)}</span>`}
+                             </div>
+                             <div class="client-card-info">
+                                 <h2 class="client-card-name">${name}</h2>
+                                 <div class="client-card-details">
+                                     <span><strong>Company</strong>${escapeHtml(client.company_name || 'â€”')}</span>
+                                     <span><strong>Party type</strong>${escapeHtml((client.party_type || 'customer').replaceAll('_', ' '))}</span>
+                                     <span><strong>Email</strong>${escapeHtml(client.email || 'â€”')}</span>
+                                     <span><strong>Phone</strong>${escapeHtml(client.phone || 'â€”')}</span>
+                                 </div>
+                                 <span class="client-card-hint">View details and transaction history</span>
+                             </div>
+                             <div class="client-card-actions">
+                                 <span class="client-status-badge ${client.status === 'active' ? 'is-active' : 'is-inactive'}">${escapeHtml(client.status || 'inactive')}</span>
+                                 ${CAN_MANAGE_CLIENTS ? `
+                                     <button type="button" class="quick-action-btn client-edit-btn" data-client-id="${Number(client.id)}" aria-label="Edit ${name}" title="Edit client"><i class="bi bi-pencil" aria-hidden="true"></i><span>Edit</span></button>
+                                     <button type="button" class="quick-action-btn ${nextStatus === 'inactive' ? 'client-deactivate-btn' : 'client-reactivate-btn'} toggle-client-status-btn" data-client-id="${Number(client.id)}" data-status="${nextStatus}" data-client-name="${name}" aria-label="${nextStatus === 'inactive' ? 'Deactivate' : 'Reactivate'} ${name}">${nextStatus === 'inactive' ? 'Deactivate' : 'Reactivate'}</button>
+                                 ` : ''}
+                             </div>
+                         </article>`;
+                 }).join('');
+             }
+             document.getElementById('clientPageInfo').textContent = filtered.length
+                 ? `Showing ${start + 1}-${Math.min(start + clientDirectoryPageSize, filtered.length)} of ${filtered.length}`
+                 : (search ? 'No matching clients or vendors' : 'No entries');
+             const pagination = document.getElementById('clientPagination');
+             let html = `<li class="page-item ${clientDirectoryPage === 1 ? 'disabled' : ''}"><button class="page-link" data-page="${clientDirectoryPage - 1}">Previous</button></li>`;
+             for (let page = 1; page <= totalPages; page++) html += `<li class="page-item ${page === clientDirectoryPage ? 'active' : ''}"><button class="page-link" data-page="${page}">${page}</button></li>`;
+             html += `<li class="page-item ${clientDirectoryPage === totalPages ? 'disabled' : ''}"><button class="page-link" data-page="${clientDirectoryPage + 1}">Next</button></li>`;
+             pagination.innerHTML = html;
+         }
+
+         document.getElementById('clientDirectorySearch').addEventListener('input', () => { clientDirectoryPage = 1; renderClients(); });
+         document.getElementById('clientRowsPerPage').addEventListener('change', event => {
+             clientDirectoryPageSize = Number(event.target.value);
+             clientDirectoryPage = 1;
+             renderClients();
+         });
+         document.getElementById('clientPagination').addEventListener('click', event => {
+             const button = event.target.closest('[data-page]');
+             if (!button) return;
+             const page = Number(button.dataset.page);
+             const totalPages = Math.max(1, Math.ceil(allDirectoryClients.filter(client => [client.name, client.company_name, client.party_type, client.email, client.phone, client.status]
+                 .some(value => String(value || '').toLocaleLowerCase().includes((document.getElementById('clientDirectorySearch').value || '').trim().toLocaleLowerCase()))).length / clientDirectoryPageSize));
+             if (page < 1 || page > totalPages) return;
+             clientDirectoryPage = page;
+             renderClients();
+         });
+
+         async function loadClients() {
               try {
                   const res = await fetch(`${API_URL}?action=list-clients`);
                   const data = await res.json();
-                  const clientList = document.getElementById('clientsTableBody');
-                  
-                  if (data.success && data.clients.length > 0) {
-                      clientList.innerHTML = data.clients.map(client => {
-                          const name = escapeHtml(client.name || 'Unnamed client');
-                          const logoUrl = getClientLogoUrl(client.logo);
-                          const initials = getClientInitials(client.name);
-                          const nextStatus = client.status === 'active' ? 'inactive' : 'active';
-                          return `
-                              <article class="client-card" data-client-id="${Number(client.id)}" tabindex="0" role="button" aria-label="View details and transaction history for ${name}">
-                                  <div class="client-card-logo" style="--client-logo-hue: ${(Number(client.id) * 67) % 360};">
-                                      ${logoUrl
-                                          ? `<img src="${logoUrl}" alt="${name} logo" loading="lazy">`
-                                          : `<span aria-hidden="true">${escapeHtml(initials)}</span>`}
-                                  </div>
-                                  <div class="client-card-info">
-                                      <h2 class="client-card-name">${name}</h2>
-                                      <div class="client-card-details">
-                                          <span><strong>Company</strong>${escapeHtml(client.company_name || '—')}</span>
-                                          <span><strong>Party type</strong>${escapeHtml((client.party_type || 'customer').replaceAll('_', ' '))}</span>
-                                          <span><strong>Email</strong>${escapeHtml(client.email || '—')}</span>
-                                          <span><strong>Phone</strong>${escapeHtml(client.phone || '—')}</span>
-                                      </div>
-                                      <span class="client-card-hint">View details and transaction history</span>
-                                  </div>
-                                  <div class="client-card-actions">
-                                      <span class="client-status-badge ${client.status === 'active' ? 'is-active' : 'is-inactive'}">${escapeHtml(client.status || 'inactive')}</span>
-                                      ${CAN_MANAGE_CLIENTS ? `
-                                          <button type="button" class="quick-action-btn client-edit-btn" data-client-id="${Number(client.id)}" aria-label="Edit ${name}" title="Edit client"><i class="bi bi-pencil" aria-hidden="true"></i><span>Edit</span></button>
-                                          <button type="button" class="quick-action-btn ${nextStatus === 'inactive' ? 'client-deactivate-btn' : 'client-reactivate-btn'} toggle-client-status-btn" data-client-id="${Number(client.id)}" data-status="${nextStatus}" data-client-name="${name}" aria-label="${nextStatus === 'inactive' ? 'Deactivate' : 'Reactivate'} ${name}">${nextStatus === 'inactive' ? 'Deactivate' : 'Reactivate'}</button>
-                                      ` : ''}
-                                  </div>
-                              </article>
-                          `;
-                      }).join('');
+                  if (data.success) {
+                      allDirectoryClients = data.clients || [];
+                      renderClients();
                   } else {
-                      clientList.innerHTML = '<p class="client-directory-message">No clients recorded yet.</p>';
+                      throw new Error(data.error || 'Could not load clients.');
                   }
               } catch (e) {
                   console.error('Error loading clients:', e);
@@ -610,7 +674,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
               if (qrContainer) qrContainer.innerHTML = '<div class="spinner-border text-primary spinner-border-sm" role="status"></div> Loading QR...';
 
               try {
-                  const response = await fetch(`${API_URL}?action=init-scan-session`);
+                  const response = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'init-scan-session' }) });
                   const data = await response.json();
 
                   if (data.success && data.mobile_url) {
@@ -644,7 +708,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
               scanPollInterval = setInterval(async () => {
                   if (!currentScanToken) return;
                   try {
-                      const response = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+                      const response = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
                       const data = await response.json();
                       if (data.success && data.status === 'completed') {
                           stopScanPolling();
@@ -682,7 +746,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                   const data = await response.json();
 
                   if (data.success) {
-                      const checkRes = await fetch(`${API_URL}?action=check-scan-session&token=${currentScanToken}`);
+                      const checkRes = await fetch(API_URL, { method: 'POST', body: new URLSearchParams({ action: 'check-scan-session', token: currentScanToken }) });
                       const checkData = await checkRes.json();
                       if (checkData.success && checkData.status === 'completed') {
                           stopScanPolling();

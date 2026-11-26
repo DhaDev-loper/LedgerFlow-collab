@@ -16,7 +16,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <title>Journal Entries — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=20261116-auto-reference-state">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -71,6 +71,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                                 <option value="">All Types</option>
                             </select>
                         </div>
+                        
                         <div class="col-md-2">
                             <label class="form-label small mb-1">Status</label>
                             <select class="form-select form-control-dark" id="filterStatus">
@@ -89,24 +90,25 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
             </div>
 
             <!-- MAIN JOURNAL & SUMMARY GRID -->
-            <div class="row g-4">
+            <div class="journal-summary-layout" id="journalMainGrid">
+                
                 <!-- JOURNAL TABLE PANEL -->
-                <div class="col-lg-8">
+                <div id="journalEntriesColumn">
                     <div class="panel">
                         <div class="table-responsive journal-table-scroll">
                             <table class="table table-transactions align-middle mb-0">
                                 <thead>
                                     <tr>
                                         <th style="width: 18%;">Date & Ref</th>
-                                        <th style="width: 35%;">Description & Created By</th>
+                                        <th style="width: 35%;">Description & Recorded By</th>
                                         <th style="width: 17%;">Type</th>
                                         <th class="text-end" style="width: 18%;">Amount</th>
-                                        <?php if ($canCreate): ?><th class="text-end" style="width: 12%;">Actions</th><?php endif; ?>
+                                        <th class="text-end" style="width: 12%;">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="journalTableBody">
                                     <tr>
-                                        <td colspan="<?= $canCreate ? '5' : '4' ?>" class="text-center py-4" style="color: var(--dark-text-muted);">
+                                        <td colspan="5" class="text-center py-4" style="color: var(--dark-text-muted);">
                                             Loading journal entries...
                                         </td>
                                     </tr>
@@ -137,8 +139,9 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                 </div>
 
                 <!-- SIDE SUMMARY PANEL -->
-                <div class="col-lg-4">
-                    <div class="panel receipt-card">
+                <div id="journalSummaryColumn">
+                    <div class="journal-summary-dock" id="journalSummaryDock">
+                    <div class="panel receipt-card" id="journalSummaryPanel">
                         <div class="panel-header">
                             <h2 class="h6 mb-0">Summary</h2>
                         </div>
@@ -162,6 +165,11 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                             </div>
                         </div>
                     </div>
+                    <button type="button" class="journal-summary-tab is-open" id="toggleJournalSummary"
+                            aria-expanded="true" aria-controls="journalSummaryPanel" aria-label="Close summary" title="Close summary">
+                        <span>Summary</span><i class="bi bi-chevron-right" aria-hidden="true"></i>
+                    </button>
+                    </div>
                 </div>
             </div>
 
@@ -171,15 +179,15 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
 <!-- BOTTOM NAV -->
 
-
+#region MODAL
 <?php if ($canCreate): ?>
 <!-- NEW ENTRY MODAL -->
 <div class="modal fade" id="entryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content modal-dark journal-entry-modal">
             <div class="modal-header">
                 <h5 class="modal-title">New Journal Entry</h5>
-                <div class="journal-mode-toggle">
+                <div class="journal-mode-toggle" id="journalModeToggleContainer">
                     <input type="checkbox" id="entryModeToggle" role="switch" aria-label="Auto journal entry mode" aria-checked="false" disabled>
                     <label for="entryModeToggle">
                         <span class="journal-mode-manual">Manual</span>
@@ -218,13 +226,13 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 
                     <div class="row g-3 mb-3">
                         <div class="col-md-4">
-                            <label class="form-label small">Transaction Type</label>
+                            <label class="form-label small" for="transactionTypeId">Transaction Type</label>
                             <select class="form-select form-control-dark bg-dark text-light border-secondary" id="transactionTypeId" name="transaction_type_id" required>
                                 <!-- injected by journal-entries.js -->
                             </select>
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label small">Date</label>
+                            <label class="form-label small" for="transactionDate">Date</label>
                             <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="transactionDate" name="transaction_date" required lang="en-US">
                         </div>
                         <div class="col-md-4" id="clientFieldContainer">
@@ -235,30 +243,49 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                         </div>
                     </div>
 
-                    <div class="row g-3 mb-3">
+                    <div class="row g-3 mb-3 d-none" id="openingBalanceSection" aria-hidden="true">
+                        <div class="col-md-4">
+                            <label for="openingBalanceAccountId" class="form-label small">Account</label>
+                            <select class="form-select form-control-dark bg-dark text-light border-secondary" id="openingBalanceAccountId" name="opening_balance_account_id">
+                                <option value="">-- Select account --</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="openingBalanceAmount" class="form-label small">Opening Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">₱</span>
+                                <input type="number" class="form-control form-control-dark bg-dark text-light border-secondary" id="openingBalanceAmount" name="opening_balance_amount" min="0.01" max="999999999999.99" step="0.01" inputmode="decimal" placeholder="0.00">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="openingBalanceDirection" class="form-label small">Balance Direction</label>
+                            <select class="form-select form-control-dark bg-dark text-light border-secondary" id="openingBalanceDirection" name="opening_balance_direction">
+                                <option value="normal">Use account normal balance</option>
+                                <option value="debit">Debit this account</option>
+                                <option value="credit">Credit this account</option>
+                            </select>
+                            <div class="form-text" id="openingBalanceNormalSideHelp">Choose an account to see its normal balance.</div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3" id="projectNameRow">
                         <div class="col-md-6">
                             <label for="projectName" class="form-label small">Project (optional)</label>
                             <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="projectName" name="project_name" list="activeProjectNames" maxlength="255" placeholder="Type an event or project name">
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label small">Description</label>
-                        <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="description" name="description" placeholder="e.g. Walk-in sale, Electricity bill" required>
+                    <div class="mb-3" id="descriptionFieldContainer">
+                        <label class="form-label small" for="description" id="descriptionFieldLabel">Description</label>
+                        <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="description" name="description" placeholder="e.g. Walk-in sale, Electricity bill" maxlength="255" required>
                     </div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <label class="form-label small">Reference No. (optional)</label>
-                            <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="referenceNo" name="reference_no">
+                        <div class="col-md-6" id="referenceNoFieldContainer">
+                            <label class="form-label small" for="referenceNo">Invoice Number (assigned on save)</label>
+                            <input type="text" class="form-control form-control-dark bg-dark text-light border-secondary" id="referenceNo" name="reference_no" maxlength="50" placeholder="Generated automatically when saved" readonly>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label small">Category (optional)</label>
-                            <select class="form-select form-control-dark bg-dark text-light border-secondary" id="categoryId" name="category_id">
-                                <option value="">-- None --</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6" id="dueDateFieldContainer">
                             <label class="form-label small">Due Date (required for invoices and bills)</label>
                             <input type="date" class="form-control form-control-dark bg-dark text-light border-secondary" id="dueDate" name="due_date" lang="en-US">
                         </div>
@@ -292,7 +319,7 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                     </div>
                     <div id="accountRuleWarning" class="alert alert-warning py-2 px-3 small mt-2 d-none" role="alert"></div>
 
-                    <div class="d-flex justify-content-end gap-4 mt-3 small">
+                    <div class="d-flex justify-content-end gap-4 mt-3 small" id="journalTotalsRow">
                         <div>Total Debits: <span class="money fw-semibold" id="totalDebitsDisplay">0.00</span></div>
                         <div>Total Credits: <span class="money fw-semibold" id="totalCreditsDisplay">0.00</span></div>
                         <div id="balanceStatusDisplay" class="fw-semibold"></div>
@@ -315,14 +342,14 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     <div class="modal-dialog">
         <div class="modal-content modal-dark">
             <div class="modal-header">
-                <h5 class="modal-title">Entry Details</h5>
+                <h5 class="modal-title">Invoice Details</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="viewEntryBody">
                 <p class="text-center py-4" style="color: var(--dark-text-muted);">Loading...</p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn quick-action-btn" id="printReceiptBtn">Print Receipt</button>
+                <button type="button" class="btn quick-action-btn" id="printReceiptBtn">Print Invoice</button>
                 <button type="button" class="btn quick-action-btn" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
@@ -334,10 +361,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
     <div class="modal-dialog modal-dialog-centered" id="receiptPreviewDialog">
         <div class="modal-content style-dark-modal border border-secondary shadow-lg">
             <div class="modal-header d-flex justify-content-between align-items-center py-2 px-3 border-bottom border-secondary">
-                <h6 class="modal-title m-0 fw-semibold">Receipt Preview</h6>
+                <h6 class="modal-title m-0 fw-semibold">Invoice Preview</h6>
                 <div>
                     <button type="button" class="btn btn-sm btn-primary py-1 px-2 me-1" id="downloadReceiptBtn">
-                        <i class="bi bi-download"></i> Download
+                        <i class="bi bi-download"></i> Download Invoice
                     </button>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
@@ -367,15 +394,8 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small">Reference No. (optional)</label>
-                        <input type="text" class="form-control form-control-dark" id="editReferenceNo">
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small">Category (optional)</label>
-                        <select class="form-select form-control-dark" id="editCategoryId">
-                            <option value="">-- None --</option>
-                        </select>
+                        <label class="form-label small">Invoice Number</label>
+                        <input type="text" class="form-control form-control-dark" id="editReferenceNo" readonly>
                     </div>
 
                     <p class="small mb-0" style="color: var(--dark-text-muted);">
@@ -552,23 +572,23 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-               <div class="wrs-table-container">
-    <table class="wrs-table">
-        <thead>
-            <tr>
-                <th>Requested By</th>
-                <th>Reason</th>
-                <th>Date</th>
-                <th style="text-align: right;">Actions</th>
-            </tr>
-        </thead>
-        <tbody id="pendingRequestsTableBody">
-            <tr>
-                <td colspan="4" style="text-align: center; color: #94a3b8; padding: 20px;">Loading pending requests...</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
+                <div class="wrs-table-container">
+                    <table class="wrs-table">
+                        <thead>
+                            <tr>
+                                <th>Requested By</th>
+                                <th>Reason</th>
+                                <th>Date</th>
+                                <th style="text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingRequestsTableBody">
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: #94a3b8; padding: 20px;">Loading pending requests...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -582,10 +602,10 @@ $userName = $_SESSION['full_name'] ?? $_SESSION['role'] ?? 'User';
 <script src="../frontend/js/currency-inputs.js"></script>
 <script>
     window.API_URL    = '../backend/routes/journal.php'; // Ensure correct path to your backend endpoint
-    window.CAN_CREATE = <?= json_encode(!empty($_SESSION['user_id'])) ?>;
+    window.CAN_CREATE = <?= json_encode($canCreate) ?>;
     window.USER_ROLE  = <?= json_encode(strtolower($_SESSION['role'] ?? 'staff')) ?>;
 </script>
-<script src="../frontend/js/journal-entries.js?v=20261116-auto-template-load"></script>
+<script src="../frontend/js/journal-entries.js?v=journal-lines-expand-20261126"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <datalist id="activeProjectNames"></datalist>
 <script src="../frontend/js/session-timeout.js"></script>

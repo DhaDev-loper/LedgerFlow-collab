@@ -57,8 +57,8 @@
                             <input type="date" class="form-control form-control-dark" id="paymentDate" required lang="en-US">
                         </div>
                         <div class="col-md-4">
-                            <label for="paymentReference" class="form-label small">Reference #</label>
-                            <input type="text" class="form-control form-control-dark" id="paymentReference" maxlength="50" placeholder="Check # / OR #">
+                            <label for="paymentReference" class="form-label small">Invoice Number (assigned on save)</label>
+                            <input type="text" class="form-control form-control-dark" id="paymentReference" maxlength="50" placeholder="Generated automatically when saved" readonly required>
                         </div>
                         <div class="col-12">
                             <label for="paymentDescription" class="form-label small">Description / Notes</label>

@@ -14,7 +14,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 <title>Chart of Accounts — KoboSocial</title>
 <script src="../frontend/js/theme.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=mega-nav-1">
+<link rel="stylesheet" href="../frontend/css/dashboard-style.css?v=dashboard-direct-link-20261126">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 </head>
 <body>
@@ -42,7 +42,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
             <div class="row g-3 mb-4" id="summaryCards">
                 <!-- injected by accounts.js -->
             </div>
-
+            
             <div class="panel">
                 <div class="table-responsive journal-table-scroll">
                     <table id="accountsTable" class="table table-transactions mb-0">
@@ -85,7 +85,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
 </div>
 
 
-
+#region ADD/EDIT
 <?php if ($canManage): ?>
 <!-- Add / Edit Account Modal -->
 <div class="modal fade" id="accountModal" tabindex="-1" aria-hidden="true">
@@ -109,6 +109,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
                         <select class="form-select form-control-dark" id="accountTypeId" name="account_type_id" required>
                             <!-- injected by accounts.js -->
                         </select>
+                        <div class="form-text" style="color: var(--dark-text-muted);">Account type and financial statement classification cannot be changed after transactions have been recorded.</div>
                     </div>
                     <div class="mb-3 d-none" id="accountClassificationOption">
                         <label class="form-label small" for="accountClassification">Financial Statement Classification</label>
@@ -148,7 +149,7 @@ $canManage = in_array($userRole, ['admin', 'accountant', 'owner'], true);
         </div>
     </div>
 </div>
-
+#endregion
 <!-- RECEIPT SCANNER & EDIT MODAL -->
 <div class="modal fade" id="receiptScannerModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered">
